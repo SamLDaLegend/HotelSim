@@ -54,9 +54,42 @@
 // builds this palette from the SHIPPED content and asserts the pairwise floor over the ids
 // actually drawn — so the guarantee survives someone adding a thirteenth entry, and fails
 // loudly rather than washing out quietly.
+//
+// ==========================================================================================
+// AND AT G-077 THE LADDER STOPPED BEING THE WHOLE ANSWER (E-017, ADR-0112 — human ruling).
+//
+// The arithmetic above has a second half nobody needed until twenty-eight item types landed:
+// the ceiling S^(1/(N-1)) does not merely make a WHEEL of twelve impossible, IT MAKES A
+// LADDER OF TWENTY-EIGHT IMPOSSIBLE TOO. Shipped span 6.0929 gives seven ids; the widest band
+// that can physically exist gives twelve; twenty-eight would need a span of 1.19e3, and WCAG
+// contrast tops out at 21:1. **The cap was physics, not this palette.** G-030's own note —
+// "the fix is not a better twelve; it is fewer colours per question" — was the same reading
+// one step short: scoping per role buys a factor, and a factor runs out.
+//
+// THE HUMAN'S RULING WAS OPTION (a): LUMINANCE STOPS BEING THE SOLE DISCRIMINATOR. Lowering
+// the floor and narrowing the comparison population were both offered and both refused. So a
+// drawn thing now has a MARK — a colour AND A FORM (`form.ts`) — and the separation claim
+// moves with it:
+//
+//   BEFORE   every pair of ids in a role differs in luminance by at least the floor
+//   NOW      every pair of ids in a role differs in FORM, or in luminance by at least the
+//            floor — and ids sharing a form always differ in luminance
+//
+// LUMINANCE STILL GOES FIRST AND SPENDS ITSELF COMPLETELY. A role with no more ids than
+// `MAX_RUNGS` gets exactly the ladder it got before this goal, to the byte: rooms and needs
+// are untouched by G-077 and only the item ladder moved. Form is what happens after the free
+// resource is exhausted, not instead of it.
+//
+// WHAT THE CAP IS NOW: `MAX_RUNGS * FORMS.length`, and it is derived rather than declared.
+// It is not special-cased to items — ADR-0112 §2 rules the seven-room-type cap temporary, and
+// a fix that lifted it for one role would leave M6's first new room type to raise E-017 again
+// under another heading.
+// ==========================================================================================
 
 import { needTypesInOrder } from '@hotelsim/sim';
 import type { BoundContent } from '@hotelsim/sim';
+import { FORMS } from './form.js';
+import type { Form } from './form.js';
 
 /** The page behind everything. Every drawn colour is held clear of it by `BAND_MIN_L`. */
 export const BACKGROUND = 0x0d0f12;
@@ -119,6 +152,31 @@ export function bestAchievableContrast(count: number): number {
   return span ** (1 / (count - 1));
 }
 
+/**
+ * HOW MANY LUMINANCE RUNGS A LADDER MAY HAVE — the longest one whose own CEILING still clears
+ * the floor, computed from the two functions above rather than written down.
+ *
+ * ADR-0013 §4: a gate threshold must be derivable from a stated requirement. The requirement
+ * is `MIN_CONTRAST_WITHIN_ROLE`'s — no pair as close as the pairs measured on the build a
+ * human could not read — and `bestAchievableContrast` is the arithmetic that says how many
+ * ids that permits. Adding a rung past this point does not make the ladder slightly worse; it
+ * makes EVERY pair on it worse than the floor at once, which is what the failed twelve-hue
+ * wheel was.
+ *
+ * IT IS SEVEN ON THE SHIPPED BAND AND NOTHING SHOULD DEPEND ON THAT. Move `BACKGROUND`,
+ * `MIN_CONTRAST_VS_BACKGROUND` or `BAND_MAX_L` and this follows, because the ladder is no
+ * longer the only discriminator: a role that loses a rung spills into one more form instead of
+ * going quietly below the floor. That is the difference G-077 bought, and it is why the E-017
+ * escalation was about a number sitting on its own limit.
+ */
+export const MAX_RUNGS: number = (() => {
+  // `bestAchievableContrast` falls monotonically towards 1 and the floor is above 1, so this
+  // terminates. Two is the smallest ladder that has a pair at all.
+  let rungs = 1;
+  while (bestAchievableContrast(rungs + 1) > MIN_CONTRAST_WITHIN_ROLE) rungs += 1;
+  return rungs;
+})();
+
 /** RGB in 0..1, for mixing. */
 type Rgb = { readonly r: number; readonly g: number; readonly b: number };
 
@@ -170,23 +228,15 @@ function atLuminance(hueDegrees: number, targetL: number): number {
 }
 
 /**
- * `count` colours: luminance spread geometrically across the band, hue spread evenly around
- * the circle from `hueOffset`.
+ * The luminance of rung `rung` of a ladder `rungs` long.
  *
  * Geometric in (L + 0.05) rather than linear in L, because contrast is a RATIO of those
- * quantities — an even spread in L would bunch every pair at the light end together.
+ * quantities — an even spread in L would bunch every pair at the light end together. A ladder
+ * of one has no pair to separate and takes the top of the band.
  */
-function ladder(count: number, phase: number): readonly number[] {
-  if (count <= 0) return [];
-  const hueAt = (i: number): number => ALLOWED_HUE_START + (ALLOWED_HUE_SPAN * (i + phase)) / count;
-  if (count === 1) return [atLuminance(hueAt(0), BAND_MAX_L)];
-  const step = bestAchievableContrast(count);
-  const out: number[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const targetL = (BAND_MIN_L + 0.05) * step ** i - 0.05;
-    out.push(atLuminance(hueAt(i), targetL));
-  }
-  return out;
+function rungLuminance(rungs: number, rung: number): number {
+  if (rungs <= 1) return BAND_MAX_L;
+  return (BAND_MIN_L + 0.05) * bestAchievableContrast(rungs) ** rung - 0.05;
 }
 
 /**
@@ -214,6 +264,34 @@ const ALLOWED_HUE_SPAN = 360 - 2 * RESERVED_HUE_HALF_WIDTH - 10;
  */
 const ROLE_HUE_PHASE = { room: 0, item: 0.33, need: 0.66 } as const;
 
+/**
+ * WHICH ROLES ARE DRAWN AS A FORM AS WELL AS A COLOUR, AND IT IS NOT A PREFERENCE.
+ *
+ * ==========================================================================================
+ * THIS IS THE ANTI-VACUITY CONDITION FOR THE WHOLE OF G-077, so it is stated here and asserted
+ * in `palette.contrast.test.ts` rather than left as an understanding.
+ *
+ * The separation claim is now a DISJUNCTION — two ids are told apart by their forms OR by
+ * their luminance. A disjunction is only as strong as its weaker branch is REAL: if a role
+ * were given forms that nothing on screen ever draws, every pair in it would satisfy the
+ * check by a difference the player cannot see. That is ADR-0007's class exactly, one level up
+ * from a vacuous test and inside the mechanism meant to catch one.
+ *
+ *   `room` — `drawRoom` puts the form on the badge plate, beside the initials.
+ *   `item` — `drawItems` draws the item AS its form. It is the whole mark.
+ *   `need` — NOTHING DRAWS A NEED'S FORM. A need is a column in a guest's vector, three
+ *            logical pixels wide, and there is no silhouette at that size. So needs are not
+ *            here, they get the ladder they always got, and a content set with more need
+ *            types than `MAX_RUNGS` goes RED on the contrast gate instead of passing on a
+ *            form nobody draws. The gate names this file when it does.
+ *
+ * The tie between this list and the two functions above is checked against the bytes of
+ * `scene.ts` by the contrast test, because a list of role names cannot say what a renderer
+ * does with them.
+ * ==========================================================================================
+ */
+export const ROLES_DRAWN_AS_FORMS: readonly string[] = Object.freeze(['room', 'item']);
+
 /** Hue in degrees, 0..360. Undefined for a pure grey, which is reported as 0. */
 export function hueOf(colour: number): number {
   const r = ((colour >> 16) & 0xff) / 0xff;
@@ -233,56 +311,139 @@ export function hueDistanceFromReserved(colour: number): number {
   return delta > 180 ? 360 - delta : delta;
 }
 
+/**
+ * HOW ONE CONTENT ID IS DRAWN: a colour and a form. The pair is what has to be unique.
+ *
+ * `rung` is carried because it is the thing the contrast floor is ABOUT — two ids on the same
+ * rung have (near enough) the same luminance whatever their hues, and the test says so in its
+ * message rather than making a reader re-derive it from two hex values.
+ */
+export type Mark = {
+  readonly colour: number;
+  readonly rung: number;
+  readonly form: Form;
+};
+
 export type Palette = {
   readonly roomColour: (contentId: string) => number;
   readonly itemColour: (contentId: string) => number;
   readonly needColour: (contentId: string) => number;
+  /** The shape a room's badge glyph takes. `UNKNOWN_FORM` for an id this palette has none for. */
+  readonly roomForm: (contentId: string) => Form;
+  /** The shape an item is drawn as. `UNKNOWN_FORM` for an id this palette has none for. */
+  readonly itemForm: (contentId: string) => Form;
   /** Ink that reads against `fill`, chosen by contrast rather than by taste. */
   readonly inkOn: (fill: number) => number;
   /** Every colour this palette will ever hand out, by role — the test's subject. */
   readonly byRole: ReadonlyMap<string, ReadonlyMap<string, number>>;
+  /**
+   * Every MARK this palette will ever hand out, by role. `byRole` above is this map's colour
+   * column, kept as it was because half a dozen callers want a colour and nothing else.
+   *
+   * EVERY ROLE IS HERE, INCLUDING THE ONES NOTHING DRAWS A FORM FOR. A role outside
+   * `ROLES_DRAWN_AS_FORMS` gets the SAME form for every one of its ids, so every pair in it is
+   * a same-form pair and the contrast test holds it to the pre-G-077 rule — colour alone must
+   * separate it — by the same expression it applies to the others. The list is what decides
+   * the assignment; it is not a filter on this map.
+   */
+  readonly marksByRole: ReadonlyMap<string, ReadonlyMap<string, Mark>>;
 };
 
 /** Ascending, explicit, locale-free — the `compareIds` discipline from `content.ts`. */
 const ascending = (ids: readonly string[]): readonly string[] =>
   [...ids].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
-function assign(ids: readonly string[], phase: number): ReadonlyMap<string, number> {
+/**
+ * One role's ids, each given a rung of the luminance ladder and a form.
+ *
+ * ==========================================================================================
+ * LUMINANCE FIRST, AND ONLY THEN SHAPE. `rungs` is the whole count while the count fits, so a
+ * role no bigger than `MAX_RUNGS` gets exactly the ladder it got before G-077 — every id on
+ * its own rung, every pair separated by the ceiling for that length, one form for all of them.
+ * That is not a compatibility shim: luminance is the discriminator that works at any size and
+ * for any eye, and spending it before reaching for shape is what keeps the picture as legible
+ * as arithmetic allows.
+ *
+ * PAST THAT, RUNG CYCLES AND FORM ADVANCES. Two ids share a rung only if their indices differ
+ * by a multiple of `rungs`, and then their forms differ by construction; two ids share a form
+ * only if they are in the same block of `rungs`, and then their rungs differ. So no two ids
+ * can share both, which is what makes the collision impossible rather than unlikely.
+ *
+ * HUE IS UNTOUCHED BY ANY OF THIS. It is still one even sweep of the allowed arc over the
+ * WHOLE role, which is why `palette.reserved-hue.test.ts`'s measurement of where the first
+ * room sits is unmoved by this goal.
+ * ==========================================================================================
+ */
+function assign(ids: readonly string[], phase: number, role: string): ReadonlyMap<string, Mark> {
   const ordered = ascending(ids);
-  const colours = ladder(ordered.length, phase);
-  const map = new Map<string, number>();
+  const count = ordered.length;
+  const formed = ROLES_DRAWN_AS_FORMS.includes(role);
+  const rungs = Math.max(1, formed ? Math.min(count, MAX_RUNGS) : count);
+  if (formed && count > rungs * FORMS.length) {
+    // LOUD, NEVER QUIET, and it is the same call `UNKNOWN`'s magenta makes: a palette that
+    // cannot tell two things apart must say so rather than hand out two marks that are the
+    // same mark. This is E-017 re-raised at the ceiling G-077 built, and the message says what
+    // to do about it — which E-017 could not, because at the time there was nothing to do.
+    throw new Error(
+      `the "${role}" role declares ${count} content ids and this palette can draw ` +
+        `${rungs * FORMS.length} distinguishable marks (${rungs} luminance rungs x ${FORMS.length} ` +
+        'forms). Add a form to FORMS in view/form.ts, or split the role.',
+    );
+  }
+  const map = new Map<string, Mark>();
   ordered.forEach((id, i) => {
-    const colour = colours[i];
-    if (colour !== undefined) map.set(id, colour);
+    const hue = ALLOWED_HUE_START + (ALLOWED_HUE_SPAN * (i + phase)) / count;
+    const rung = i % rungs;
+    const form = FORMS[Math.floor(i / rungs)] ?? UNKNOWN_FORM;
+    map.set(id, { colour: atLuminance(hue, rungLuminance(rungs, rung)), rung, form });
   });
   return map;
 }
 
+/** Just the colours, for the callers that want a fill and nothing else. */
+const coloursOf = (marks: ReadonlyMap<string, Mark>): ReadonlyMap<string, number> =>
+  new Map([...marks].map(([id, mark]) => [id, mark.colour]));
+
 /**
  * The palette for one content set. Built once at startup; no id is named anywhere in this
- * file (ADR-0003), and a content set with more room types simply gets a longer ladder.
+ * file (ADR-0003), and a content set with more room types gets a longer ladder until the
+ * ladder is full, then a second form (see `assign`).
  */
 export function createPalette(content: BoundContent): Palette {
-  const rooms = assign(content.content.roomTypes.map((room) => room.id), ROLE_HUE_PHASE.room);
+  const rooms = assign(content.content.roomTypes.map((room) => room.id), ROLE_HUE_PHASE.room, 'room');
   // `itemTypes` is optional in `SimContent` — content from before G-009 had none, and the
   // shape still says so. An absent table is an empty ladder, not a crash.
-  const items = assign((content.content.itemTypes ?? []).map((item) => item.id), ROLE_HUE_PHASE.item);
-  const needs = assign(needTypesInOrder(content).map((need) => need.id), ROLE_HUE_PHASE.need);
+  const items = assign((content.content.itemTypes ?? []).map((item) => item.id), ROLE_HUE_PHASE.item, 'item');
+  const needs = assign(needTypesInOrder(content).map((need) => need.id), ROLE_HUE_PHASE.need, 'need');
+  const marksByRole = new Map([
+    ['room', rooms],
+    ['item', items],
+    ['need', needs],
+  ]);
   return {
-    roomColour: (id) => rooms.get(id) ?? UNKNOWN,
-    itemColour: (id) => items.get(id) ?? UNKNOWN,
-    needColour: (id) => needs.get(id) ?? UNKNOWN,
+    roomColour: (id) => rooms.get(id)?.colour ?? UNKNOWN,
+    itemColour: (id) => items.get(id)?.colour ?? UNKNOWN,
+    needColour: (id) => needs.get(id)?.colour ?? UNKNOWN,
+    roomForm: (id) => rooms.get(id)?.form ?? UNKNOWN_FORM,
+    itemForm: (id) => items.get(id)?.form ?? UNKNOWN_FORM,
     inkOn: (fill) => (contrastRatio(fill, INK.paper) >= contrastRatio(fill, INK.soot) ? INK.paper : INK.soot),
-    byRole: new Map([
-      ['room', rooms],
-      ['item', items],
-      ['need', needs],
-    ]),
+    byRole: new Map([...marksByRole].map(([role, marks]) => [role, coloursOf(marks)])),
+    marksByRole,
   };
 }
 
 /** A content id this palette has no colour for. Loud, never quiet. */
 export const UNKNOWN = 0xff00ff;
+
+/**
+ * The form drawn for an id this palette has no entry for.
+ *
+ * IT IS THE FIRST FORM AND IT IS NOT A SECOND ALARM, deliberately. `UNKNOWN`'s magenta already
+ * shouts, on the same mark, in the channel that carries further; a bespoke "unknown shape"
+ * would be a second thing to learn for a state that is already unmistakable, and it would have
+ * to be a ninth silhouette that never appears in a working build.
+ */
+export const UNKNOWN_FORM: Form = FORMS[0] ?? 'block';
 
 /** The building's furniture, none of it content-dependent. */
 export const INK = {

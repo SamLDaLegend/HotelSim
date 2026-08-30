@@ -6,7 +6,7 @@
 
 - **Schemas**: save **v25** (G-052a — the world gained a `staff` payroll, and `migrateV23ToV24` writes the empty one a pre-G-052a world had; before that v23 at G-038b-i — the world gained a `lift` and a `liftQueue`, and the departure table gained a row; a guest gained a `partyId` at G-040a; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `19de1252e3c9948e` · measure golden `4d6050fd9a1ad339`. *(**Both MOVED AT G-059, and this time it IS
+  `6e2b73afff30461b` · measure golden `814c3916f96625e2`. *(**Both MOVED AT G-059, and this time it IS
   BEHAVIOUR** — the review scorer changed and `reviewOutcomes` is world state. `c967bdb98dac9b0d` /
   `a57925e09896e3a4` -> the pair above. **NO `World` FIELD, so save stays v25 with no migration**, and
   `World.contentHash` did NOT move because no content file was touched. Previously **MOVED TWICE at G-051a, each time for
@@ -6065,7 +6065,51 @@ one place the two must agree.
 Any change to the export format, to `replay.ts`'s document validation, or to what the recorder draws.
 
 ## G-077 — A thing on the floor has a FORM, and you can see where it stands
-Status: **IN-PROGRESS 2026-08-30. RULED (ADR-0112, human). UNBLOCKS G-075b and G-075c, which are finished and waiting on the `items-blocked-on-e017` branch.** Milestone: M5 · Owner pair: render-engineer / render-critic
+Status: **DONE 2026-08-30. A MARK IS A COLOUR AND A FORM; capacity per role 7 -> 56.** Owner pair: render-engineer / (orchestrator-verified)
+
+> **LUMINANCE IS SPENT FIRST AND COMPLETELY, THEN FORM.** `MAX_RUNGS` is **derived** — the longest
+> ladder whose own ceiling still clears the floor, reading **7** on the shipped band — then
+> `rung = i % rungs`, `form = FORMS[floor(i / rungs)]`. **Two ids may share a rung or a form, never
+> both.** Eight solid silhouettes in `view/form.ts`, which imports nothing. **No hollow variants: a
+> stroke has a width, and a width that reads at 12px does not read at 6.** Past capacity it
+> **THROWS**, naming the remedy, rather than degrading quietly.
+
+**A ROLE THAT STILL FITS THE LADDER IS BYTE-IDENTICAL TO BEFORE** — `room` 0 of 7 colours moved,
+`need` 0 of 4; only `item` moved, 24 of 28. *The palette did not churn for a problem it did not have.*
+
+**THE GATE CHANGED HONESTLY, WHICH WAS THE INSTRUCTION MOST AT RISK.** The floor is **untouched at
+1.3**; the assertion now runs over **SAME-FORM pairs**; and the header says outright that **it no
+longer checks that any two colours in a role are told apart in greyscale** — two items on one rung
+are **1.00:1** to each other, *the exact reading the failed wheel was condemned for*, and this file
+passes them because one is a disc and the other a triangle. **ADR-0086 kept: a gate's name claims one
+clause, and the clause it dropped is written down.**
+
+**AND THE EXEMPTION IS NOT TAKEN ON TRUST.** Forms are **rasterised and pixel-compared** (28 pairs
+distinct, closest pinned at 24 pixels, `block vs disc`), and a second test **reads `scene.ts`'s BYTES**
+to assert the forms are actually drawn — so **a role cannot claim a form exemption it does not use.**
+`need` is deliberately NOT form-bearing (a need column is 3px wide), so an eighth need type reddens
+the gate rather than passing on a shape nobody draws.
+
+**THE EIGHTH ROOM TYPE, TWICE.** In the gate, and in a scratch content directory with **exactly one
+line changed** — **26 tests, 26 passed.** It also found **two receipts INSIDE the gate that would
+themselves have reddened on an eighth room type** and rewrote them as growth-proof derivations:
+*a gate that refuses the eighth room type in its receipts is the cap wearing a different hat.*
+
+> **IT DISPROVED A CLAIM THE ORCHESTRATOR PUT IN BOTH ADR-0112 AND THE BRIEF.** *"The renderer already
+> draws each item at its own cell"* is **true only for the first two.** `drawItems` marched items
+> rightward from `centre.x - ITEM_SIZE`, so **the THIRD plate was drawn partly off its own cell and
+> the TENTH roughly four tiles away** — position was not merely illegible, **below the third item it
+> was drawn WRONG.** *And a parked falsification test had already measured it and was waiting*:
+> `wall-height.occlusion.test.ts`'s *"if `drawItems` ever lays items out within the tile's own
+> diamond … this expectation drops to 0."* **It now reads 0 for every index of every count 1-6**, with
+> containment asserted to 12. **Third parked hypothesis to pay out this session.**
+
+**Position is also legible in the room, not only in the cell**: `drawTile` strokes each room floor
+cell, so a footprint reads as **a grid of cells rather than a slab**. Three stale derivations in
+`iso.ts` corrected, one figure **withdrawn rather than restated** (*"at 27 the criterion holds by one
+pixel"* — what made it worth having was a look, and nobody has looked at 31).
+
+**`packages/sim` diff: ZERO LINES.** Milestone: M5 · Owner pair: render-engineer / render-critic
 
 **The human, resolving E-017:** *"Some form of basic rendering — we should also be able to determine
 WHERE in the room — currently it just 'is in the room'."* And, on the cap: ***"No it's not a permanent
@@ -6299,7 +6343,7 @@ The catalogue (**G-075b**), the tool (**G-075c**), refunds for removing an item,
 what `placeItem` already refuses.
 
 ## G-075b — Every room type has something worth putting in it
-Status: **BUILT BUT BLOCKED 2026-08-30 — E-017. The catalogue is written, measured and UNCOMMITTED; one render test is red and the fix is a human call.** *(Was PLANNED.)* Human-specified: *"at least 5 items per room type, suitable to the room type, serving a purpose functionally or decoratively."*** Milestone: M5 · Owner pair: economy-engineer / balance-critic
+Status: **DONE 2026-08-30 — unblocked by G-077 and landed with it.** *(Was BUILT BUT BLOCKED on E-017 for one render test, then held on a branch rather than forced past a red gate.)* Human-specified: *"at least 5 items per room type, suitable to the room type, serving a purpose functionally or decoratively."*** Milestone: M5 · Owner pair: economy-engineer / balance-critic
 
 **Three items against seven room types.** `single_bed` (provides nothing), `arm_chair`
 (`guest_comfort`), `vending_machine` (`guest_nourishment`).
@@ -6362,7 +6406,32 @@ The tool (**G-075c**). Room scoring (**G-037a, OWED — do not deliver half of i
 suitability (**open on the human; ADR-0111 recommends suggest-not-enforce**).
 
 ## G-075c — The player puts something in the room
-Status: **PLANNED 2026-08-30. Follows G-075a AND G-075b. The charter's SECOND CLAUSE. MAY NOT SHIP BEFORE G-075a — see ADR-0111.** Milestone: M5 · Owner pair: render-engineer / render-critic
+Status: **DONE 2026-08-30 — landed with G-075b and G-077. THE CHARTER'S SECOND CLAUSE IS PLAYABLE.** Owner pair: render-engineer / (orchestrator-verified)
+
+> **`HOTELSIM.md:5` NOW HAS TWO OF ITS THREE CLAUSES PLAYABLE.** *"The player draws a room's
+> footprint"* shipped at G-064; ***"places items inside it"* ships here**; *"and the room is scored on
+> what it contains"* is **G-037a and still OWED**. *Clause 2 carried NO MARK before ADR-0110 — it read
+> as built for ten goals because G-064's block claimed the whole sentence when it had delivered one
+> clause of it.*
+
+**IT WAS NEVER A MISSING FEATURE — IT WAS A RULED VERB WITH NO BUTTON.** `placeItem` has existed with
+its refusals since G-036b, and `commands.ts:105` records that **ADR-0046 §4.2 made it "the primary
+player verb" alongside the drawing one.** `input.ts` never offered it. **The simulation was waiting
+for a message the player had no way to send.**
+
+**The first measurement answered NO and found TWO mechanisms, not one**: a drawn room comes out VALID
+because `applyDrawRoom` seeds a room type's `requires` items free, **and** because four of the seven
+room types require nothing at all — *for those, `missingItem` has no population whatever the draw
+does.* **The second is not something furnishing them; it is the gate having nothing to check.**
+
+**One `<select>` with a group per room type, not forty buttons** — 28 items x `suits` = 40 entries,
+and E-013 is open with the HUD measured at 368 of 419px. **All three refusals reachable and RECORDED,
+none pre-empted by the UI.** Verified in the running game (WATCH #41): *"last place Arm Chair at floor
+0, column 2, row 2 — refused: not in room"*.
+
+> **AND IT CAUGHT G-063's DEFECT ARRIVING ONE VERB LATER, IN THE FILE THAT RECORDED IT.**
+> `session.ts`'s `attribute` read only `built` and `demolished`; `placeItem` moves `placed`. **Every
+> successful placement would have flashed as a REFUSAL.** Milestone: M5 · Owner pair: render-engineer / render-critic
 
 **IT IS NOT A MISSING FEATURE. IT IS A RULED VERB WITH NO BUTTON.** `placeItem` exists
 (`commands.ts:125`) with refusal rules — off-plot, and no room covering the cell — **recorded, never

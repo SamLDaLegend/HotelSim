@@ -78,24 +78,35 @@ export const ASSET_SCALE = 2;
  *   it.
  *
  *   GEOMETRY — the occluding wall's top edge, at horizontal offset `dx` from the tile's centre,
- *   sits `HALF_HEIGHT - |dx| / 2 - H` below that centre. `ITEM_ANCHOR_RISE`, `ITEM_SIZE` and
- *   `ITEM_PLATE_PAD` below put the item's plate between `centre.y - 18` and `centre.y - 2`,
- *   reaching `|dx| = 14`. The binding case is the plate's lower outer corner.
+ *   sits `HALF_HEIGHT - |dx| / 2 - H` below that centre. `ITEM_ANCHOR_RISE`, `itemMarkSpan` and
+ *   `itemMarkOffsetX` below put a lone item's plate between `centre.y - 24` and `centre.y - 8`,
+ *   reaching `|dx| = 8`. The binding case is the plate's lower outer corner.
  *
  *   **COMPUTED RATHER THAN HAND-DERIVED, AND THE HAND DERIVATION WAS WRONG BY TWO.**
  *   `tools/headless/src/wall-height.occlusion.test.ts` builds the actual wall polygon from
- *   `edgeOf` and the actual plate from the three constants below, and walks every integer
- *   height: **the first height at which any part of the band is covered is 28.** The first
- *   version of this paragraph reasoned to `H < 30`, because it measured the item SQUARE and the
- *   visible thing is the PLATE around it. The test is the authority and the number here follows
- *   it — which is the whole reason the criterion is a computation rather than a sentence.
+ *   `edgeOf` and the actual plate from the layout functions below, and walks every integer
+ *   height: **the first height at which any part of the band is covered is 32**, and it is a
+ *   tile holding TWO items that reaches it first. The first version of this paragraph reasoned
+ *   to `H < 30`, because it measured the item SQUARE and the visible thing is the PLATE around
+ *   it. The test is the authority and the number here follows it — which is the whole reason
+ *   the criterion is a computation rather than a sentence.
+ *
+ *   **IT READ 28 UNTIL G-077 AND THE ROW IS WHY.** `drawItems` used to march its plates
+ *   rightward from `centre.x - ITEM_SIZE` and hang them from `centre.y - 18` to `centre.y - 2`;
+ *   ADR-0112 §3 made the row CENTRED on the tile and the plate centred on the anchor, so the
+ *   binding corner moved up and inward and it now takes a taller wall to reach it. The bound is
+ *   also a function of how many items a tile holds, which is why the test quantifies over the
+ *   count rather than measuring one item and calling it the band.
  *
  * **24 IS A PREFERENCE INSIDE THAT BOUND AND SHIPS LABELLED AS ONE** (ADR-0013 §4). It is
- * `TILE_HEIGHT * 3 / 8`, it leaves the far five eighths of every tile clear, and it sits 4px
+ * `TILE_HEIGHT * 3 / 8`, it leaves the far five eighths of every tile clear, and it sits 8px
  * inside the bound rather than on it. What can be said about the two ends comes from LOOKING at
  * rendered frames of the shipped scenario rather than from arithmetic: at **16** the walls read
- * as kerbs and the enclosure WATCH #13 credited to the old value is gone; at **27** the
- * criterion holds by one pixel, which is not a margin.
+ * as kerbs and the enclosure WATCH #13 credited to the old value is gone. *(This paragraph also
+ * said "at 27 the criterion holds by one pixel", which was true of the marching row and is not
+ * true of the centred one — the bound moved to 32 and nothing has LOOKED at 31. The sentence is
+ * withdrawn rather than restated with a new number, because what made it worth having was the
+ * look, not the arithmetic.)*
  *
  * **THE VERTICAL-RHYTHM ARGUMENT SURVIVES IN THE FORM THAT WAS TRUE.** ADR-0047 A2 wanted every
  * vertical measure to be an exact rational of one number; 24 is `TILE_HEIGHT * 3 / 8` and
@@ -255,11 +266,60 @@ export const HALF_HEIGHT = TILE_HEIGHT / 2;
  */
 export const ITEM_ANCHOR_RISE = 16;
 
-/** The side of the coloured square an item is drawn as, at scale 1. */
+/** The side of the coloured mark an item is drawn as, at scale 1, when it has the room for it. */
 export const ITEM_SIZE = 12;
 
 /** How far the dark plate under an item extends past it on every side. */
 export const ITEM_PLATE_PAD = 2;
+
+/**
+ * ==========================================================================================
+ * WHERE THE ITEMS ON ONE TILE STAND, AND IT IS THE ARITHMETIC THAT KEEPS THEM ON IT (G-077).
+ *
+ * WHAT WAS WRONG. `drawItems` MARCHED items rightward from a fixed start — `centre.x - size +
+ * i * (size + 2 * pad)` — so a tile's second item sat right of centre, its third sat off the
+ * tile's own diamond, and its tenth was four tiles away. `wall-height.occlusion.test.ts`
+ * measured that and PARKED IT WITH ITS TEST: *"if `drawItems` ever lays items out within the
+ * tile's own diamond instead of marching them off its right edge, this expectation drops to
+ * 0"*. This is the goal that does it, because ADR-0112's second clause is that the picture must
+ * make an item's POSITION legible — and a mark drawn on the neighbour's floor says the wrong
+ * cell holds it. Nothing else can fix that: the item is on the cell the simulation says it is
+ * on, and the renderer was drawing it somewhere else.
+ *
+ * THE ROW IS CENTRED AND THE MARKS SHRINK UNTIL IT FITS, which is the whole rule. A row of `n`
+ * marks of span `s` centred on the tile reaches `n * s / 2` sideways and hangs `rise + s / 2`
+ * above the centre, and a point is inside a 2:1 diamond when `|dx| / HALF_WIDTH + |dy| /
+ * HALF_HEIGHT <= 1`. Solving that for `s` gives `fit` below, and the span is the smaller of it
+ * and `ITEM_SIZE + 2 * ITEM_PLATE_PAD` — so ONE item is drawn exactly as big as it always was
+ * and a crowded cell draws smaller marks rather than a longer row.
+ *
+ * NOTHING IS EVER DROPPED, AND THAT IS WHY THERE IS NO `+N` HERE. `drawStandingGuests` counts
+ * the guests a tile has no room for, because a body has a minimum size below which it is not a
+ * body. A mark has no such floor: at nine items to a cell it is a small square, which is the
+ * honest picture of a cell somebody has crammed. A count of undrawn things is owed only by a
+ * renderer that drops one.
+ *
+ * THE CONDITION IS SOLVED FOR THE PLATE AND NOT FOR THE COLOURED SHAPE, WHICH IS WHERE THE
+ * MARGIN COMES FROM — so no inset constant is introduced and nothing here needs deriving twice.
+ * The plate already extends `ITEM_PLATE_PAD` past the mark on every side, so a row whose
+ * outermost PLATE corner lands exactly on the diamond's edge leaves the outermost coloured
+ * shape strictly inside it. A dark plate touching the cell boundary is the right picture in any
+ * case — that is furniture against a wall — and solving for the plate is what lets a one- or
+ * two-item cell keep drawing its marks at full size.
+ * ==========================================================================================
+ */
+
+/** The span of one item's plate on a tile holding `count` of them, at scale 1. */
+export function itemMarkSpan(count: number): number {
+  if (count <= 0) return 0;
+  const fit = (1 - ITEM_ANCHOR_RISE / HALF_HEIGHT) / (count / (2 * HALF_WIDTH) + 1 / (2 * HALF_HEIGHT));
+  return Math.min(ITEM_SIZE + 2 * ITEM_PLATE_PAD, fit);
+}
+
+/** How far mark `index` of `count` sits from its tile's centre, along the screen's x axis. */
+export function itemMarkOffsetX(index: number, count: number): number {
+  return (index - (count - 1) / 2) * itemMarkSpan(count);
+}
 
 /**
  * Which way the camera is looking, in 90-degree steps.

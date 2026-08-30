@@ -1,13 +1,14 @@
-// THE THREE VIEW MODULES `tools/` MAY IMPORT ARE STILL PURE (G-035).
+// THE FOUR VIEW MODULES `tools/` MAY IMPORT ARE STILL PURE (G-035, widened G-077).
 //
 //   pnpm exec vitest run view-fence
 //
 // ============================================================================
 // A PATH LIST SAYS WHICH FILES ARE ALLOWED. IT CANNOT SAY THEY ARE STILL WHAT THEY WERE.
 //
-// `.dependency-cruiser.cjs` carries a fence: only `apps/game/src/view/palette.ts`, `iso.ts`
-// and `depth.ts` may be imported from `tools/`. It was one file at G-030 and it is three at
-// G-035. The fence's own stated reason is NOT "these three are special" — it is:
+// `.dependency-cruiser.cjs` carries a fence: only `apps/game/src/view/palette.ts`, `iso.ts`,
+// `depth.ts` and `form.ts` may be imported from `tools/`. It was one file at G-030, three at
+// G-035, and four at G-077. The fence's own stated reason is NOT "these four are special" —
+// it is:
 //
 //   "The next test to reach into the render layer would import `view/scene.ts`, which pulls
 //    Pixi — and therefore a WebGL renderer and a DOM — into the test tree that
@@ -52,6 +53,7 @@ const ALLOWED = [
   'apps/game/src/view/palette.ts',
   'apps/game/src/view/iso.ts',
   'apps/game/src/view/depth.ts',
+  'apps/game/src/view/form.ts',
 ];
 
 /**
@@ -93,9 +95,9 @@ export function forbiddenSpecifiers(file: string, source: string, allowed: reado
 }
 
 describe('the fence admits only files that are still pure', () => {
-  it('names three files, and every one of them exists', () => {
+  it('names four files, and every one of them exists', () => {
     // Vacuity first: an empty list satisfies every assertion below.
-    expect(ALLOWED).toHaveLength(3);
+    expect(ALLOWED).toHaveLength(4);
     for (const file of ALLOWED) {
       expect(readFileSync(join(ROOT, file), 'utf8').length).toBeGreaterThan(0);
     }
@@ -117,6 +119,14 @@ describe('the fence admits only files that are still pure', () => {
   it('depth.ts imports iso.ts and nothing else', () => {
     const source = readFileSync(join(ROOT, 'apps/game/src/view/depth.ts'), 'utf8');
     expect([...new Set(specifiersIn(source))]).toEqual(['./iso.js']);
+  });
+
+  it('form.ts imports nothing at all either — it is the other piece of arithmetic', () => {
+    // G-077 widened the fence to four, and this is the price of that widening, in the shape
+    // the file's header sets: the strongest form of the property, asserted on the module that
+    // was added rather than argued for in the commit message. `form.ts` returns polygons as
+    // flat numbers; if it ever needs an import, the widening argument needs rewriting with it.
+    expect(specifiersIn(readFileSync(join(ROOT, 'apps/game/src/view/form.ts'), 'utf8'))).toEqual([]);
   });
 });
 

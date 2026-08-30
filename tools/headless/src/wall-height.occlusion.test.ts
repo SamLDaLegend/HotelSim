@@ -47,12 +47,13 @@ import {
   farSidesOf,
   HALF_HEIGHT,
   ITEM_ANCHOR_RISE,
-  ITEM_PLATE_PAD,
-  ITEM_SIZE,
+  itemMarkOffsetX,
+  itemMarkSpan,
   neighbourAcross,
   ORIENTATIONS,
   TILE_HEIGHT,
   tileCentre,
+  tileCorners,
   toView,
   WALL_HEIGHT,
 } from '../../../apps/game/src/view/iso.js';
@@ -72,21 +73,25 @@ type Box = { readonly left: number; readonly top: number; readonly right: number
  * THE ITEM BAND A ROOM DRAWS ON ONE TILE, at scale 1 — the plate, which is the outermost
  * thing `drawItems` emits.
  *
- * REBUILT FROM `iso.ts`'s OWN CONSTANTS rather than from a copy: `drawItems` computes
- * `x = centre.x - size + i * (size + 2 * pad)` and `y = centre.y - ITEM_ANCHOR_RISE`, then
- * insets the plate by `pad` on every side. `i` is the item's index on the tile; index 0 is the
- * leftmost and therefore the one that reaches furthest into the wall's slope, which is why the
- * cases below drive it.
+ * ==========================================================================================
+ * IT CALLS `iso.ts`'s OWN LAYOUT FUNCTIONS SINCE G-077, WHICH IS STRICTLY BETTER THAN WHAT IT
+ * DID BEFORE. This helper used to REBUILD the row arithmetic from the constants — `x = centre.x
+ * - size + i * (size + 2 * pad)` — which was a copy of `drawItems`' expression living in a test,
+ * and a copy is exactly what goes stale when the renderer's layout changes. It changed at G-077,
+ * and this file is where that would have gone unnoticed: every arm here would have kept passing
+ * while measuring a row nothing draws.
+ *
+ * `itemMarkOffsetX` AND `itemMarkSpan` ARE THE SHIPPED EXPRESSION. The row is centred on the
+ * tile and its span shrinks with the count so that the outermost PLATE corner lands on the
+ * diamond's edge, which is why the plate takes a `count` now: where the third of three items
+ * sits is not where the third of six does.
+ * ==========================================================================================
  */
-function itemPlate(centre: ScreenPoint, index: number): Box {
-  const x = centre.x - ITEM_SIZE + index * (ITEM_SIZE + 2 * ITEM_PLATE_PAD);
+function itemPlate(centre: ScreenPoint, index: number, count: number): Box {
+  const span = itemMarkSpan(count);
+  const x = centre.x + itemMarkOffsetX(index, count);
   const y = centre.y - ITEM_ANCHOR_RISE;
-  return {
-    left: x - ITEM_PLATE_PAD,
-    top: y - ITEM_PLATE_PAD,
-    right: x - ITEM_PLATE_PAD + ITEM_SIZE + 2 * ITEM_PLATE_PAD,
-    bottom: y - ITEM_PLATE_PAD + ITEM_SIZE + 2 * ITEM_PLATE_PAD,
-  };
+  return { left: x - span / 2, top: y - span / 2, right: x + span / 2, bottom: y + span / 2 };
 }
 
 /**
@@ -133,10 +138,10 @@ function probesOf(box: Box): readonly (readonly [number, number])[] {
  * shared with the room itself; here every neighbour is a separate room, which is the worst case
  * and the case WATCH #13 photographed.
  */
-function coverageOf(orientation: Orientation, height: number, index = 0): number {
+function coverageOf(orientation: Orientation, height: number, index = 0, count = index + 1): number {
   const tile = toView(0, 0, orientation);
   const centre = tileCentre(tile.u, tile.v);
-  const probes = probesOf(itemPlate(centre, index));
+  const probes = probesOf(itemPlate(centre, index, count));
   const quads: (readonly ScreenPoint[])[] = [];
   for (const side of ['east', 'north', 'south', 'west'] as const) {
     const beside = neighbourAcross(0, 0, side);
@@ -180,45 +185,107 @@ describe('a room shows its contents when a room stands in front of it (WATCH #13
   });
 
   it('finds the exact height at which the criterion breaks, and it is where the derivation says', () => {
-    // `WALL_HEIGHT`'s docblock derives `H < 30` from the band's own geometry. This walks every
-    // integer height and reports the first that covers anything, so the docblock's arithmetic
-    // is checked rather than believed. COUNTED rather than bounded — G-034b's lesson — because
-    // "somewhere above 24 it breaks" is the assertion that survives getting the number wrong.
-    let firstBad = 0;
-    for (let height = 1; height <= TILE_HEIGHT; height += 1) {
-      if (coverageOf(0, height) > 0) {
-        firstBad = height;
-        break;
+    // `WALL_HEIGHT`'s docblock quotes this number rather than deriving one of its own. This
+    // walks every integer height and reports the first that covers anything, so the docblock's
+    // arithmetic is checked rather than believed. COUNTED rather than bounded — G-034b's lesson
+    // — because "somewhere above 24 it breaks" is the assertion that survives getting the
+    // number wrong.
+    //
+    // OVER COUNTS AS WELL AS HEIGHTS SINCE G-077, AND THE BOUND IS THE WORST OF THEM. The row's
+    // width is a function of how many items the tile holds, so "the height at which a wall
+    // starts covering an item" is not one number until the count is quantified. The criterion is
+    // about ANY item on ANY tile, so the bound is the minimum over counts and the loop says so.
+    let firstBad = TILE_HEIGHT + 1;
+    const worstCount = { count: 0, height: firstBad };
+    for (let count = 1; count <= 6; count += 1) {
+      for (let height = 1; height <= TILE_HEIGHT; height += 1) {
+        let covered = 0;
+        for (let index = 0; index < count; index += 1) covered += coverageOf(0, height, index, count);
+        if (covered > 0) {
+          if (height < worstCount.height) {
+            worstCount.height = height;
+            worstCount.count = count;
+          }
+          break;
+        }
       }
     }
-    expect(firstBad).toBe(28);
+    firstBad = worstCount.height;
+    // 28 UNTIL G-077, AND THE MOVE IS THE ITEM ROW BEING CENTRED. The old row started at
+    // `centre.x - ITEM_SIZE` and hung its plate from `centre.y - 18` to `centre.y - 2`, so its
+    // lower outer corner reached down and out into the neighbouring wall's slope. The row is now
+    // centred on the tile and the plate is centred on the anchor, which moves the binding corner
+    // up and inward — so a TALLER wall is needed before anything is covered. The shipped 24 sits
+    // further inside the bound than it did, and this is the receipt for that.
+    expect({ firstBad, atCount: worstCount.count }).toEqual({ firstBad: 32, atCount: 2 });
     expect(WALL_HEIGHT).toBeLessThan(firstBad);
   });
 
-  it('holds for a SECOND item on a tile, and MEASURES where the third one starts to clip', () => {
+  it('THE PARKED PREDICTION, COLLECTED: every item on a crowded tile is clear too', () => {
     // ==================================================================================
-    // A ROOM MAY HOLD MORE THAN ONE ITEM, AND THIS IS THE FIRST GOAL IN WHICH A PLAYER CAN PUT
-    // ONE THERE. `standard_room` requires one bed; `placeItem` lets a player add more, and
-    // `drawItems` marches them RIGHTWARD from the tile centre — so the third one sits where the
-    // front-right neighbour's wall foot is already high.
+    // THIS ARM USED TO RECORD A DEFECT AND PARK IT WITH ITS OWN FALSIFICATION TEST. Until
+    // G-077 `drawItems` MARCHED items rightward from a fixed start, so a tile's third plate
+    // sat where the front-right neighbour's wall foot is already high, and one of its five
+    // probes was covered. The note read, in as many words:
     //
-    // MEASURED AND RECORDED RATHER THAN ASSERTED AWAY. Items 0 and 1 are entirely clear at the
-    // shipped wall height. Item 2 has ONE of its five probes covered — its bottom-right corner
-    // — which is a clipped corner on a dark plate rather than a hidden item, and it is a fact
-    // about the ITEM LAYOUT rather than about the wall height: it is the marching that walks
-    // the third plate off its own tile, and no wall height inside the useful range fixes it.
+    //   *"if `drawItems` ever lays items out within the tile's own diamond instead of
+    //     marching them off its right edge, THIS EXPECTATION DROPS TO 0."*
     //
-    // PARKED WITH ITS TEST, which is this line: **if `drawItems` ever lays items out within the
-    // tile's own diamond instead of marching them off its right edge, this expectation drops to
-    // 0 and the arm above covers it.** That is a render-layout goal, not this one.
+    // ADR-0112 §3 is the ruling that made somebody do it — an item's POSITION has to be
+    // legible, and a mark drawn on the neighbour's floor names the wrong cell. The prediction
+    // was right and the expectation is 0, for every index of every count up to six.
+    //
+    // COUNT BY COUNT, because the row is now centred and sized from the count: where the third
+    // of three items sits is not where the third of six does, and a loop over indices at one
+    // fixed count would check a layout the renderer only draws sometimes.
     // ==================================================================================
-    expect({ index: 0, covered: coverageOf(0, WALL_HEIGHT, 0) }).toEqual({ index: 0, covered: 0 });
-    expect({ index: 1, covered: coverageOf(0, WALL_HEIGHT, 1) }).toEqual({ index: 1, covered: 0 });
-    expect({ index: 2, covered: coverageOf(0, WALL_HEIGHT, 2) }).toEqual({ index: 2, covered: 1 });
-    // AND THE SHIPPED CONTENT CANNOT REACH IT: no room type requires more than one item, so
-    // index 2 is a state only `placeItem` produces. Read off the content rather than asserted,
-    // so a designer adding a second required item makes this line move rather than go quiet.
+    for (let count = 1; count <= 6; count += 1) {
+      for (let index = 0; index < count; index += 1) {
+        expect({ count, index, covered: coverageOf(0, WALL_HEIGHT, index, count) }).toEqual({
+          count,
+          index,
+          covered: 0,
+        });
+      }
+    }
+    // AND THE SHIPPED CONTENT CANNOT REACH PAST ONE: no room type requires more than one item,
+    // so a second is a state only `placeItem` produces. Read off the content rather than
+    // asserted, so a designer adding a second required item makes this line move rather than
+    // go quiet.
     expect(Math.max(...shippedRequiredItemCounts())).toBe(1);
+  });
+
+  it('and every plate is inside its OWN tile, which is what makes the cell readable', () => {
+    // ==================================================================================
+    // THE POSITIONAL CLAIM OF G-077, AS A COMPUTATION RATHER THAN A SCREENSHOT (ADR-0112 §3).
+    //
+    // The simulation stores an item's CELL and `drawItems` draws it there; whether a player can
+    // SEE which cell is a question about whether the mark is inside that cell's diamond. Before
+    // this goal a tile's third item was not, and its tenth was four tiles away. `itemMarkSpan`
+    // solves the containment condition, so this is the assertion that the solution holds — at
+    // every count, at every index, on all five probes of the plate.
+    //
+    // IT IS THE PLATE THAT IS TESTED, WHICH IS THE OUTERMOST THING DRAWN. The coloured shape is
+    // `ITEM_PLATE_PAD` inside it on every side, so a plate that is in bounds puts a mark that is
+    // strictly in bounds — and the plate is allowed to touch the boundary, which is why the
+    // predicate below is "not outside" rather than "strictly inside".
+    // ==================================================================================
+    const tile = toView(0, 0, 0);
+    const centre = tileCentre(tile.u, tile.v);
+    const diamond = tileCorners(tile.u, tile.v);
+    // `|dx| / HALF_WIDTH + |dy| / HALF_HEIGHT <= 1` is the diamond, written from its corners so
+    // it cannot drift from the projection: the corners ARE the projection's own answer.
+    const halfWidth = Math.max(...diamond.map((corner) => Math.abs(corner.x - centre.x)));
+    const halfHeight = Math.max(...diamond.map((corner) => Math.abs(corner.y - centre.y)));
+    expect({ halfWidth, halfHeight }).toEqual({ halfWidth: TILE_HEIGHT, halfHeight: HALF_HEIGHT });
+    for (let count = 1; count <= 12; count += 1) {
+      for (let index = 0; index < count; index += 1) {
+        for (const [px, py] of probesOf(itemPlate(centre, index, count))) {
+          const outside = Math.abs(px - centre.x) / halfWidth + Math.abs(py - centre.y) / halfHeight;
+          expect({ count, index, outside: outside > 1 + 1e-9 }).toEqual({ count, index, outside: false });
+        }
+      }
+    }
   });
 });
 
@@ -238,7 +305,7 @@ describe('the structural relationship, stated once so a future revision has some
     const centre = tileCentre(tile.u, tile.v);
     // The whole plate, not merely its anchor: an anchor above the centre with a band tall
     // enough to hang below it would satisfy the clause above and fail the criterion.
-    expect(itemPlate(centre, 0).bottom).toBeLessThan(centre.y);
+    expect(itemPlate(centre, 0, 1).bottom).toBeLessThan(centre.y);
     // And the tile it sits on is a real diamond of the locked size, so this is measuring the
     // shipped projection rather than an abstraction of it.
     expect(cornerOf(tile.u, tile.v).y).toBe(centre.y - HALF_HEIGHT);

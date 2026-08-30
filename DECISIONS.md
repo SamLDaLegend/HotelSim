@@ -10668,6 +10668,21 @@ new room type re-raises E-017 under a different heading.*
   falls back to the room — so a guest using a pool table stands at the pool table.
 - **The renderer already draws each item at its own cell**, on a 16x16 plate.
 
+> **AMENDMENT 1 (2026-08-30, at G-077's VERIFY): THAT THIRD BULLET WAS FALSE BELOW THREE ITEMS PER
+> CELL, AND THE ORCHESTRATOR WROTE IT INTO BOTH THE ADR AND THE BRIEF.** `drawItems` marched items
+> rightward from `centre.x - ITEM_SIZE`, so **the THIRD plate on a tile was drawn partly off its own
+> cell and the tenth roughly FOUR TILES AWAY.** So position was not merely illegible — **below the
+> third item it was drawn WRONG.**
+>
+> **A PARKED FALSIFICATION TEST HAD ALREADY MEASURED IT AND WAS WAITING**:
+> `wall-height.occlusion.test.ts` carried *"if `drawItems` ever lays items out within the tile's own
+> diamond instead of marching them off its right edge, this expectation drops to 0."* **It now reads
+> 0 for every index of every count 1-6.** *That is §4's parked-hypothesis discipline paying out for
+> the third time this session — a result waiting for a goal that happened to run it.*
+>
+> **The ruling is unaffected and is strengthened**: the human asked to *"determine WHERE in the
+> room"*, and the answer turned out to include a defect rather than only a legibility gap.
+
 > **SO WHAT IS ROOM-LEVEL IS THE CONSEQUENCE, NOT THE POSITION.** Whether a need is served does not
 > depend on where the item sits; any item in a valid room serves. **Position is stored, walked to and
 > drawn — and it does not yet MATTER.**

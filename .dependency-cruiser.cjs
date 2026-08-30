@@ -77,22 +77,30 @@ module.exports = {
       //
       // AND THE PROPERTY IS NOW CHECKED RATHER THAN TRUSTED. A path list says which files
       // are allowed; it cannot say they are still pure. `tools/headless/src/
-      // view-fence.test.ts` reads all three off disk and asserts their imports stay inside
+      // view-fence.test.ts` reads all four off disk and asserts their imports stay inside
       // this set — so the day somebody writes `import { Graphics } from 'pixi.js'` into
       // `iso.ts`, something goes red here rather than a WebGL context quietly appearing in
       // the simulation's own test run.
+      //
+      // WIDENED AGAIN AT G-077, FROM THREE TO FOUR, AND THE PROPERTY IS UNCHANGED RATHER THAN
+      // RELAXED — the same sentence G-035 wrote above, checked the same way. `view/form.ts`
+      // is the SHAPE half of a mark: it imports NOTHING AT ALL, like `iso.ts`, and is
+      // arithmetic returning a list of coordinates. It has to be reachable for exactly the
+      // reason `palette.ts` was: `palette.contrast.test.ts` computes the separation claim over
+      // the SHIPPED marks, and since ADR-0112 a mark is a colour AND A FORM. Re-deriving the
+      // silhouettes inside `tools/` would test a copy, and the copy is what would drift.
       // ---------------------------------------------------------------------------------
       name: 'tools-may-reach-only-pure-view-modules',
       severity: 'error',
       comment:
         'Only the pure, dependency-free modules in apps/game/src/view may be imported from ' +
-        'tools/ (G-030, widened G-035): palette.ts, iso.ts, depth.ts. Anything else drags ' +
-        'Pixi and the DOM into the sim-side test tree. That the three are still pure is ' +
-        'asserted by tools/headless/src/view-fence.test.ts.',
+        'tools/ (G-030, widened G-035 and G-077): palette.ts, iso.ts, depth.ts, form.ts. ' +
+        'Anything else drags Pixi and the DOM into the sim-side test tree. That the four are ' +
+        'still pure is asserted by tools/headless/src/view-fence.test.ts.',
       from: { path: '^tools/' },
       to: {
         path: '^apps/',
-        pathNot: '^apps/game/src/view/(palette|iso|depth)\\.ts$',
+        pathNot: '^apps/game/src/view/(palette|iso|depth|form)\\.ts$',
       },
     },
     {

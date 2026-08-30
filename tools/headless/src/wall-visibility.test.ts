@@ -170,6 +170,15 @@ describe('THE GLASS ALPHA IS INSIDE A COMPUTED BOUND, not chosen and then defend
     // `INK.soot`, and one percent less glass is affordable. The pair this function measures is
     // an item against the ink drawn ON it, which is why an item-only content change moves it.
     // The structural assertion above did not move, again.
+    //
+    // AND AT G-077 THE ITEM LADDER WAS RE-SHAPED AND THIS BOUND DID NOT MOVE AT ALL, WHICH
+    // CORRECTS THE MECHANISM THE PARAGRAPH ABOVE STATES. `createPalette` no longer spreads
+    // twenty-eight colours across the band: it spreads SEVEN, and cycles them under four
+    // shapes (ADR-0112). Measured before and after, the bound is 35 both times and the pair
+    // driving it is the same one — the item on the BOTTOM RUNG, read against its plate through
+    // a bright room's glass. That is the whole correction: the bottom rung is `BAND_MIN_L`
+    // whatever the ladder's LENGTH, so what moved this number at G-075b was the HUE the bottom
+    // rung landed on, not how far down the band the ladder reached.
     expect({ bound, shipped: TRANSPARENT_WALL_ALPHA_HUNDREDTHS }).toEqual({ bound: 35, shipped: 30 });
   });
 
