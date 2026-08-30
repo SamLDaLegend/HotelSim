@@ -29,19 +29,47 @@
 // recording.
 // ============================================================================
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
   createValidityCache,
   createWorld,
   entranceCell,
+  hashState,
+  run,
   solvencyOf,
   starRatingOf,
   stepTick,
   UNRATED,
 } from '@hotelsim/sim';
-import type { World } from '@hotelsim/sim';
+import type { Command, ScheduledCommand, World } from '@hotelsim/sim';
+/**
+ * ==========================================================================================
+ * THE READER FOR THE DOCUMENT THE GAME'S "export session" BUTTON WRITES (G-074).
+ *
+ * THIS IS AN `apps/` -> `tools/` IMPORT, AND THAT DIRECTION IS THE ONE NOBODY FENCED.
+ * `.dependency-cruiser.cjs`'s `tools-may-reach-only-pure-view-modules` runs the OTHER way — it
+ * stops `tools/` reaching into `apps/`, so that a test cannot drag Pixi and a DOM into the
+ * sim-side test tree. Nothing there and nothing in `check-purity.mjs` constrains this edge; the
+ * only rule that could is `no-circular`, and `session-document.ts` imports one value and one
+ * type from `@hotelsim/sim` and nothing else, so there is no cycle for it to make.
+ *
+ * AND `session-document.ts` RATHER THAN `replay.ts`, WHICH ALSO EXPORTS THESE TWO. `replay.ts`
+ * imports `./content-loader.js` — the HARNESS's content path, the one this file's own header
+ * spent four commits' worth of an incident getting away from. Importing it would put that
+ * loader back into this file's module graph, evaluated at startup, one autocomplete from a call
+ * site. `session-document.ts` is the piece both consumers need and it reaches no filesystem and
+ * binds no content at all: `parseSession` takes TEXT.
+ *
+ * WHAT IS SHARED IS THE DEFINITION OF THE FORMAT, which is the point. A second reader that
+ * validated the document itself would be a second answer to "what is a session", and the day
+ * `exportSession` grows a field one of them would refuse the unknown key and the other would
+ * silently drop it.
+ * ==========================================================================================
+ */
+import { assertReplayable, parseSession } from '../../../tools/headless/src/session-document.js';
+import type { SessionDocument } from '../../../tools/headless/src/session-document.js';
 /**
  * ==========================================================================================
  * THE GAME'S OWN CONTENT LOADER, AND IT IS THE HEADER'S PROPERTY RATHER THAN AN IMPORT TIDY-UP
@@ -125,8 +153,83 @@ if (walls !== wallsArg) {
 `);
 }
 
-const seed = arg('seed', 7);
-const ticks = arg('ticks', 2880);
+/** `--name value` as a STRING, or null when the flag is absent. `arg`'s sibling. */
+function textArg(name: string): string | null {
+  const at = process.argv.indexOf(`--${name}`);
+  if (at === -1) return null;
+  const value = process.argv[at + 1];
+  // A flag with no value is an error rather than an absence: `--session` alone is somebody
+  // asking for a session and getting the scenario, which is the quiet wrong answer.
+  if (value === undefined || value.startsWith('--')) throw new Error(`--${name} needs a value`);
+  return value;
+}
+
+/**
+ * ==========================================================================================
+ * FILM A SESSION SOMEBODY PLAYED, INSTEAD OF THE SCENARIO THIS FILE DRIVES (G-074) —
+ * `--session <file>`, the document the game's "export session" button wrote.
+ *
+ *   pnpm --filter @hotelsim/game record --
+ *     --session ../../tools/headless/src/fixtures/played-session.json --every 240 --out watch
+ *
+ * WHY: G-073 made a played session REPLAYABLE — `pnpm sim:replay` reproduces its `finalHash` —
+ * and that proves the run happened without showing anybody what it looked like. ADR-0013 says a
+ * "reads as stupid" finding needs a FRAME REFERENCE, and *"the guests were doing something weird
+ * around there"* is exactly the class a hash cannot settle. So the substitution is the one
+ * `replay.ts` already makes: the world is driven by the SESSION'S OWN COMMAND LOG instead of by
+ * `createScenario`, and nothing else about this recorder moves.
+ *
+ * WITHOUT THE FLAG NOTHING HERE RUNS AND NOTHING BELOW CHANGES, and that is not a courtesy.
+ * Every WATCH in this project is a recording taken at the default; a flag that quietly moved the
+ * default would invalidate all of them at once. With no `--session`, `session` is `null`, `seed`,
+ * `ticks` and the command source resolve by the expressions they always did, and the frames are
+ * byte-identical — demonstrated by recording the default before and after this change and
+ * comparing sha256 of every file.
+ *
+ * IT DOES NOT READ `frameTicks`. A recorded frame is taken at a tick the OPERATOR names, on the
+ * `--every` cadence, because a WATCH is an argument about the simulation rather than about how a
+ * browser's frame pacing happened to bunch up on the afternoon somebody played it.
+ * ==========================================================================================
+ */
+const sessionPath = textArg('session');
+const session: SessionDocument | null =
+  sessionPath === null ? null : parseSession(readFileSync(sessionPath, 'utf8'), sessionPath);
+
+/**
+ * A SESSION BRINGS ITS OWN SCHEMA VERSION, ITS OWN SEED AND ITS OWN LENGTH, AND ALL THREE
+ * CONFLICTS ARE REFUSED OUTRIGHT RATHER THAN WARNED ABOUT.
+ *
+ * `--walls` and `--carry` warn and fall back, because a MISSPELLING has a safe answer. These are
+ * not misspellings, they are contradictions: `--seed 42 --session` asks for two different hotels,
+ * and `--ticks` past the end of the log asks to film ticks the session says nothing about. Either
+ * would fill a directory with frames that a report would then cite as "the session", which is
+ * worse than no frames at all. `assertReplayable` is the third and it is `replay.ts`'s, shared
+ * rather than restated — a document from another save schema describes commands whose meaning may
+ * have moved.
+ *
+ * AND THEY THROW BEFORE ANYTHING IS WRITTEN, which is the opposite of the empty-recording refusal
+ * at the foot of this file, for the reason that one states: there, the empty frames ARE the
+ * evidence of the fault, so they are written first. Here nothing has been filmed yet.
+ */
+if (session !== null && sessionPath !== null) {
+  assertReplayable(session, sessionPath);
+  if (process.argv.includes('--seed')) {
+    throw new Error(
+      `--seed and --session cannot both be given: ${sessionPath} was played at seed ` +
+        `${session.seed}, and the same command log under another seed is a different hotel.`,
+    );
+  }
+  if (process.argv.includes('--ticks') && arg('ticks', session.ticks) > session.ticks) {
+    throw new Error(
+      `--ticks ${arg('ticks', session.ticks)} is past the end of ${sessionPath}, which is ` +
+        `${session.ticks} ticks long. Beyond that the log says nothing, so the frames would not ` +
+        'be this session. Give --ticks at or below its length, or drop it to film all of it.',
+    );
+  }
+}
+
+const seed = session === null ? arg('seed', 7) : session.seed;
+const ticks = session === null ? arg('ticks', 2880) : arg('ticks', session.ticks);
 const every = arg('every', 240);
 
 /**
@@ -167,7 +270,42 @@ const outDir = process.argv.includes('--out')
 
 const content = loadContent();
 const world = createWorld(seed, content);
-const scenarioAt = createScenario(content, world.grid);
+/**
+ * WHERE EACH TICK'S COMMANDS COME FROM — the scenario this file drives, or a session's log.
+ *
+ * THE GROUPING IS THIS FILE'S OWN AND NOT `run`'s, though `run` does the same fold in
+ * `packages/sim`: it does not export it, and copying six lines is cheaper than widening the
+ * simulation's surface for a recorder. THE COPY IS NOT TAKEN ON TRUST — the agreement check in
+ * the frame loop below re-runs the same log through `run` and compares state hashes, so a
+ * grouping that disagreed with `run`'s in any way that reached the world goes red at the first
+ * filmed tick.
+ */
+function commandsFrom(schedule: readonly ScheduledCommand[]): (tick: number) => readonly Command[] {
+  const byTick = new Map<number, Command[]>();
+  for (const entry of schedule) {
+    const bucket = byTick.get(entry.tick);
+    if (bucket === undefined) byTick.set(entry.tick, [entry.command]);
+    else bucket.push(entry.command);
+  }
+  const none: readonly Command[] = [];
+  // Lookup only, never iterated — `run` carries the same note, for I2's reason.
+  return (tick: number): readonly Command[] => byTick.get(tick) ?? none;
+}
+// RENAMED FROM `scenarioAt` AT G-074, because under `--session` it is not a scenario. A name
+// that says "scenario" at the one call site that decides what the filmed hotel DOES is the kind
+// of quiet wrongness this project keeps paying for.
+const commandsAt =
+  session === null ? createScenario(content, world.grid) : commandsFrom(session.commands);
+if (session !== null && sessionPath !== null) {
+  // THE PROVENANCE GOES ON STDOUT AND NOT IN THE CAPTION. A caption change would move what the
+  // recorder DRAWS, and every frame recorded before today would stop being comparable by eye
+  // with the ones taken after. The output directory and this line are what a WATCH note cites.
+  process.stdout.write(
+    `session ${sessionPath} - seed ${session.seed} - save v${session.saveSchemaVersion} - ` +
+      `${session.ticks} ticks - ${session.commands.length} commands - ` +
+      `recorded hash ${session.finalHash}\n`,
+  );
+}
 // THE SPRITE REFERENCES THE GAME PASSES, not an empty map standing in for them. It returns
 // nothing today (no shipped table declares a sprite) and that is exactly why it was easy to
 // substitute — the substitution is invisible until the day it is not, which is the same shape
@@ -248,6 +386,38 @@ const entrance = entranceCell(current.grid);
 let peakGuests = 0;
 let peakAtTick = -1;
 
+/**
+ * ==========================================================================================
+ * EVERY CHECK ON WHICH THIS RECORDER AND `pnpm sim:replay` REACHED DIFFERENT WORLDS (G-074).
+ * Empty on the green path, and a reading is printed either way. NOT "every filmed tick": two
+ * arms are folded into this one list and the second is not taken at a filmed tick.
+ *
+ * WHAT THIS CHECKS, IN ONE LINE: for each frame written under `--session`, the world it was
+ * drawn from hashes to the same `hashState` as `run(createWorld(seed), log, tick)` — and, at the
+ * session's last tick, to the `finalHash` the BROWSER recorded.
+ *
+ * WHY IT IS ASSERTED AND NOT ASSUMED. A frame and a hash are two claims about one session, and
+ * this goal exists so that a stranger's report can be anchored to a picture. A picture drawn
+ * from a world that is not the world `sim:replay` reproduces is worse than no picture: it would
+ * be cited as evidence of a run that never happened that way. The two halves catch different
+ * things and both are needed:
+ *
+ *   THE PER-TICK ARM catches this file diverging from the SHIPPED tick loop — a command grouping
+ *   that dropped an entry, a `--carry` or a cache regime that reached the world, a scenario leak.
+ *   Its independent arm is `run` in `packages/sim`, the same call `replaySession` makes.
+ *
+ *   THE FINAL-HASH ARM catches the TWO CONTENT PATHS diverging. This recorder binds content
+ *   through `apps/game/src/content.ts` and `replay.ts` binds it through `content-loader.ts`;
+ *   `replay.ts`'s header says at length that the agreement between them is a test rather than an
+ *   assumption. Reproducing the browser's own `finalHash` here is that test taken a second time,
+ *   from the OTHER host, which is the only reason this arm is worth its cost.
+ *
+ * IT REPORTS AT THE END AND FAILS AFTERWARDS, exactly as the empty-recording refusal below does
+ * and for the reason that one states: the frames are the evidence, so they get written first.
+ * ==========================================================================================
+ */
+const disagreements: string[] = [];
+
 for (let tick = 0; tick <= ticks; tick += 1) {
   if (tick % every === 0) {
     for (const floor of floorsOf(current)) {
@@ -313,11 +483,51 @@ for (let tick = 0; tick <= ticks; tick += 1) {
       }
     }
     process.stdout.write(`${census(current, entrance.floor)}\n`);
+    if (session !== null) {
+      // The frame's own world, and the world a replay of the same log reaches at the same tick.
+      const filmed = hashState(current);
+      const replayed = hashState(
+        run(createWorld(session.seed, content), content, current.tick, session.commands),
+      );
+      if (filmed !== replayed) {
+        disagreements.push(
+          `tick ${current.tick}: this recording reached ${filmed}, a replay of the same log reached ${replayed}`,
+        );
+      }
+    }
   }
   if (tick === ticks) break;
   const before = current;
-  current = stepTick(current, content, scenarioAt(current.tick), cache);
+  current = stepTick(current, content, commandsAt(current.tick), cache);
   observeMotion(motion, content, before, current);
+}
+
+/**
+ * THE SECOND ARM: the browser's own `finalHash`, reproduced by this host.
+ *
+ * ONLY WHEN THE WHOLE SESSION WAS FILMED, because `finalHash` is a statement about the tick the
+ * button was pressed on and about no other. A prefix recording (`--ticks` below the log's length)
+ * is a legitimate thing to want and is still covered by the per-tick arm above.
+ */
+if (session !== null && sessionPath !== null && current.tick === session.ticks) {
+  const reached = hashState(current);
+  if (reached !== session.finalHash) {
+    // THE MESSAGE NAMES A DISJUNCTION RATHER THAN A CAUSE, AND IT NAMES THE COMMAND THAT
+    // SEPARATES THEM. The first draft read "the log and the seed agree, so what differs is the
+    // content this host bound" — which the very first mutation probe falsified: dropping one
+    // `spawnEntity` from the log fires this arm, and then the log is exactly what does NOT
+    // agree. A failure message that asserts a cause it cannot know is ADR-0007's class in the
+    // one place a reader has no other information.
+    disagreements.push(
+      `tick ${current.tick} (the session's last): the browser recorded ${session.finalHash} and ` +
+        `this recording reached ${reached}. Either this document is no longer the one that ` +
+        'produced that hash — a command edited, added or dropped — or the two hosts bound ' +
+        'different content: this recorder binds through `apps/game/src/content.ts` and ' +
+        '`pnpm sim:replay` binds through `tools/headless/src/content-loader.ts`. RUN ' +
+        `\`pnpm sim:replay ${sessionPath}\`: if it also reaches ${reached}, the ` +
+        'document moved; if it reaches the recorded hash, this host did.',
+    );
+  }
 }
 
 // THE RUN'S OWN SUMMARY, printed rather than inferred from the pictures.
@@ -385,6 +595,35 @@ writeFileSync(join(outDir, 'contact-sheet.html'), sheet, 'utf8');
 // AND IT PRINTS ITS READING ON THE GREEN PATH TOO, because a check that only speaks when it
 // fails is a check nobody can tell is still connected (ADR-0007).
 // ==========================================================================================
+// AND IT SPEAKS ON THE GREEN PATH, for the reason the guests reading below does (ADR-0007): a
+// check that only speaks when it fails is a check nobody can tell is still connected.
+if (session !== null) {
+  if (disagreements.length === 0) {
+    process.stdout.write(
+      `session: every filmed tick matches a replay of the same log` +
+        `${current.tick === session.ticks ? `, and tick ${current.tick} matches the hash the browser recorded` : ''}\n`,
+    );
+  } else {
+    process.stdout.write(
+      [
+        '',
+        // THE COUNT NAMES ITS UNIT (§4.1) AND THE UNIT IS CHECKS and not FILMED TICKS. The two
+        // arms are counted into one list and the final-hash arm is not a filmed tick — the first
+        // draft said "N of the filmed ticks" and the mutation probe printed 3 for two filmed
+        // ticks plus one terminal check.
+        `THIS RECORDING IS NOT OF THE SESSION IT NAMES. ${disagreements.length} of its checks put`,
+        'this recorder in a different world from a replay of the same session, so the frames just',
+        'written cannot be cited as evidence about it — a frame and a hash are two claims about one',
+        'run and they disagree.',
+        '',
+        ...disagreements.map((line) => `  ${line}`),
+        '',
+      ].join('\n'),
+    );
+    process.exitCode = 1;
+  }
+}
+
 if (peakGuests > 0) {
   process.stdout.write(`guests: peak ${peakGuests} in one frame, at tick ${peakAtTick}\n`);
 } else {

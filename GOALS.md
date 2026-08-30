@@ -5974,7 +5974,52 @@ Replaying frames into the VIEWER (`tools/viewer` reads recordings, a different f
 change to `exportSession`'s document shape — **it is fine; nothing had read it.**
 
 ## G-074 — A stranger's session can be LOOKED AT, not only hash-checked
-Status: **IN-PROGRESS 2026-08-30. NOT a blocker on G-067 — an improvement to its evidence, and labelled one.** Milestone: M5 · Owner pair: render-engineer / render-critic
+Status: **DONE 2026-08-30. A session can be looked at, and the pictures are NOT what proves it.** Owner pair: render-engineer / (orchestrator-verified)
+
+> **`pnpm --filter @hotelsim/game record -- --session <file>`** — 18 frames across four floors from
+> the REAL fixture at ticks 0 / 566 / 1132 / 1698 / 2264, the last being the tick the export button
+> was pressed on.
+
+**THE DEPENDENCY CALL IS THE DECISION IN THIS GOAL, AND IT DECLINED THE PERMITTED EASY THING.**
+The fence is `from: ^tools/` -> `^apps/`, so it constrains tools -> apps and **the edge this needed
+points the other way** — verified from the cruiser's own JSON, 0 violations. **So importing
+`replay.ts` was ALLOWED, and the builder refused it**: `replay.ts` imports `content-loader.js`, the
+HARNESS's content path, and `record-frames.ts`'s own header documents the incident where using that
+loader **filmed a hotel nobody could arrive in for four commits.** The document reader moved to
+`tools/headless/src/session-document.ts` instead — one value and one type from `@hotelsim/sim`,
+nothing else — with `replay.ts` re-exporting both names so nothing downstream moved. *Refused on a
+recorded incident rather than on taste.*
+
+**BOTH HASH ARMS ASSERTED, AND THE SECOND CROSSES THE TWO CONTENT PATHS**: every filmed tick against
+a replay of the same log, and the last tick against **the browser's own `finalHash`** — which is
+`apps/game/src/content.ts` on one side and `content-loader.ts` on the other. **Byte-identity of the
+default recording demonstrated rather than asserted**: HEAD's recorder written to a temp file, run,
+deleted — **51 files identical, 0 differing**, stdout matching line for line.
+
+> **AND THE HONEST CAVEAT IT DID NOT HAVE TO VOLUNTEER: THE PICTURES PROVE NOTHING.** The fixture's
+> three player commands are all deterministic no-ops (G-073 documented the property; nobody had noted
+> the consequence), so **the session's frames are byte-identical to a default seed-7 recording — all
+> 38, `cmp`-equal.** What proves the substitution is the MUTATION PROBES: drop a scenario command and
+> nine rooms become eight; move the player's corridor to a free cell and 83 declared cells become 84.
+> **A WATCH taken from THIS fixture cannot be told apart from the scenario by looking at it.** *The
+> first genuinely interesting session will be the stranger's — which is ADR-0110's point arriving
+> from the other direction.*
+
+**IT CAUGHT A FALSE MESSAGE THE ORCHESTRATOR HAD VERIFIED AND COMMITTED AT G-073.** `replay.ts` said
+*"the seed, the log and the schema version all match, so what differs is the simulation or the
+content it ran under."* **False in exactly the case G-073's own criterion 3 manufactures**: the hash
+is the ONLY test of the log, so a mismatch is precisely the state in which *"the log matches"* is
+unknown — and every tampered log takes that path. **Fixed by the orchestrator at VERIFY** (it is
+shipped code, not the builder's scope) with a disjunction naming both causes and how to separate
+them. *The builder found it because its OWN first draft copied the same shape and its probe printed
+the sentence while being the counterexample.*
+
+**Probe B re-confirmed G-073's correction for the third time**: moving the REFUSED `drawRoom`
+produces a byte-identical world, because a refusal counter does not care where or when it was
+incremented.
+
+**`packages/sim` zero-line diff; `check:tickcost` reads `verdict=IDENTICAL:1 ratio=none`; no save
+bump; no gate touched.** Milestone: M5 · Owner pair: render-engineer / render-critic
 
 G-073 made an exported session **replayable**: `pnpm sim:replay` reproduces `finalHash` from a real
 download. **That proves the run happened. It does not show anybody what it looked like.**

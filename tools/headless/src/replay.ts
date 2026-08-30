@@ -30,6 +30,15 @@
 // `.dependency-cruiser.cjs` forbids `tools/` importing anything under `apps/` except three
 // pure view modules. A consumer there could only be tested through a spawn.
 //
+// NARROWED AT G-074, BECAUSE A SECOND SESSION CONSUMER NOW DOES LIVE IN `apps/game` AND THIS
+// PARAGRAPH WOULD OTHERWISE READ AS A BAN. `record-frames.ts --session` drives a session in
+// order to FILM it, and the paragraph above is unchanged in what it decides: THE HASH-CHECKING
+// TOOL lives here, because that one has to be reachable from a test and a consumer under
+// `apps/` is not. The recorder is not reachable from a test either — it carries its own
+// assertions instead, which is the argument its own header already makes for the
+// empty-recording refusal, and which is why the two files check the SAME session in two
+// places and must agree about it.
+//
 // THE COST OF LIVING HERE IS ONE THING AND IT IS STATED RATHER THAN HIDDEN: the browser bound
 // its content through `apps/game/src/content.ts` and this binds it through
 // `content-loader.ts`, so there are TWO content paths and a replay is only right while they
@@ -61,141 +70,30 @@
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { createWorld, hashState, run, SAVE_SCHEMA_VERSION } from '@hotelsim/sim';
-import type { BoundContent, ScheduledCommand, World } from '@hotelsim/sim';
+import { createWorld, hashState, run } from '@hotelsim/sim';
+import type { BoundContent, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
+import { assertReplayable, parseSession } from './session-document.js';
+import type { SessionDocument } from './session-document.js';
 
-/**
- * The document `exportSession` writes, as this reader understands it.
- *
- * The field names are the producer's and are not restated anywhere else; `EXPECTED_FIELDS`
- * below is the runtime half of this type and the two are checked against each other by the
- * field-coverage case in `replay.session.test.ts`, which drops each key in turn and requires
- * a refusal naming it. That is `assertWorldShape`'s discipline (I6) applied to the one other
- * document this project serialises.
- */
-export type SessionDocument = {
-  /** The seed the world was created with — `SEED` in `apps/game/src/main.ts`. */
-  readonly seed: number;
-  /** `SAVE_SCHEMA_VERSION` as it stood in the build that played the session. */
-  readonly saveSchemaVersion: number;
-  /** `world.tick` at the moment the button was pressed. */
-  readonly ticks: number;
-  /** `hashState(world)` at that moment. The thing a replay has to reproduce. */
-  readonly finalHash: string;
-  /**
-   * Ticks consumed by each rendered frame, in order.
-   *
-   * NOT READ BY THE REPLAY, and deliberately so: the log already says which tick each
-   * command landed on, so how the wall clock distributed those ticks across frames changes
-   * nothing about the run. It is the WITNESS that this log came out of a real-time driver
-   * rather than a headless loop, which is the property `session.ts` states and which
-   * `replay.session.test.ts` asserts about the committed fixture.
-   */
-  readonly frameTicks: readonly number[];
-  /** Exactly what was applied, in order, tick by tick — the command log I2 speaks of. */
-  readonly commands: readonly ScheduledCommand[];
-};
-
-/**
- * Every key the document may carry, and no others.
- *
- * AN UNKNOWN KEY IS REFUSED RATHER THAN IGNORED, and that is this goal's own lesson wearing
- * a predicate: a producer that grew a field its consumer silently drops is how the session
- * came to have no reader at all. A reader that shrugs at a field it does not understand
- * cannot tell "I replayed the whole document" from "I replayed the part I recognised".
- */
-const EXPECTED_FIELDS = [
-  'seed',
-  'saveSchemaVersion',
-  'ticks',
-  'finalHash',
-  'frameTicks',
-  'commands',
-] as const;
-
-const isInteger = (value: unknown): value is number => Number.isInteger(value);
-
-/**
- * Parse and validate one exported session. Throws with the path and the reason, never a
- * raw `SyntaxError` and never a `TypeError` three frames deep in the tick loop.
- *
- * The schema version is NOT checked here — that is `assertReplayable` below, so that a
- * caller can read a stale document's fields in order to say something useful about it.
- */
-export function parseSession(text: string, path: string): SessionDocument {
-  const fail = (why: string): never => {
-    throw new Error(`${path} is not an exported session: ${why}`);
-  };
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch (error) {
-    return fail(`it is not JSON (${error instanceof Error ? error.message : String(error)})`);
-  }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return fail('the top level is not an object');
-  }
-  const document = parsed as Record<string, unknown>;
-  const missing = EXPECTED_FIELDS.filter((field) => !(field in document));
-  if (missing.length > 0) fail(`it is missing ${missing.join(', ')}`);
-  // Sorted, because the message must not depend on key order in the file (I2's habit, and
-  // this one is printed to a human who may be comparing two runs).
-  const unknown = Object.keys(document)
-    .filter((key) => !(EXPECTED_FIELDS as readonly string[]).includes(key))
-    .sort();
-  if (unknown.length > 0) {
-    fail(
-      `it carries ${unknown.join(', ')}, which this reader does not understand — ` +
-        'exportSession has grown a field and this reader has not',
-    );
-  }
-  if (!isInteger(document['seed'])) fail('seed is not an integer');
-  if (!isInteger(document['saveSchemaVersion'])) fail('saveSchemaVersion is not an integer');
-  if (!isInteger(document['ticks']) || (document['ticks'] as number) < 0) {
-    fail('ticks is not a whole number of ticks');
-  }
-  if (typeof document['finalHash'] !== 'string' || document['finalHash'] === '') {
-    fail('finalHash is not a hash');
-  }
-  const frameTicks = document['frameTicks'];
-  if (!Array.isArray(frameTicks) || !frameTicks.every((n) => isInteger(n) && n >= 0)) {
-    fail('frameTicks is not a list of tick counts');
-  }
-  const commands = document['commands'];
-  if (!Array.isArray(commands)) fail('commands is not a list');
-  for (const [index, entry] of (commands as unknown[]).entries()) {
-    if (typeof entry !== 'object' || entry === null) fail(`commands[${index}] is not an object`);
-    const scheduled = entry as Record<string, unknown>;
-    if (!isInteger(scheduled['tick']) || (scheduled['tick'] as number) < 0) {
-      fail(`commands[${index}] has no tick`);
-    }
-    const command = scheduled['command'];
-    if (typeof command !== 'object' || command === null) fail(`commands[${index}] has no command`);
-    if (typeof (command as Record<string, unknown>)['kind'] !== 'string') {
-      fail(`commands[${index}].command has no kind`);
-    }
-  }
-  return document as unknown as SessionDocument;
-}
-
-/**
- * Refuse a document recorded against another save schema, by number.
- *
- * BOTH DIRECTIONS ARE REFUSED. A document from an OLDER build describes commands whose
- * meaning may have moved; one from a NEWER build describes commands this build may not have.
- * Neither is a run this binary can reproduce, and answering "the hashes differ" to either
- * would be the unstated-reason failure `exportSession`'s docblock exists to prevent.
- */
-export function assertReplayable(document: SessionDocument, path: string): void {
-  if (document.saveSchemaVersion !== SAVE_SCHEMA_VERSION) {
-    throw new Error(
-      `${path} was recorded against save schema v${document.saveSchemaVersion}, this build is v${SAVE_SCHEMA_VERSION}. ` +
-        'A session is a seed and a command log, not a save: there is no migration path for one, ' +
-        'so replay it with a build at its own version.',
-    );
-  }
-}
+// ---------------------------------------------------------------------------------------
+// THE DOCUMENT READER LIVES IN `session-document.ts` AND IS RE-EXPORTED HERE (G-074).
+//
+// It was defined in this file at G-073, when this file was its only consumer. G-074 adds a
+// SECOND one — `apps/game/scripts/record-frames.ts --session`, which FILMS a session instead
+// of hashing it — and the alternative to sharing was a second copy of the format, which is
+// the defect class this project keeps recording. `session-document.ts` carries the argument
+// for why the shared piece is the DOCUMENT READER ALONE rather than this whole module: this
+// one imports `./content-loader.js`, the HARNESS's content path, and the recorder must not
+// have that in its module graph.
+//
+// NOTHING ABOUT THE VALIDATION CHANGED; IT MOVED. Same fields, same order, same messages,
+// same refusals — and the names are RE-EXPORTED rather than relocated in every caller, so
+// `replay.session.test.ts` reaches `parseSession` and `assertReplayable` through this module
+// exactly as it did.
+// ---------------------------------------------------------------------------------------
+export { assertReplayable, parseSession } from './session-document.js';
+export type { SessionDocument } from './session-document.js';
 
 /** What a replay produced, and what the document said it should have. */
 export type Replay = {
@@ -281,9 +179,20 @@ function main(): void {
   process.stdout.write(describeReplay(document, replay, path));
   if (!replay.matches) {
     throw new Error(
+      // THE FIRST SPELLING OF THIS MESSAGE ASSERTED SOMETHING IT CANNOT KNOW, AND G-074's TAMPER
+      // PROBE PRINTED IT WHILE BEING THE COUNTEREXAMPLE. It read "the seed, the log and the schema
+      // version all match, so what differs is the simulation or the content it ran under". The seed
+      // and the schema version are FIELDS and really are checked. The LOG IS NOT: this hash is the
+      // only thing that ever tests it, so a mismatch is exactly the state in which "the log matches"
+      // is unknown — and G-073's own criterion 3 (a tampered log must fail) routes every tamper
+      // through here. A disjunction that names both causes and says how to separate them is the most
+      // this line can truthfully carry.
       `${path} does not replay: it recorded ${document.finalHash} and this build reached ${replay.hash}. ` +
-        'The seed, the log and the schema version all match, so what differs is the simulation or the ' +
-        'content it ran under — compare the content fingerprint above against the build that played it.',
+        'Either this document is no longer the one that produced that hash — a command edited, added ' +
+        'or dropped — or this build is not the one that played it. The seed and the schema version ' +
+        'were checked and agree; THE LOG WAS NOT, because this hash is the only test of it. To ' +
+        'separate the two: compare the content fingerprint above against the build that played it — ' +
+        'if the fingerprints agree, the document moved.',
     );
   }
 }
