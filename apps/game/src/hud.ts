@@ -629,9 +629,11 @@ export function renderTools(
   none.addEventListener('click', () => handlers.onPick(null));
   host.append(none);
 
-  // THE SESSION LOG, ON DEMAND. G-031b replays this file headless and compares hashes; it
-  // is a button rather than an automatic write because `hashState` canonicalises the whole
-  // world and nothing should pay that once a frame.
+  // THE SESSION LOG, ON DEMAND. `pnpm sim:replay <file>` replays it headless and compares
+  // hashes (G-073 — this comment named `G-031b`, which ADR-0032 §2 ruled is not a goal at all,
+  // and there was no reader of any kind until then). It is a button rather than an automatic
+  // write because `hashState` canonicalises the whole world and nothing should pay that once
+  // a frame.
   const save = document.createElement('button');
   save.textContent = 'export session';
   save.title = 'the seed, the command log and the state hash — G-031b replays it headless';

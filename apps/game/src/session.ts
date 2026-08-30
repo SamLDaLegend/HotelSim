@@ -105,8 +105,10 @@ export type Session = {
    * NOT A DIAGNOSTIC. It is the witness that this log came out of a real-time driver rather
    * than out of a headless `run()`: a 30-ticks-per-second rung against a 60Hz display earns
    * 0 ticks on some frames and 2 on others, and no straight loop produces that shape by
-   * accident. G-031b's replay test asserts it, which is what stops the fixture being
-   * regenerated the easy way after a schema move.
+   * accident. `replay.session.test.ts` asserts it of the committed fixture — the frames sum
+   * to the run, there are MORE of them than there are ticks, and the shape is ragged — which
+   * is what stops the fixture being regenerated the easy way after a schema move. (That
+   * sentence named `G-031b`'s replay test and was an obligation with no owner until G-073.)
    */
   readonly frameTicks: number[];
   /** The most recent resolved action. Never expires — see `main.ts`. */
@@ -313,14 +315,28 @@ export function describeAction(resolved: ResolvedAction, words: (name: string) =
 /**
  * THE SESSION, AS A DOCUMENT — seed, log, witness, and the hash of the world just drawn.
  *
- * This is G-031b's input and it is produced here because only a played session can produce
- * it. `hashState` is computed ON DEMAND rather than per frame: it canonicalises the whole
- * world including the ledger, and a HUD that did it 60 times a second would be paying a
- * serialisation cost to display a number nobody reads until they export.
+ * IT HAS A CONSUMER SINCE G-073, AND UNTIL THEN IT DID NOT. This paragraph read "This is
+ * G-031b's input" from G-031a until 2026-08-30 — and G-031b is NOT A GOAL: ADR-0032 §2
+ * (2026-08-13) ruled it a name that "occurs exactly once in the ledger", with no block, no
+ * criteria and no owner, and `GOALS.md` carries it struck. So this button wrote a document
+ * NOTHING IN THE REPOSITORY COULD READ, while the comment naming its reader is what made that
+ * invisible — ADR-0007's class one level up, a producer whose consumer nobody verified.
+ *
+ * The reader is `tools/headless/src/replay.ts` (`pnpm sim:replay <file>`): it re-creates the
+ * world from `seed`, re-runs `commands` for `ticks`, and requires `finalHash` back.
+ * `replay.session.test.ts` runs it against a document a real browser downloaded from THIS
+ * BUTTON, because a round-trip that never left the test suite would re-make the same defect.
+ *
+ * It is produced here because only a played session can produce it. `hashState` is computed ON
+ * DEMAND rather than per frame: it canonicalises the whole world including the ledger, and a
+ * HUD that did it 60 times a second would be paying a serialisation cost to display a number
+ * nobody reads until they export.
  *
  * The schema version travels with it so a stale log fails LOUDLY at replay — "recorded
  * against save v12, this build is v13" — rather than as two hex strings that differ for an
  * unstated reason. Track B moves that number; this is how the move announces itself.
+ * `assertReplayable` in `replay.ts` is where that promise is now KEPT rather than only made,
+ * and it refuses a NEWER document as well as an older one, for the same reason.
  */
 export function exportSession(session: Session, seed: number, world: World): string {
   return JSON.stringify(

@@ -5853,6 +5853,118 @@ it away in the write-up.*
 Any threshold on how bad the burn must be; any change to the three facts; and the warning's WORDING,
 which is G-067's to judge.
 
+## G-073 — A played session can be replayed, which G-067 has been assuming since it was written
+Status: **DONE 2026-08-30. The button's output is readable for the first time, and it was proved against a file the SHIPPED BUTTON produced.** Owner pair: sim-engineer / (orchestrator-verified)
+
+> **`pnpm sim:replay <file>`**, living in `tools/headless/src/replay.ts`. **Two placements were ruled
+> out MECHANICALLY rather than by taste**: not `packages/sim`, which cannot name `node:fs` (I1, and
+> the tsconfig enforces it); not `apps/game`, which `vitest.config.ts` excludes and which
+> `.dependency-cruiser.cjs` forbids `tools/` from importing except three pure view modules.
+
+**THE FIXTURE IS A REAL DOWNLOAD, WHICH IS THE CRITERION THAT MATTERED.** The builder drove the
+SHIPPED BUILD in a real browser — vite on 5180, headless Edge over the DevTools protocol, genuine
+`Input.dispatchMouseEvent` presses on the toolbar and canvas, **the game's own real-time driver
+deciding which tick each click landed on**, and the browser's own download of the blob
+`exportSession` built. **Nothing in the repo was patched to obtain it.**
+`fixtures/played-session.json` is that download byte-for-byte: **76,451 bytes, seed 7, v25, 2,264
+ticks, 158 commands of which THREE are the player's** (ticks 232 / 325 / 514), 6,501 frames. *A
+round-trip that never left the test suite would have re-made this goal's own defect.*
+
+**VERIFIED BY THE ORCHESTRATOR AT THE COMMAND LINE**, not on report:
+`recorded c31225990e219e8d / replayed c31225990e219e8d · MATCH`, exit 0. The session laid a corridor
+twice on an already-declared cell, dragged a room onto an occupied cell (refused), crossed a
+settlement boundary and saw 25 arrivals with 9 checkouts — **so the replay covers scenario commands,
+player commands, a refusal, demand-driven arrivals and a nightly settlement.**
+
+**THE ONE REAL COST IS STATED RATHER THAN HIDDEN**: the browser binds content through
+`apps/game/src/content.ts` and this binds through `content-loader.ts`, so there are TWO content paths.
+**Taken deliberately — a consumer using the game's own loader could never DISAGREE with it, so it
+could never report that the headless host had drifted.** The test is the agreement check, and
+`record-frames.ts` carries the incident it is priced against: it used this loader with the default
+market and filmed an empty hotel for four commits.
+
+**TWO CORRECTIONS TO THE ORCHESTRATOR'S OWN WORK.** *(1)* **`G-031b` IS NOT AN UNBUILT GOAL — IT IS
+NOT A GOAL.** Struck 2026-08-13 under ADR-0032 §2 (`GOALS.md:122`, *"names only, never goals"*) as a
+name occurring exactly once in the ledger with no statement, criteria or owner. `exportSession`'s
+docblock names it as its consumer, **and the orchestrator quoted that docblock straight into G-067's
+block** without checking either the name or the capability. Both were false. *(2)* **EXIT CRITERION
+4 WAS OVER-GENERAL**: *"change one command and the hash must diverge"* is not true of every command,
+**and the reason is the sim being RIGHT rather than the tool being broken** — re-timing the player's
+corridor changes nothing, because it declared a cell the scenario had already declared and
+`commands.ts` documents that as a deterministic no-op; moving the REFUSED `drawRoom` changes nothing,
+because a refusal counter does not care which tick it was incremented on. **The shipped tampers are
+the ones that bite** — a command's cell, a dropped scenario command, a falsified hash — **and the
+negative case is pinned with its explanation, so the next reader meets the answer instead of the
+surprise.**
+
+**Mutation probes bit and were restored with a verified sha256**: forcing the default market reddens
+the match case (3), disabling the schema refusal reddens the stale-schema case (3).
+
+**`packages/sim` HAS A ZERO-LINE DIFF**, `check:tickcost` reads **`verdict=IDENTICAL:1 ratio=none`**
+— the gate declining to measure a ratio rather than reporting a meaningless one — and I2 is
+unmoved at `058a2e86ff88b44a`. No save bump. **`apps/game/src/{session,hud}.ts` were edited,
+COMMENTS ONLY, and the builder flagged it as outside its domain**: the goal's founding defect IS a
+comment naming a consumer that never existed, and leaving it would have left the trap armed. Milestone: M5 · Owner pair: sim-engineer / sim-critic
+
+### THE PRODUCER EXISTS, IS WELL DOCUMENTED, AND HAS NO CONSUMER
+
+`exportSession` (`apps/game/src/session.ts:325`) writes `{seed, saveSchemaVersion, ticks, finalHash,
+frameTicks, commands}` — **measured live from the shipped button: 36,003 bytes, 155 commands, a real
+`finalHash`.** Its docblock says, in as many words:
+
+> *"THE SESSION, AS A DOCUMENT … **This is G-031b's input** and it is produced here because only a
+> played session can produce it."*
+
+**MEASURED, AND THE NEGATIVE IS THE FINDING:**
+
+- `record.replay.test.ts` contains **ZERO** references to `exportSession`.
+- **Nothing under `tools/` mentions it at all** — the only three files that name it are
+  `apps/game/src/{session,main,hud}.ts`, all on the producing side.
+- The CLI has **eighteen** flags and **none reads a session file**; `report.ts` builds its command
+  logs with `schedule(...)` and no `readFileSync` reaches one.
+
+> **THE BUTTON PRODUCES A DOCUMENT NOTHING IN THIS REPOSITORY CAN READ**, while its own comment says
+> otherwise. **ADR-0007's class one level up**: not a check that inspects nothing, but a PRODUCER
+> whose CONSUMER nobody verified — and the comment naming the consumer is what made it invisible.
+
+### WHY IT IS M5 AND NOT A NICETY
+
+**G-067's block claims this as its evidentiary design, and the orchestrator wrote that claim without
+checking it:** *"`export session` makes the session a REPRODUCIBLE ARTEFACT … so a stranger's
+subjective report can be ANCHORED TO FRAMES afterwards — which is what ADR-0013 demands and what an
+ordinary playtest can never supply."*
+
+**That is the whole argument for why this project's playtest is worth more than anybody's playtest,
+and it rests on a path that does not exist.** G-067 can still run — its protocol already allows
+findings *"explicitly marked as unanchorable"* — but it would run with the weaker evidence it was
+written to avoid, **and the discovery would come AFTER the one session of ignorance was spent.**
+
+### THE REPLAY IS GENUINELY POSSIBLE, WHICH IS WHY THIS IS SMALL
+
+**The exported log is complete, not partial.** Measured: its first entries are the SCENARIO's own
+commands (`spawnEntity standard_room at floor 0, column 1, row 1` at tick 0), so **seed + log is a
+whole description of the world** — exactly what I2 rests on. `saveSchemaVersion` travels with it so a
+stale log fails loudly rather than as two hex strings differing for an unstated reason.
+
+### Exit criteria
+
+1. **A consumer that reads an exported session and reproduces `finalHash`**, run against a file the
+   SHIPPED BUTTON produced — not one a test synthesised. *A round-trip that never leaves the test
+   suite would re-make this goal's own defect.*
+2. **A stale-schema log fails LOUDLY**, with the version in the message, which is the behaviour
+   `exportSession`'s docblock already promises.
+3. **A tampered log fails**, so the check is not vacuous — change one command and the hash must
+   diverge.
+4. `pnpm verify` — fourteen rows, fourteen PASS, exit read from `$?`. **No save bump. I2 must not
+   move** — this reads existing state and adds no world field.
+5. **G-067's block is corrected** to say what is true at the time it is read *(the orchestrator's, at
+   REFLECT, not the builder's)*.
+
+### Out of scope
+
+Replaying frames into the VIEWER (`tools/viewer` reads recordings, a different format), and any
+change to `exportSession`'s document shape — **it is fine; nothing had read it.**
+
 ## G-067 — A stranger plays it, and the protocol is written BEFORE they do
 Status: **READY 2026-08-30 — every dependency has landed and this is the ONLY remaining M5 item. It cannot be run by an agent.** Milestone: M5 · Owner pair: (human-run) / orchestrator-analysed
 
@@ -5878,10 +5990,18 @@ informed one.**
 ### WHY A PLAYTEST IS WORTH MORE HERE THAN IT USUALLY IS
 
 **`export session` makes the session a REPRODUCIBLE ARTEFACT.** It writes the seed, the command log
-and the state hash, and G-031b replays it headless. So a stranger's subjective report can be
+and the state hash, and **`pnpm sim:replay <file>` replays it headless (G-073)**. So a stranger's subjective report can be
 **anchored to frames afterwards** — which is what ADR-0013 demands (*a "reads as stupid" finding
 requires a frame reference*) and what an ordinary playtest can never supply. **The report says what
 they felt; the log says what happened; the replay reconciles them.**
+
+> **THIS PARAGRAPH SAID "G-031b REPLAYS IT HEADLESS" UNTIL G-073, AND G-031b IS NOT A GOAL.** It was
+> STRUCK on 2026-08-13 under ADR-0032 §2 — *"names only, never goals"*, `GOALS.md:122` — as a name
+> occurring exactly once in the ledger with no statement, no criteria and no owner. **The
+> orchestrator quoted `exportSession`'s docblock, which names the same struck goal, without checking
+> either the name or the capability.** The capability did not exist: measured at G-073, `export
+> session` produced a document **nothing in this repository could read.** It exists now, and this
+> paragraph names the thing that does it.
 
 ### THE FIVE THINGS, AND ONLY THESE
 

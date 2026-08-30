@@ -25,6 +25,7 @@
     "test:save": "vitest run save",
     "dev": "pnpm --filter @hotelsim/game dev",
     "sim:run": "tsx tools/headless/src/cli.ts",
+    "sim:replay": "tsx tools/headless/src/replay.ts",
     "sim:bench": "node tools/gates/bench.mjs",
     "sim:measure": "node tools/gates/measure.mjs",
     "sim:needs-history": "node tools/gates/needs-history.mjs",
