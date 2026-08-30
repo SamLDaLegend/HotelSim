@@ -831,10 +831,11 @@ export const roomTypesSchema = z.array(roomTypeSchema).min(1);
  *
  * An item is still the smallest thing the validity rule can inspect (a room is furnished
  * when an entity of this kind stands in it), and it is now also a PROVIDER: a guest
- * engages the arm chair, not the lounge it stands in. Item cost, quality and decay are
- * still M6, and each is a field added here later rather than a shape changed. `fitBasisPoints`
- * (G-014a) is NOT item quality: it is an ordering over providers of a need, it never
- * changes, and nothing in it says a chair wears out.
+ * engages the arm chair, not the lounge it stands in. **COST ARRIVED AT G-075a** — see
+ * `purchaseCostPenceSchema` below; quality and decay are still owed, and each is a field
+ * added here later rather than a shape changed. `fitBasisPoints` (G-014a) is NOT item
+ * quality: it is an ordering over providers of a need, it never changes, and nothing in it
+ * says a chair wears out.
  *
  * An item type nobody requires is NOT an error, and that asymmetry is deliberate. A need
  * no provider offers is guaranteed unhappiness (`bindContent` rejects it); an item no room
@@ -867,6 +868,64 @@ export const roomTypesSchema = z.array(roomTypeSchema).min(1);
  *     a vending machine. Such an item is a declared provider that could never deliver.
  * ---------------------------------------------------------------------------
  */
+/**
+ * WHAT ONE OF THESE COSTS A PLAYER TO PUT IN A ROOM (G-075a, ADR-0111), in integer pence.
+ *
+ * ==========================================================================================
+ * EVERY VALUE IN `item-types.json` IS A **DESIGN STATEMENT** AND IS LABELLED ONE. NOTHING
+ * DERIVES IT AND NOTHING MAY CLAIM TO.
+ *
+ * ADR-0013 §4 governs a number A GATE COMPARES AGAINST — *"a gate threshold must be derivable
+ * from a stated requirement, or it is a superstition with CI access"*. **Nothing compares
+ * against a price.** `room-types.json`'s `constructionCostPence` of 250,000 is not derived
+ * either, and `demand.json` is the ONE table in this project that is (see
+ * `partiesPerDaySchema`, which carries its derivation). Manufacturing an arithmetic for a
+ * price would be the worse failure of the two: a number nobody can source, wearing the
+ * costume of one that can.
+ *
+ * THE REFERENCE POINT, WHICH IS THE HONEST THING A CHOSEN NUMBER CAN OFFER: **a room costs
+ * 250,000** (`room-types.json`, six of the seven types). An item and a facility room compete
+ * for the same job — being the thing that serves a guest's need — so a room's price is the
+ * scale an item's price is chosen on, and the shipped three sit at:
+ *
+ *     single_bed        25,000    a tenth of a room. It PROVIDES NOTHING (`provides: []`).
+ *     arm_chair        100,000    two fifths of a room. One engagement need.
+ *     vending_machine  100,000    two fifths of a room. One engagement need.
+ *
+ * **THE TWO PROVIDERS ARE PRICED THE SAME, AND THAT IS THE CHOICE RATHER THAN AN OVERSIGHT.**
+ * They are structurally identical — one engagement need each, the same `fitBasisPoints`, the
+ * same `refillPerTick + 1` concurrent guests — so a price gap between them would be a number
+ * with nothing behind it. What separates them is WHICH need they serve, and a need is not
+ * ranked against another need.
+ *
+ * **AN ITEM IS THE CHEAPER ROUTE TO PROVISION AND THAT IS DELIBERATE, because it is not the
+ * same purchase.** A `hotel_cafe` costs 250,000 AND 1,500 a night AND raises the star rating;
+ * a `vending_machine` costs 100,000, costs nothing to keep, RAISES NO RATING (`star-tiers.json`
+ * counts rooms), scrap-values at NOTHING (`stockValueOf` in `loan.ts` walks room types only),
+ * and cannot stand anywhere but inside a room the player already paid for. Each wins on an
+ * axis: the item on capital, the room on demand.
+ * ==========================================================================================
+ *
+ * REQUIRED HERE AND OPTIONAL IN THE SIM, for the third time in this file and the same reason
+ * as `provides` and both room prices. Absence is not emptiness: `ItemTypeData` in
+ * `packages/sim/src/content.ts` keeps the key optional so a document written before items had
+ * a price fingerprints exactly as it did then — which is what keeps the permanent v1 save
+ * fixture a world that still ticks (ADR-0006) — and reads as FREE. A NEW document on disk that
+ * forgets the key is a designer's oversight, and a free provider is the exploit ADR-0111 was
+ * ruled to close, so the key is required. `0` remains available and is the different,
+ * deliberate statement "free to place".
+ *
+ * **IT IS CHARGED BY `placeItem` AND BY NOTHING ELSE, WHICH IS AN ASYMMETRY WORTH STATING
+ * HERE RATHER THAN LEAVING TO BE REDISCOVERED.** A scenario seeds furniture with
+ * `spawnEntity`, the structural primitive, which charges nothing — so the shipped hotel's 49
+ * entities cost it nothing and its economics did not move when this field arrived. The same
+ * asymmetry already existed for ROOMS and is why a demolished seeded room refunds money
+ * nobody paid (G-068's finding). `drawRoom` also still seeds a room's `requires` items free:
+ * a room's `constructionCostPence` is the price of the room READY TO WORK. See
+ * `applyPlaceItem` in `packages/sim/src/build.ts`.
+ */
+export const purchaseCostPenceSchema = penceSchema.min(0);
+
 export const itemTypeSchema = z.strictObject({
   id: contentIdSchema,
   name: z.string().min(1),
@@ -875,6 +934,10 @@ export const itemTypeSchema = z.strictObject({
   // item ranks on the same scale — see `fitBasisPointsSchema`, which also states why
   // `single_bed` may not carry one (it provides nothing, so nothing could ever read it).
   fitBasisPoints: fitBasisPointsSchema,
+  // AND A PRICE SINCE G-075a (ADR-0111) — see `purchaseCostPenceSchema` above, which carries
+  // the whole of it: every value is a DESIGN STATEMENT, the reference point is what a room
+  // costs, and only `placeItem` ever charges it.
+  purchaseCostPence: purchaseCostPenceSchema,
   // AND AN OPTIONAL PICTURE SINCE G-035 — see `spriteRefSchema`. An item is drawn by the
   // same prefer-sprite-else-fallback rule a room is, so the field is on both tables or the
   // seam only half exists.

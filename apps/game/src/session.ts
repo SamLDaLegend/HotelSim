@@ -337,12 +337,41 @@ export function describeAction(resolved: ResolvedAction, words: (name: string) =
  * unstated reason. Track B moves that number; this is how the move announces itself.
  * `assertReplayable` in `replay.ts` is where that promise is now KEPT rather than only made,
  * and it refuses a NEWER document as well as an older one, for the same reason.
+ *
+ * AND SO DOES THE CONTENT FINGERPRINT, SINCE G-076 — FOR THE SAME PROMISE, WHICH THE SCHEMA
+ * VERSION ALONE COULD NOT KEEP.
+ *
+ * ==========================================================================================
+ * `finalHash` IS NOT A STATEMENT ABOUT THE LOG ALONE. `hashState` folds `World.contentHash`,
+ * which `bindContent` computes over every injected table — so the SAME seed and the SAME log
+ * reach a different hash the moment a designer edits a price, a rate or a name. The save
+ * schema version does not move when content moves, and it should not: content is not a
+ * format.
+ *
+ * MEASURED, AND IT IS WHY THIS FIELD EXISTS. G-075a added `purchaseCostPence` to three item
+ * types — a field the committed session's log never exercises, because its 158 commands are
+ * 49 `spawnEntity`, 85 `layCorridor`, 23 `layStair` and one `drawRoom`, and not one
+ * `placeItem` among them. The fingerprint moved anyway, and with it every hash the document
+ * claims. The replay reported two hex strings and, in the same breath, told the reader to
+ * "compare the content fingerprint above against the build that played it" — against a
+ * document that recorded no fingerprint to compare. A false message had been replaced with
+ * an unactionable one, and neither was the defect: THE FORMAT WAS.
+ *
+ * So the world's own fingerprint travels with the hash it qualifies, and `replay.ts` refuses
+ * a content mismatch BY NAME, before it ever reaches the hash comparison. The two fields are
+ * ONE STATEMENT — "under this content, this log reaches this hash" — and neither half means
+ * anything without the other.
+ * ==========================================================================================
  */
 export function exportSession(session: Session, seed: number, world: World): string {
   return JSON.stringify(
     {
       seed,
       saveSchemaVersion: SAVE_SCHEMA_VERSION,
+      // `world.contentHash` rather than a fingerprint asked of the loader: this is the
+      // content the world was BUILT under and has been asserting against on every tick
+      // (`assertContentMatches`), so it cannot disagree with the hash on the line below.
+      contentHash: world.contentHash,
       ticks: world.tick,
       finalHash: hashState(world),
       frameTicks: session.frameTicks,

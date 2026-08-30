@@ -128,10 +128,24 @@ export const FOOD_COURT_ROOM_TYPES = [
   },
 ] as const;
 
-/** `single_bed` is dropped with the bedroom it furnished; the other two are shipped verbatim. */
+/**
+ * `single_bed` is dropped with the bedroom it furnished; the other two are shipped verbatim.
+ *
+ * `purchaseCostPence` IS REQUIRED ON DISK SINCE G-075a (ADR-0111), like the two room prices and
+ * `requires` and the two footprint bounds above, and for the same reason: this fixture is WRITTEN
+ * OUT and read back through `itemTypeSchema`, so it has to look like a document a designer edits
+ * today rather than like history. The SHIPPED values, so this arm differs from the shipped table
+ * only in what it was always meant to differ in — no food court in this file places an item.
+ */
 export const FOOD_COURT_ITEM_TYPES = [
-  { id: 'arm_chair', name: 'Arm Chair', provides: ['guest_comfort'], fitBasisPoints: 2500 },
-  { id: 'vending_machine', name: 'Vending Machine', provides: ['guest_nourishment'], fitBasisPoints: 2500 },
+  { id: 'arm_chair', name: 'Arm Chair', provides: ['guest_comfort'], fitBasisPoints: 2500, purchaseCostPence: 100000 },
+  {
+    id: 'vending_machine',
+    name: 'Vending Machine',
+    provides: ['guest_nourishment'],
+    fitBasisPoints: 2500,
+    purchaseCostPence: 100000,
+  },
 ] as const;
 
 export const FOOD_COURT_ECONOMY = [

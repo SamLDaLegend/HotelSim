@@ -5,9 +5,10 @@
 // =========================================================================================
 // WHY THIS FILE EXISTS, AND IT IS NOT A NICETY.
 //
-// `exportSession` (`apps/game/src/session.ts`) has written `{seed, saveSchemaVersion, ticks,
-// finalHash, frameTicks, commands}` since G-031a, from a button in the shipped toolbar, and
-// its docblock said "This is G-031b's input". NOTHING IN THIS REPOSITORY COULD READ IT.
+// `exportSession` (`apps/game/src/session.ts`) wrote `{seed, saveSchemaVersion, ticks,
+// finalHash, frameTicks, commands}` from G-031a until G-076 added `contentHash`, from a button
+// in the shipped toolbar, and its docblock said "This is G-031b's input". NOTHING IN THIS
+// REPOSITORY COULD READ IT.
 // `record.replay.test.ts` names a DIFFERENT artefact (`--record`'s NDJSON frame stream); the
 // CLI's eighteen flags include no session file; and G-031b is NOT A GOAL — ADR-0032 §2
 // (2026-08-13) ruled it a name that "occurs exactly once in the ledger", with no block, no
@@ -46,9 +47,9 @@
 // `'byDemand'` is "what the game does: `apps/game` asks for it" — and this file asks for the
 // same thing at the one call site below.
 //
-// THE AGREEMENT IS NOT ASSUMED, IT IS THE TEST. `replay.session.test.ts` replays a document a
-// real browser wrote and requires the hash back, so the day the two hosts inject different
-// tables that test goes red naming both hashes. That is worth more than the alternative:
+// THE AGREEMENT IS NOT ASSUMED, IT IS THE TEST. `replay.session.test.ts` replays a log a real
+// browser wrote and requires the document's hash back, so the day the two hosts inject
+// different tables that test goes red naming both hashes. That is worth more than the alternative:
 // a consumer using the game's own loader could never disagree with it and so could never
 // report that the headless host had drifted. (`apps/game/scripts/record-frames.ts` carries
 // the incident this trade is priced against — it used this loader with the DEFAULT market and
@@ -67,13 +68,39 @@
 // REFUSED, by number, which is exactly what `exportSession`'s docblock already promised: "a
 // stale log fails LOUDLY at replay — 'recorded against save v12, this build is v13' — rather
 // than as two hex strings that differ for an unstated reason".
+//
+// =========================================================================================
+// THREE OUTCOMES, IN THIS ORDER, AND EACH ONE ELIMINATES A CAUSE THE NEXT NO LONGER HAS TO
+// NAME (G-076).
+//
+//   1  SCHEMA REFUSAL  — `assertReplayable`. The commands may not mean what they meant.
+//                        Refused before content is even loaded.
+//   2  CONTENT REFUSAL — `assertContentReplayable`. The tables the state hash folds have
+//                        moved. Refused before a single tick runs.
+//   3  HASH MISMATCH   — reported by `main` below, and it is what is LEFT once 1 and 2 have
+//                        been eliminated: the log moved, or the simulation did.
+//
+// THE ORDER IS THE DESIGN. Each refusal is a cheap, decidable question about a FIELD; the
+// hash is the expensive, undecidable one. Answering the cheap ones first is what turns "two
+// hex strings differ" into a named cause — `exportSession`'s promise, kept for the second
+// axis as well as the first.
+//
+// WHY THE SECOND ONE HAD TO BE ADDED, AND IT IS THIS FILE'S OWN DEFECT. `hashState` folds
+// `World.contentHash`, so EVERY content edit invalidates EVERY recorded session's hash,
+// permanently and by construction. G-075a priced three items and the committed fixture
+// stopped replaying — its log contains no `placeItem` and so runs not one line of that
+// change. Worse, the mismatch message below then told the reader to "compare the content
+// fingerprint above against the build that played it", and THE FORMAT RECORDED NO
+// FINGERPRINT TO COMPARE. A false message had been replaced with an unactionable one. The
+// document carries `contentHash` since G-076 and this is where it is spent.
+// =========================================================================================
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { createWorld, hashState, run } from '@hotelsim/sim';
 import type { BoundContent, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
-import { assertReplayable, parseSession } from './session-document.js';
+import { assertContentReplayable, assertReplayable, parseSession } from './session-document.js';
 import type { SessionDocument } from './session-document.js';
 
 // ---------------------------------------------------------------------------------------
@@ -92,7 +119,7 @@ import type { SessionDocument } from './session-document.js';
 // `replay.session.test.ts` reaches `parseSession` and `assertReplayable` through this module
 // exactly as it did.
 // ---------------------------------------------------------------------------------------
-export { assertReplayable, parseSession } from './session-document.js';
+export { assertContentReplayable, assertReplayable, parseSession } from './session-document.js';
 export type { SessionDocument } from './session-document.js';
 
 /** What a replay produced, and what the document said it should have. */
@@ -100,7 +127,7 @@ export type Replay = {
   readonly world: World;
   /** `hashState` over the world this replay reached. */
   readonly hash: string;
-  /** True when that is the hash the browser recorded. */
+  /** True when that is the hash the DOCUMENT records — see `SessionDocument.finalHash`. */
   readonly matches: boolean;
   /** The fingerprint of the content this replay was run under (`World.contentHash`). */
   readonly contentHash: string;
@@ -129,6 +156,18 @@ export function replaySession(document: SessionDocument, content: BoundContent):
 }
 
 /**
+ * What the document says about the content it was played under, for a human to read.
+ *
+ * A DOCUMENT WITH NO FINGERPRINT GETS A SENTENCE, NOT A BLANK. Absence is a fact about the
+ * document's age (see `SessionDocument.contentHash`), and an empty column would read as "the
+ * fingerprint is empty" — which is the unstated-reason failure this field exists to end,
+ * arriving through the report instead of through the error.
+ */
+function describeRecordedContent(document: SessionDocument): string {
+  return document.contentHash ?? 'not stated (this document predates G-076)';
+}
+
+/**
  * The lines this prints, in order, and nothing wall-clock among them.
  *
  * A replay's output is a pure function of the document and the content, which is the
@@ -139,14 +178,19 @@ export function replaySession(document: SessionDocument, content: BoundContent):
 export function describeReplay(document: SessionDocument, replay: Replay, path: string): string {
   return [
     `replayed ${path}`,
-    `  seed           ${document.seed}`,
-    `  save schema    v${document.saveSchemaVersion}`,
-    `  ticks          ${document.ticks}`,
-    `  commands       ${document.commands.length}`,
-    `  frames         ${document.frameTicks.length}`,
-    `  content        ${replay.contentHash}`,
-    `  recorded hash  ${document.finalHash}`,
-    `  replayed hash  ${replay.hash}`,
+    `  seed            ${document.seed}`,
+    `  save schema     v${document.saveSchemaVersion}`,
+    `  ticks           ${document.ticks}`,
+    `  commands        ${document.commands.length}`,
+    `  frames          ${document.frameTicks.length}`,
+    // THE CONTENT PAIR READS LIKE THE HASH PAIR BELOW IT, ON PURPOSE (G-076): "recorded" is
+    // what the DOCUMENT claims, "replayed" is what this run actually did. Before G-076 there
+    // was ONE content line and it was this build's — which is exactly how the mismatch
+    // message below came to ask a reader to compare a fingerprint nothing had recorded.
+    `  recorded under  ${describeRecordedContent(document)}`,
+    `  replayed under  ${replay.contentHash}`,
+    `  recorded hash   ${document.finalHash}`,
+    `  replayed hash   ${replay.hash}`,
     replay.matches ? '  MATCH' : '  MISMATCH',
     '',
   ].join('\n');
@@ -159,40 +203,105 @@ export function describeReplay(document: SessionDocument, replay: Replay, path: 
  * injects the demand curve unconditionally, so a session played in a browser is a session in
  * which the hotel earned its own arrivals, and replaying it under the harness's default clamp
  * would reach a different world for a reason that has nothing to do with the log.
+ *
+ * ==========================================================================================
+ * `contentDir` IS THE `--content <dir>` FLAG, AND IT EXISTS BECAUSE THE REFUSAL RECOMMENDS IT
+ * (G-076). `assertContentReplayable` tells a reader whose fingerprints disagree to "replay it
+ * under the content it was played under" — and a message that recommends something the tool
+ * cannot do is the exact defect this goal was opened to fix, one turn later. The flag is the
+ * CLI's own `--content` (`cli.ts`, G-006), same loader, same nine files, same all-or-nothing
+ * validation; it is not a new content path.
+ *
+ * IT ALSO MAKES THE CONTENT REFUSAL PROVABLE AGAINST A REAL DOCUMENT. Criterion 2 of this
+ * goal asks for the named refusal demonstrated by replaying against a scratch content
+ * DIRECTORY rather than by editing a fingerprint into a synthesised file — because a
+ * synthesised document proves two functions in this repository agree with each other, which
+ * is G-073's founding defect wearing a different hat.
+ *
+ * THE MARKET IS NOT A FLAG AND MUST NOT BECOME ONE. `'byDemand'` is what the browser played
+ * under; a session replayed under the clamp reaches a different world for a reason that has
+ * nothing to do with either the log or the content directory, and `replay.session.test.ts`
+ * pins both readings so the one call site cannot drift to the default.
+ * ==========================================================================================
  */
-export function replayFile(path: string): { readonly document: SessionDocument; readonly replay: Replay } {
+export function replayFile(
+  path: string,
+  contentDir?: string,
+): { readonly document: SessionDocument; readonly replay: Replay } {
   const document = parseSession(readFileSync(path, 'utf8'), path);
+  // THE THREE REFUSALS IN THE ORDER THIS FILE'S HEADER SETS OUT. Schema first, because it is
+  // decidable without loading anything; content second, because it is decidable without
+  // running anything; the hash last, in `main`, because it is the only one that has to run
+  // the whole session before it can say a word.
   assertReplayable(document, path);
-  const content = loadContent(undefined, 'byDemand');
+  const content = loadContent(contentDir, 'byDemand');
+  assertContentReplayable(document, content.fingerprint, path);
   return { document, replay: replaySession(document, content) };
 }
 
+const USAGE =
+  'pnpm sim:replay <session.json> [--content <dir>] — the file the game\'s "export session" ' +
+  'button wrote, optionally replayed under another content directory (G-076: the content a ' +
+  'session was played under is part of what produced its hash)';
+
 function main(): void {
-  const path = process.argv[2];
-  if (path === undefined) {
-    throw new Error('pnpm sim:replay <session.json> — the file the game\'s "export session" button wrote');
+  const argv = process.argv.slice(2);
+  // A FLAG, NOT A POSITIONAL, and the session file is the only positional there is. `cli.ts`
+  // parses `--content <dir>` the same way; this repeats the shape rather than the code
+  // because the two commands share no argument parser and inventing one for two flags would
+  // be more surface than either has.
+  const contentAt = argv.indexOf('--content');
+  const contentDir = contentAt === -1 ? undefined : argv[contentAt + 1];
+  if (contentAt !== -1 && (contentDir === undefined || contentDir.startsWith('--'))) {
+    throw new Error(`--content needs a directory. ${USAGE}`);
   }
-  const { document, replay } = replayFile(path);
+  // The flag's VALUE is not a positional, and `contentAt + 1` is only a real index when the
+  // flag is present — `-1 + 1` is 0, which would silently eat the session path of an
+  // invocation that carries no flag at all. Written out rather than folded into the
+  // comparison, because that near-miss is the whole of what this line has to get right.
+  const valueAt = contentAt === -1 ? -1 : contentAt + 1;
+  const path = argv.find((entry, index) => !entry.startsWith('--') && index !== valueAt);
+  if (path === undefined) throw new Error(USAGE);
+  const { document, replay } = replayFile(path, contentDir);
   // Print the report, THEN fail on a mismatch. `cli.ts` states the ordering and the reason:
   // the numbers a reader needs in order to act are the same ones a mismatch is reported
   // against, so they must be on stdout either way.
   process.stdout.write(describeReplay(document, replay, path));
   if (!replay.matches) {
     throw new Error(
-      // THE FIRST SPELLING OF THIS MESSAGE ASSERTED SOMETHING IT CANNOT KNOW, AND G-074's TAMPER
-      // PROBE PRINTED IT WHILE BEING THE COUNTEREXAMPLE. It read "the seed, the log and the schema
-      // version all match, so what differs is the simulation or the content it ran under". The seed
-      // and the schema version are FIELDS and really are checked. The LOG IS NOT: this hash is the
-      // only thing that ever tests it, so a mismatch is exactly the state in which "the log matches"
-      // is unknown — and G-073's own criterion 3 (a tampered log must fail) routes every tamper
-      // through here. A disjunction that names both causes and says how to separate them is the most
-      // this line can truthfully carry.
+      // TWO SPELLINGS OF THIS MESSAGE HAVE BEEN WRONG, IN OPPOSITE DIRECTIONS, AND BOTH ARE
+      // RECORDED HERE BECAUSE THE THIRD IS WRITTEN AGAINST THEM.
+      //
+      // (1) IT ASSERTED WHAT IT COULD NOT KNOW, and G-074's tamper probe printed it while BEING
+      // the counterexample. It read "the seed, the log and the schema version all match, so what
+      // differs is the simulation or the content it ran under". The seed and the schema version
+      // are FIELDS and really are checked. THE LOG IS NOT: this hash is the only thing that ever
+      // tests it, so a mismatch is exactly the state in which "the log matches" is unknown — and
+      // G-073's criterion 3 (a tampered log must fail) routes every tamper through here.
+      //
+      // (2) THE REPAIR THEN ASKED FOR SOMETHING THE FORMAT COULD NOT SUPPLY. It ended "compare
+      // the content fingerprint above against the build that played it — if the fingerprints
+      // agree, the document moved", and the document recorded NO fingerprint to compare. True,
+      // and unactionable, which is the failure G-076 was opened on: G-075a moved the content, the
+      // fixture stopped replaying, and this sentence sent its reader looking for a field nobody
+      // had written.
+      //
+      // SO THE THIRD SPELLING MAKES NO COMPARISON THE READER HAS TO MAKE. The content refusal
+      // ran before a tick did, so by the time control reaches this line the fingerprints have
+      // ALREADY been compared — and the message says which of the two answers it got.
       `${path} does not replay: it recorded ${document.finalHash} and this build reached ${replay.hash}. ` +
         'Either this document is no longer the one that produced that hash — a command edited, added ' +
-        'or dropped — or this build is not the one that played it. The seed and the schema version ' +
-        'were checked and agree; THE LOG WAS NOT, because this hash is the only test of it. To ' +
-        'separate the two: compare the content fingerprint above against the build that played it — ' +
-        'if the fingerprints agree, the document moved.',
+        'or dropped — or this build no longer simulates what it did. The seed and the schema version ' +
+        'were checked and agree; THE LOG WAS NOT, because this hash is the only test of it. ' +
+        (document.contentHash === undefined
+          ? 'AND THE CONTENT COULD NOT BE RULED OUT: this document predates G-076 and states no ' +
+            `content fingerprint, so nothing here can tell an edited log from content that has moved ` +
+            `since it was played. This build bound ${replay.contentHash}. Re-export the session from ` +
+            'a build you can name, or re-derive its hash under this content and record the ' +
+            'fingerprint beside it.'
+          : `THE CONTENT WAS RULED OUT: this document was played under ${document.contentHash} and ` +
+            'this build binds the same, which is why you are reading a hash mismatch rather than a ' +
+            'content refusal. So the log moved, or the simulation did.'),
     );
   }
 }

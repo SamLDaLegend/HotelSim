@@ -52,6 +52,7 @@ import {
   countConstructionTransactions,
   countDemolitionRefundTransactions,
   countFloorConstructionTransactions,
+  countItemPurchaseTransactions,
   countGuestsInInvalidRooms,
   countInvalidRooms,
   countLoanDrawTransactions,
@@ -2404,6 +2405,31 @@ export type RunSummary = {
      * balance. A run whose builds all land on the entrance floor reads 0 here, correctly.
      */
     readonly floorConstructionPennies: number;
+    /**
+     * Negative: what FURNISHING cost (G-075a, ADR-0111) - the build loop's small sink.
+     *
+     * ADDITIVE, so `SUMMARY_SCHEMA_VERSION` does NOT move - the policy on that constant, and
+     * the `wagesPennies` precedent. No key changes meaning and none is removed.
+     *
+     * One transaction per successful `placeItem`, including a free item type, so
+     * `itemPurchases` beside it is the count and this is the money. Reported for
+     * `wagesPennies`' reason exactly, and it is the same shape of case: **no shipped workload
+     * and no shipped scenario places an item**, so every arm this harness runs reads 0 here
+     * TRUTHFULLY - a scenario seeds furniture with `spawnEntity`, which charges nothing. The
+     * day the player gets an item tool the number moves in a document consumers already read,
+     * rather than being folded silently into a balance nobody can take apart.
+     */
+    readonly itemPurchasePennies: number;
+    /**
+     * How many items were bought - the count of `itemPurchase` transactions (G-075a).
+     *
+     * Beside `placed` in the build block rather than folded into it, because they are TWO
+     * CLAIMS written by two subsystems: an item landed, and an item was paid for.
+     * `countItemPurchaseTransactions === placed` is the law a reader checks by putting the two
+     * lines side by side, which is what makes it a measurement rather than an inference
+     * (ADR-0007) - the `wageSettlements` argument, one event over.
+     */
+    readonly itemPurchases: number;
     /** Positive: cash borrowed (G-011). Also the money side of the debt fold. */
     readonly loanDrawPennies: number;
     /** Negative: what borrowing cost (G-011), charged once per draw. */
@@ -2864,6 +2890,11 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       startingCapitalPennies: sumByReason(world.ledger, 'startingCapital'),
       demolitionRefundPennies: sumByReason(world.ledger, 'demolitionRefund'),
       floorConstructionPennies: sumByReason(world.ledger, 'floorConstruction'),
+      // G-075a. Both halves folded from the LEDGER rather than from the item table: what the
+      // hotel bought is a question asked of the log (I4), and asking the entity store instead
+      // would report what it is STANDING IN rather than what it PAID.
+      itemPurchasePennies: sumByReason(world.ledger, 'itemPurchase'),
+      itemPurchases: countItemPurchaseTransactions(world.ledger),
       loanDrawPennies: sumByReason(world.ledger, 'loanDraw'),
       loanFeePennies: sumByReason(world.ledger, 'loanFee'),
       loanRepaymentPennies: sumByReason(world.ledger, 'loanRepayment'),
@@ -3565,6 +3596,15 @@ export function renderText(summary: RunSummary): string {
     `capital     ${summary.money.startingCapitalPennies}p`,
     `refunds     ${summary.money.demolitionRefundPennies}p`,
     `floors      ${summary.build.floorConstructionTransactions} opened, ${summary.money.floorConstructionPennies}p`,
+    // G-075a, BESIDE `floors` BECAUSE THEY ARE THE SAME KIND OF THING: a build-loop sink levied
+    // by a player's click rather than by the night. Both halves on one line for `floors`' reason
+    // exactly - a money total with no count beside it cannot be checked by hand. It reads
+    // `0 bought, 0p` on every shipped invocation, TRUTHFULLY: nothing in the tree issues
+    // `placeItem` until the player gets a tool, and a scenario's furniture arrives through
+    // `spawnEntity`, which charges nothing. A row that is a truthful zero is worth more than a
+    // row nobody emits (the `unreachable` argument, G-038a-ii-beta): the day an item tool ships,
+    // the number moves in a document consumers already read.
+    `furnished   ${summary.money.itemPurchases} bought, ${summary.money.itemPurchasePennies}p`,
     `loans       ${summary.loans.drawn} drawn, ${summary.loans.refused.notEligible} not needed, ` +
       `${summary.loans.refused.noLoanOffered} not offered`,
     `borrowed    ${summary.money.loanDrawPennies}p, fees ${summary.money.loanFeePennies}p, ` +

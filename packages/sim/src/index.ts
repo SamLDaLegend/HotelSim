@@ -18,9 +18,13 @@ export {
   countConstructionTransactions,
   countDemolitionRefundTransactions,
   countFloorConstructionTransactions,
+  // G-075a — an item costs money (ADR-0111). The price accessor and the cross-subsystem law
+  // `countItemPurchaseTransactions(ledger) === buildOutcomes.placed`.
+  countItemPurchaseTransactions,
   createBuildOutcomes,
   describeOccupied,
   isBuildRefusalReason,
+  itemPurchaseCostOf,
   roomAt,
   roomOverlapping,
   totalBuildOutcomes,

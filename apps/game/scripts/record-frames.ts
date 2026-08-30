@@ -68,7 +68,11 @@ import type { Command, ScheduledCommand, World } from '@hotelsim/sim';
  * silently drop it.
  * ==========================================================================================
  */
-import { assertReplayable, parseSession } from '../../../tools/headless/src/session-document.js';
+import {
+  assertContentReplayable,
+  assertReplayable,
+  parseSession,
+} from '../../../tools/headless/src/session-document.js';
 import type { SessionDocument } from '../../../tools/headless/src/session-document.js';
 /**
  * ==========================================================================================
@@ -269,6 +273,33 @@ const outDir = process.argv.includes('--out')
   : join(process.cwd(), 'recording');
 
 const content = loadContent();
+/**
+ * THE SECOND SESSION REFUSAL, AND IT COULD ONLY BE MADE HERE (G-076).
+ *
+ * ==========================================================================================
+ * `assertReplayable` above answers the SAVE SCHEMA and needs nothing but the document.
+ * `assertContentReplayable` answers the CONTENT FINGERPRINT, and content does not exist until
+ * the line above — so it sits here rather than beside its sibling, which is the only reason
+ * the two refusals are separated.
+ *
+ * WHY THIS FILE MAKES IT AT ALL, WHEN `pnpm sim:replay` ALREADY DOES. Because this is the
+ * OTHER content path. `session-document.ts`'s header is about exactly this: two consumers, one
+ * definition, and the failure mode is "one reader refuses the unknown key and the other
+ * silently drops it, and the two disagree about what a session IS". A recorder that ignored a
+ * field the format carries would be that failure, arriving through the consumer that FILMS a
+ * session — and the frames would be of a hotel running content the session was never played
+ * under, captioned with the session's name. That is worse than no frames, which is the
+ * argument the `--seed`/`--ticks` refusals above already make.
+ *
+ * AND IT DOES NOT REPLACE THE `finalHash` ARM AT THE FOOT OF THIS FILE. That one crosses the
+ * two content PATHS — this recorder binds through `apps/game/src/content.ts` and
+ * `pnpm sim:replay` binds through `tools/headless/src/content-loader.ts` — and its whole value
+ * is that it can catch the two hosts having drifted while both agree with the document.
+ * ==========================================================================================
+ */
+if (session !== null && sessionPath !== null) {
+  assertContentReplayable(session, content.fingerprint, sessionPath);
+}
 const world = createWorld(seed, content);
 /**
  * WHERE EACH TICK'S COMMANDS COME FROM — the scenario this file drives, or a session's log.
@@ -409,7 +440,7 @@ let peakAtTick = -1;
  *   THE FINAL-HASH ARM catches the TWO CONTENT PATHS diverging. This recorder binds content
  *   through `apps/game/src/content.ts` and `replay.ts` binds it through `content-loader.ts`;
  *   `replay.ts`'s header says at length that the agreement between them is a test rather than an
- *   assumption. Reproducing the browser's own `finalHash` here is that test taken a second time,
+ *   assumption. Reproducing the document's own `finalHash` here is that test taken a second time,
  *   from the OTHER host, which is the only reason this arm is worth its cost.
  *
  * IT REPORTS AT THE END AND FAILS AFTERWARDS, exactly as the empty-recording refusal below does
@@ -503,7 +534,9 @@ for (let tick = 0; tick <= ticks; tick += 1) {
 }
 
 /**
- * THE SECOND ARM: the browser's own `finalHash`, reproduced by this host.
+ * THE SECOND ARM: the document's own `finalHash`, reproduced by this host. (It read "the
+ * browser's own" until G-076 re-derived the committed fixture's checksum under stated content;
+ * the LOG is still the browser's and that is what this arm is really about.)
  *
  * ONLY WHEN THE WHOLE SESSION WAS FILMED, because `finalHash` is a statement about the tick the
  * button was pressed on and about no other. A prefix recording (`--ticks` below the log's length)
@@ -518,14 +551,33 @@ if (session !== null && sessionPath !== null && current.tick === session.ticks) 
     // `spawnEntity` from the log fires this arm, and then the log is exactly what does NOT
     // agree. A failure message that asserts a cause it cannot know is ADR-0007's class in the
     // one place a reader has no other information.
+    //
+    // AND "the browser recorded" CAME OUT AT G-076, because it stopped being true of the one
+    // document this arm is ever run against. The committed fixture's `finalHash` was re-derived
+    // once under current content (`replay.session.test.ts`'s header is the record of it) — its
+    // LOG is the browser's, its checksum is not. The document is what records the hash; who
+    // derived it is a question the document answers and this message does not have to.
+    //
+    // THE SECOND DISJUNCT IS NOW CONDITIONAL, for the same reason. `assertContentReplayable`
+    // ran before the first frame: if the document states a fingerprint, THIS host agreed with
+    // it, and a replay that also passes has agreed with it too — so "the two hosts bound
+    // different content" is eliminated rather than offered. It is still live for a document
+    // that states none, and it is still worth stating there, because the two content paths are
+    // exactly what this arm is for.
     disagreements.push(
-      `tick ${current.tick} (the session's last): the browser recorded ${session.finalHash} and ` +
+      `tick ${current.tick} (the session's last): ${sessionPath} records ${session.finalHash} and ` +
         `this recording reached ${reached}. Either this document is no longer the one that ` +
-        'produced that hash — a command edited, added or dropped — or the two hosts bound ' +
-        'different content: this recorder binds through `apps/game/src/content.ts` and ' +
-        '`pnpm sim:replay` binds through `tools/headless/src/content-loader.ts`. RUN ' +
-        `\`pnpm sim:replay ${sessionPath}\`: if it also reaches ${reached}, the ` +
-        'document moved; if it reaches the recorded hash, this host did.',
+        'produced that hash — a command edited, added or dropped — ' +
+        (session.contentHash === undefined
+          ? 'or the two hosts bound different content: this recorder binds through ' +
+            '`apps/game/src/content.ts` and `pnpm sim:replay` binds through ' +
+            '`tools/headless/src/content-loader.ts`, and this document states no content ' +
+            'fingerprint for either of them to be checked against. RUN ' +
+            `\`pnpm sim:replay ${sessionPath}\`: if it also reaches ${reached}, the ` +
+            'document moved; if it reaches the recorded hash, this host did.'
+          : `or the simulation itself has moved. The content is NOT in it: this document was ` +
+            `played under ${session.contentHash} and this host bound the same, which is why ` +
+            'the run got this far instead of being refused before the first frame.'),
     );
   }
 }
@@ -600,8 +652,11 @@ writeFileSync(join(outDir, 'contact-sheet.html'), sheet, 'utf8');
 if (session !== null) {
   if (disagreements.length === 0) {
     process.stdout.write(
+      // "the hash the browser recorded" until G-076, and the fixture's checksum is no longer
+      // the browser's — it was re-derived once, under stated content. THE DOCUMENT is what
+      // records a hash; who computed it is the document's business, not this line's.
       `session: every filmed tick matches a replay of the same log` +
-        `${current.tick === session.ticks ? `, and tick ${current.tick} matches the hash the browser recorded` : ''}\n`,
+        `${current.tick === session.ticks ? `, and tick ${current.tick} matches the hash the document records` : ''}\n`,
     );
   } else {
     process.stdout.write(

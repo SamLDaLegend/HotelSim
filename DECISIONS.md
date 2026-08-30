@@ -10583,9 +10583,22 @@ not source), free-and-measure-it, and catalogue-only.
 **And `placeItem` books NO transaction** — `tick.ts:536`, *"It books no transaction, so unlike its
 siblings it leaves the ledger by reference."*
 
-**Each provider serves `refillPerTick + 1` = 15 concurrent guests** (G-043's flow conservation, the
-same figure G-060's amenity derivation rests on). So a player with twelve bedrooms could place twelve
-**free** nourishment providers and never build a cafe.
+**Each provider serves `refillPerTick + 1` concurrent guests** (G-043's flow conservation).
+
+> **AMENDMENT 1, 2026-08-30 — THE ARITHMETIC IN THIS SECTION WAS WRONG AND THE CONCLUSION SURVIVES A
+> FORTIORI.** It read *"a player with twelve bedrooms could place twelve FREE nourishment providers"*
+> as though that were 180 guests of capacity. **It is twelve.** `standard_room` is
+> `accessRule: guestsOfThisRoom`, and `validity.ts:1849` returns `reservedForItsOwnGuest` for any
+> non-lodging engagement by a guest who is not that room's lodger — **so a machine in a bedroom
+> serves that bedroom's own guest and nobody else.** Found by G-075a's builder, verified here.
+> **And `15` is not universal either**: `night_rest` is `refillPerTick: 2` and serves **3**; only the
+> three ENGAGEMENT needs serve 15.
+>
+> **THE REAL HOLE IS ELSEWHERE AND LARGER.** `applyPlaceItem` produces exactly three refusals —
+> `outOfBounds`, `notInRoom` and (from G-075a) `insufficientFunds` — **and NO `occupied` rule for
+> items**, so they stack without limit. **Six of the seven room types are `accessRule: public`**, so
+> one 24-cell lounge accepts 24 vending machines: 360 concurrent guests for one room's footprint.
+> **Parked with its falsification test; not fixed here.**
 
 > **THAT WOULD DISSOLVE G-060's AMENITY CLAUSE THE WEEK IT WAS DERIVED.** The clause exists because
 > `sets(tier) = ceil(parties x guestsPerParty / guestsPerProvider)` — **it is arithmetic about

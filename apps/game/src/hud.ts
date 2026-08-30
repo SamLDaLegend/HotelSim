@@ -636,7 +636,13 @@ export function renderTools(
   // a frame.
   const save = document.createElement('button');
   save.textContent = 'export session';
-  save.title = 'the seed, the command log and the state hash — G-031b replays it headless';
+  // THE TOOLTIP STILL SAID `G-031b` UNTIL G-076, four lines under a comment that says in as
+  // many words that G-031b is not a goal. G-073 corrected the comment and left the string the
+  // player actually reads — the same half-landing `CLAUDE.md`'s own banner records: "a ruling
+  // is not landed until every copy of the sentence it reverses is dead."
+  save.title =
+    'the seed, the content fingerprint, the command log and the state hash — ' +
+    'pnpm sim:replay replays it headless';
   save.addEventListener('click', handlers.onExport);
   host.append(save);
 }

@@ -2,18 +2,21 @@
   {
     "id": "single_bed",
     "name": "Single Bed",
-    "provides": []
+    "provides": [],
+    "purchaseCostPence": 25000
   },
   {
     "id": "arm_chair",
     "name": "Arm Chair",
     "provides": ["guest_comfort"],
-    "fitBasisPoints": 2500
+    "fitBasisPoints": 2500,
+    "purchaseCostPence": 100000
   },
   {
     "id": "vending_machine",
     "name": "Vending Machine",
     "provides": ["guest_nourishment"],
-    "fitBasisPoints": 2500
+    "fitBasisPoints": 2500,
+    "purchaseCostPence": 100000
   }
 ]

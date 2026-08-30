@@ -770,6 +770,11 @@ const distinct: RunSummary = {
     startingCapitalPennies: 139,
     demolitionRefundPennies: 140,
     floorConstructionPennies: -151,
+    // G-075a, and DISTINCT for this fixture's reason: a renderer that printed what furnishing
+    // cost where the floor charge goes, or the purchase COUNT where the money goes, would
+    // otherwise pass.
+    itemPurchasePennies: -168,
+    itemPurchases: 169,
     loanDrawPennies: 141,
     loanFeePennies: -142,
     loanRepaymentPennies: -143,
@@ -867,6 +872,7 @@ describe('renderers', () => {
         'capital     139p',
         'refunds     140p',
         'floors      152 opened, -151p',
+        'furnished   169 bought, -168p',
         'loans       145 drawn, 147 not needed, 146 not offered',
         'borrowed    141p, fees -142p, repaid -143p',
         'scrap value 148p',

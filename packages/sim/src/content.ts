@@ -779,6 +779,26 @@ export type ItemTypeData = {
    * the whole contract — it is one scale across rooms and items, which is the point of it.
    */
   readonly fitBasisPoints?: number | undefined;
+  /**
+   * WHAT ONE OF THESE COSTS A PLAYER TO PUT IN A ROOM (G-075a, ADR-0111), in integer pence.
+   *
+   * A DESIGN STATEMENT, NOT A DERIVATION, and `purchaseCostPenceSchema` in
+   * `packages/content` carries the whole of it — the reference point (a room costs 250,000),
+   * why the two providers are priced the same, and which axis each of an item and a room
+   * wins on. Nothing in this package derives it and nothing compares against it.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK — the `provides` contract exactly, and the reason is the
+   * same: a content set written before items had a price omits the key, fingerprints as it
+   * always did, and reads as FREE, which is what keeps the permanent v1 save fixture a world
+   * that still ticks (ADR-0006). `0` is the different, deliberate statement "free to place".
+   *
+   * ONLY `applyPlaceItem` READS IT. `spawnEntity` charges nothing (a scenario describes a
+   * world rather than buys one) and `applyDrawRoom` still seeds a room's `requires` items
+   * free, because a room's `constructionCostPence` is the price of the room READY TO WORK.
+   * That asymmetry already existed for rooms and is why a demolished seeded room refunds
+   * money nobody paid — G-068's finding. It is stated here so it is not rediscovered.
+   */
+  readonly purchaseCostPence?: number | undefined;
 };
 
 /**
@@ -1215,10 +1235,25 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
 function cloneItemType(itemType: ItemTypeData): ItemTypeData {
   const fit = itemType.fitBasisPoints;
   assertFitValue('item type', itemType.id, fit);
-  const { provides: rawProvides, fitBasisPoints: _rawFit, ...rest } = itemType;
+  // The price, validated at the boundary (G-075a), the `cloneRoomType` discipline exactly: a
+  // float or negative price from a raw host — one that did not come through the zod schema —
+  // would reach `appendTransaction` as the amount of an `itemPurchase` transaction and be
+  // rejected there, at the moment a player clicked, three subsystems from the cause. Dying
+  // here, at bind time, names the item type instead (ADR-0002).
+  const price = itemType.purchaseCostPence;
+  if (price !== undefined && (!Number.isInteger(price) || price < 0)) {
+    throw new Error(
+      `bindContent: item type "${itemType.id}" has a non-integer or negative purchaseCostPence (${String(price)}); money is integer pence (ADR-0002)`,
+    );
+  }
+  const { provides: rawProvides, fitBasisPoints: _rawFit, purchaseCostPence: _rawPrice, ...rest } = itemType;
   const withFit: ItemTypeData = fit === undefined ? { ...rest } : { ...rest, fitBasisPoints: fit };
-  if (rawProvides === undefined) return withFit;
-  return { ...withFit, provides: cloneIdList('item type', itemType.id, 'provides', 'need', rawProvides) };
+  // Stripped when absent rather than carried as `undefined`, for the reason every optional key
+  // here is: an absent key and a key holding `undefined` are different documents to the
+  // fingerprint, and only the absent form is the "predates item prices" statement.
+  const withPrice: ItemTypeData = price === undefined ? withFit : { ...withFit, purchaseCostPence: price };
+  if (rawProvides === undefined) return withPrice;
+  return { ...withPrice, provides: cloneIdList('item type', itemType.id, 'provides', 'need', rawProvides) };
 }
 
 /**

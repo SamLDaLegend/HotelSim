@@ -271,6 +271,9 @@ describe('THE BURN IS LAST NIGHT ALONE, AND IT COUNTS TRADE RATHER THAN CHOICES'
       'construction',
       'demolitionRefund',
       'floorConstruction',
+      // G-075a. A player putting furniture in a room is a CHOICE, exactly as a build is, so it
+      // joins the excluded list and the partition below said so before this line was written.
+      'itemPurchase',
       'loanDraw',
       'loanFee',
       'startingCapital',
@@ -297,7 +300,9 @@ describe('THE BURN IS LAST NIGHT ALONE, AND IT COUNTS TRADE RATHER THAN CHOICES'
     }
 
     // AND THE PARTITION IS EXHAUSTIVE, so a reason added to the union tomorrow is in exactly one
-    // of the two lists above and this case says which. Ten reasons today, six out and four in.
+    // of the two lists above and this case says which. IT DID EXACTLY THAT AT G-075a: adding
+    // `itemPurchase` to `TransactionReason` reddened this line, naming the missing member, before
+    // anybody had decided which side it belonged on. Eleven reasons today, seven out and four in.
     expect([...excluded, ...included].slice().sort()).toEqual(TRANSACTION_REASONS.slice().sort());
   });
 });

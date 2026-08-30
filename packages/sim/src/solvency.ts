@@ -91,7 +91,11 @@ import type { World } from './world.js';
  *                     accounting choice of ours, not anything the game did.
  *   construction      A CHOICE, not a rate. Clicking a room once is not a nightly cost, and a
  *   floorConstruction burn that spiked after a build would put "0 nights to nothing" on screen
- *                     for one night and then take it back.
+ *   itemPurchase      for one night and then take it back. `itemPurchase` (G-075a) joined this
+ *                     row rather than the one below because it is the same kind of event: a
+ *                     player clicking once. It is the CHEAPEST of the three, which makes it the
+ *                     most frequent, which makes a burn that counted it the noisiest — the
+ *                     opposite of what ADR-0109 asks a runway to be.
  *   demolitionRefund  A CONVERSION rather than income, and counting it would DOUBLE-COUNT
  *                     against this file's own denominator: scrapping a room moves value from
  *                     `liquidationValue` into `balance`, and the runway is measured against
@@ -103,12 +107,20 @@ import type { World } from './world.js';
  * denominator either — a room refunds less than it cost, so a build lowers `balance +
  * liquidationValue` by the non-refundable part. It is excluded anyway, because the burn is a
  * RATE and a build is an event, and a rate that jumps on a click is not a rate.
+ *
+ * AND `itemPurchase` IS THE SHARPEST CASE OF THAT EDGE, WHICH IS WHY IT IS NAMED HERE AND NOT
+ * ONLY IN THE TABLE (G-075a): furniture has NO scrap value at all (`stockValueOf` walks room
+ * types only), so the whole of an item's price leaves the reserves and none of it comes back.
+ * The runway therefore SHORTENS by exactly the price the moment an item is placed, through the
+ * denominator, while the burn RATE does not move — which is the correct reading of both
+ * quantities and is exactly what the split above is for.
  * ==========================================================================================
  */
 const NIGHTLY_FLOW: Readonly<Record<TransactionReason, boolean>> = Object.freeze({
   construction: false,
   demolitionRefund: false,
   floorConstruction: false,
+  itemPurchase: false,
   loanDraw: false,
   loanFee: false,
   loanRepayment: true,

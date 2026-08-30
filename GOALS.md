@@ -6,7 +6,7 @@
 
 - **Schemas**: save **v25** (G-052a — the world gained a `staff` payroll, and `migrateV23ToV24` writes the empty one a pre-G-052a world had; before that v23 at G-038b-i — the world gained a `lift` and a `liftQueue`, and the departure table gained a row; a guest gained a `partyId` at G-040a; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `058a2e86ff88b44a` · measure golden `fce3fdb5e8c00e69`. *(**Both MOVED AT G-059, and this time it IS
+  `19de1252e3c9948e` · measure golden `4d6050fd9a1ad339`. *(**Both MOVED AT G-059, and this time it IS
   BEHAVIOUR** — the review scorer changed and `reviewOutcomes` is world state. `c967bdb98dac9b0d` /
   `a57925e09896e3a4` -> the pair above. **NO `World` FIELD, so save stays v25 with no migration**, and
   `World.contentHash` did NOT move because no content file was touched. Previously **MOVED TWICE at G-051a, each time for
@@ -6064,8 +6064,141 @@ one place the two must agree.
 
 Any change to the export format, to `replay.ts`'s document validation, or to what the recorder draws.
 
+## G-076 — A session records the content it was played under
+Status: **DONE 2026-08-30, with G-075a — the two are INSEPARABLE and say so below.** Owner pair: sim-engineer / (orchestrator-verified)
+
+> **IT PROVED THE CAUSE RATHER THAN REASONING TO IT.** A throwaway probe stripped
+> `purchaseCostPence` off every item row, re-bound, and replayed the untouched log: fingerprint
+> `97166d1a3988680e` -> `33fe45c88f8195a4`, and the replay reached **`c31225990e219e8d` EXACTLY**.
+> So `33fe45c88f8195a4` is the fingerprint the browser played under, and **G-075a contributes
+> nothing but the fingerprint.** *That is a control, not an argument.*
+
+**THREE OUTCOMES IN ORDER, EACH ELIMINATING A CAUSE THE NEXT NEED NOT NAME**: schema refusal (before
+content loads), **content refusal (before a tick runs)**, then hash mismatch — *what is LEFT once
+the two cheap, decidable questions about FIELDS have been answered.* **The test asserts distinctness
+PAIRWISE** — `new Set(messages).size === 3`, each message containing its own subject and **not the
+others'** — because *"all three failed" is not the claim.*
+
+**ABSENCE IS "NO OPINION", NOT "NO CONTENT"**, and the asymmetry that keeps it honest is that **the
+producer has no branch**: a NEW document lacking the field did not come out of the button. *Verified
+independently by the orchestrator: a stripped copy replays, exit 0, reporting `not stated (this
+document predates G-076)`; a copy with a wrong fingerprint produces the NAMED refusal carrying both
+hashes and two performable remedies.*
+
+**AND IT NOTICED THAT ITS OWN FIX WOULD RE-VIOLATE THE BRIEF'S CRITERION 4 ONE TURN LATER.** The
+content refusal recommends replaying under the original content — **so `--content <dir>` had to
+exist, or the message would recommend a remedy the tool cannot perform.** *That is the exact defect
+the criterion was written against, caught before it shipped.*
+
+**`record-frames.ts` checks the fingerprint too** — the OTHER content path — *because a consumer that
+ignored a field the format carries is the failure `session-document.ts` exists to prevent, and it
+would film a hotel running content the session was never played under, captioned with the session's
+name.*
+
+**THE FIXTURE DIFF IS 2 INSERTIONS, 1 DELETION — the log is the browser's byte for byte** — and the
+re-derivation is RECORDED, naming the browser's original pair, what forced it, and the two options
+rejected. **It also fixed `hud.ts`'s export tooltip, which still said *"G-031b replays it headless"*
+four lines below the G-073 comment saying G-031b is not a goal.**
+
+### WHY THESE TWO LAND IN ONE COMMIT
+
+**Neither is green alone.** G-075a's content edit is what invalidated the fixture; G-076 re-derived
+that fixture's hash **under content that includes G-075a's prices**. Committing either half would
+put a red tree in the history for a reason the other half fixes. *Stated here rather than left for a
+reader of `git log` to reconstruct.* Milestone: M5 · Owner pair: sim-engineer / sim-critic
+
+**G-075a priced three items and the committed played-session fixture stopped replaying** — recorded
+`c31225990e219e8d`, this build reaches `887ee4443f8bcc30`.
+
+**THE LOG IS UNTOUCHED.** Its 158 commands census as `spawnEntity 49, layCorridor 85, layStair 23,
+drawRoom 1` — **ZERO `placeItem`**, so not one line G-075a wrote executes. **The only moved input is
+`World.contentHash`**, which `hashState` folds into every world.
+
+### THE DEFECT IS THE FORMAT, AND THE ERROR MESSAGE PROVES IT
+
+`exportSession` writes `{seed, saveSchemaVersion, ticks, finalHash, frameTicks, commands}` — **it
+does not record the content fingerprint the session was played under.** And `replay.ts`'s mismatch
+message, **rewritten by the orchestrator at G-074 to fix a DIFFERENT over-claim**, ends:
+
+> *"compare the content fingerprint above against the build that played it — if the fingerprints
+> agree, the document moved."*
+
+> **THE DOCUMENT RECORDS NO FINGERPRINT TO COMPARE AGAINST.** A false message was replaced with an
+> unactionable one, and the format never carried the thing the message asks the reader to check.
+> *Third instance in this chain: G-073 shipped a producer with no consumer, G-074 found its message
+> asserted what it could not know, and this is the same defect one layer down.*
+
+**AND IT RECURS BY CONSTRUCTION.** `contentHash` is a `World` field folded by `hashState`, so **EVERY
+content edit invalidates every recorded session's hash.** G-075b adds ~30 priced items and will fire
+it again. **A fixture that breaks on every content change is a fixture somebody will "fix" by
+re-deriving until they stop checking.**
+
+### The fix
+
+1. **The document records the content fingerprint.**
+2. **`replay.ts` refuses on a content mismatch BY NAME — a distinct, named outcome, not a hash
+   mismatch** — the way it already refuses a stale `saveSchemaVersion`, and for the same reason:
+   *"a stale log fails LOUDLY rather than as two hex strings that differ for an unstated reason"*
+   (`session.ts`'s own words).
+3. **The fixture's `finalHash` is re-derived ONCE, under current content, and the re-derivation is
+   RECORDED in its docblock** — *the log stays the browser's byte-for-byte; the checksum is stated
+   as re-derived and under which fingerprint.* **Do not quietly overwrite it.**
+
+### Exit criteria
+
+1. **`pnpm sim:replay tools/headless/src/fixtures/played-session.json` MATCHES**, exit 0.
+2. **A content mismatch produces the NAMED refusal**, with both fingerprints in the message — proved
+   by replaying against a scratch content directory, not by a synthesised document.
+3. **A stale-schema document still fails as it did**, and a tampered log still fails as a hash
+   mismatch. **Three distinct outcomes, three distinct messages.**
+4. **`replay.ts`'s mismatch text no longer asks for something the format cannot supply.**
+5. `pnpm verify` — fourteen rows, fourteen PASS. **No save bump** — the session document is not world
+   state.
+
+### Out of scope
+
+Re-recording the fixture in a browser (the log is fine). Changing what a session document otherwise
+holds. G-075a's pricing, which is complete and waiting on this.
+
 ## G-075a — An item costs money, and the charge lands before the button
-Status: **IN-PROGRESS 2026-08-30. RULED (ADR-0111, human). THE MECHANISM, INERT ON SHIPPED CONTENT.** Milestone: M5 · Owner pair: economy-engineer / balance-critic
+Status: **DONE 2026-08-30, with G-076. RULED (ADR-0111, human).** Owner pair: economy-engineer / (orchestrator-verified)
+
+> **`purchaseCostPence`** — required on disk, **optional in the sim**, so absence still reads as free
+> and the frozen v1 fixture is untouched. `single_bed` **25,000** (a tenth of a room; provides
+> nothing), `arm_chair` and `vending_machine` **100,000** each.
+
+**LABELLED A DESIGN STATEMENT, WITH ITS REFERENCE POINT NAMED AND ITS REFERENCE POINT CORRECTED.** A
+room is 250,000 for **five of the seven types and that is the FLOOR, not a universal** —
+`conference_hall` is 450,000 and `hotel_theatre` 900,000. **The two providers are priced IDENTICALLY
+on purpose**: one engagement need each, `fitBasisPoints: 2500` each, the same capacity — *a gap
+between them would be a number with nothing behind it.* **And neither dominates a room**: an item
+wins on capital, a room wins on demand, because only rooms raise the rating and `stockValueOf` walks
+room types only, so **an item scrap-values at nothing.**
+
+**`applyPlaceItem` books one `itemPurchase` UNCONDITIONALLY** — including a free item and content
+that predates prices — which makes `countItemPurchaseTransactions === placed` **exact**. Its own
+`TransactionReason` member, so `countConstructionTransactions === built` is untouched.
+`insufficientFunds` is checked AFTER `outOfBounds` and `notInRoom`. **Anti-vacuity one penny apart**:
+`CHAIR - 1` refuses with the ledger returned BY REFERENCE and no id consumed; `CHAIR` exactly places
+and closes on zero.
+
+**THE SHIPPED SCENARIO IS BYTE-IDENTICAL and its 49 entities include its furniture** — seeded with
+`spawnEntity`, charged nothing. **The asymmetry is right**, and it is the same one that lets a
+demolished seeded room refund money nobody paid (G-068). **14 CLI arms**, before/after, 30d and 365d:
+every field of every summary byte-identical except `stateHash`, **zero dissatisfied at every rung.**
+
+> **IT DISPROVED THE ARITHMETIC IN ITS OWN BRIEF AND IN ADR-0111, AND FOUND A LARGER HOLE.**
+> *"Twelve bedrooms, twelve free providers"* is **twelve guests, not 180** — `standard_room` is
+> `accessRule: guestsOfThisRoom` and `validity.ts:1849` returns `reservedForItsOwnGuest`. **And `15`
+> is not universal**: `night_rest` serves **3**. **The real hole: `applyPlaceItem` has NO `occupied`
+> rule for items and six of seven room types are `public`, so one 24-cell lounge takes 24 vending
+> machines.** ADR-0111 amended; the hole parked with its falsification test. *The conclusion held a
+> fortiori; the reasoning did not.*
+
+**It extended scope to `report.ts`** (`itemPurchasePennies`, `itemPurchases`, a `furnished` row) on
+the `wagesPennies` precedent — *a money term with no reporting line is the "folded silently into a
+balance nobody can take apart" failure that file argues against three times.* Additive; summary
+schema unmoved. Milestone: M5 · Owner pair: economy-engineer / balance-critic
 
 **AN ITEM IS A PROVIDER IN ITS OWN RIGHT.** `content.ts:758`: *"THE GUEST ENGAGES THE ITEM, NOT THE
 ROOM IT STANDS IN. An arm chair in a lounge is the provider; the lounge is the place it stands, and

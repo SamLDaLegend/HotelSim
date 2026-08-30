@@ -65,6 +65,36 @@ export type TransactionReason =
    * this hotel has reached a floor it was not already on, which is a fact somebody might want.
    */
   | 'floorConstruction'
+  /**
+   * A PLAYER PUT SOMETHING IN A ROOM (G-075a, ADR-0111). Negative: the build loop's small sink.
+   *
+   * Charged once, by `placeItem`, at the moment the item lands. NOT by `spawnEntity`, which is
+   * how a scenario seeds furniture, and not by `drawRoom`, which still hands over a room type's
+   * `requires` items with the room — see `applyPlaceItem` in `build.ts`, which states both
+   * asymmetries and why they are the same one the ledger already has for rooms.
+   *
+   * ITS OWN REASON RATHER THAN A SECOND `construction`, AND THAT IS A LAW RATHER THAN TASTE —
+   * the `demolitionRefund` and `floorConstruction` argument, one event over. G-008's
+   * cross-subsystem check is `countConstructionTransactions(ledger) === buildOutcomes.built`
+   * EXACTLY, and a furniture charge sharing that reason would break it on the first item any
+   * player placed. It is also simply a different event: one is what the room cost, the other is
+   * what filling it cost, and "a ledger you cannot explain is a ledger you cannot balance".
+   *
+   * IT IS APPENDED UNCONDITIONALLY, WHICH IS `construction`'s RULE AND NOT
+   * `floorConstruction`'s, and the difference is what the count MEANS. One row per successful
+   * placement — including a zero-priced item, and including content that predates prices
+   * entirely — makes `countItemPurchaseTransactions(ledger) === buildOutcomes.placed` an exact
+   * law, written by two subsystems that agree only if every placement did both. A conditional
+   * append would hold on every hotel somebody watched and fail on exactly the free-content
+   * worlds where nothing else would notice (ADR-0007). The zero is computed as `0 - cost`,
+   * never `-cost`, because `-0` is the same money and not the same value.
+   *
+   * THERE IS NO MIRROR OF `demolitionRefund` FOR IT, and the silence is deliberate rather than
+   * pending: an item is not scrapped for cash — `stockValueOf` walks room types only, so
+   * furniture contributes NOTHING to the liquidation value a loan is gated on. Money spent on
+   * an item is spent. Refunding one is G-075's later work and is out of this goal's scope.
+   */
+  | 'itemPurchase'
   /** Cash a loan provided (G-011). Positive. Half of what `outstandingDebtOf` folds. */
   | 'loanDraw'
   /** What the loan cost to take out (G-011). Negative, charged once, at the draw. */
@@ -121,6 +151,7 @@ const TRANSACTION_REASON_SET: Readonly<Record<TransactionReason, true>> = Object
   construction: true,
   demolitionRefund: true,
   floorConstruction: true,
+  itemPurchase: true,
   loanDraw: true,
   loanFee: true,
   loanRepayment: true,

@@ -28,7 +28,7 @@
 // in packages/sim is a leaked content ID and fails `pnpm check:content` (ADR-0003).
 
 import { describe, expect, it } from 'vitest';
-import { totalBuildOutcomes, totalRefusals } from './build.js';
+import { countItemPurchaseTransactions, totalBuildOutcomes, totalRefusals } from './build.js';
 import type { Command } from './commands.js';
 import { bindContent } from './content.js';
 import { entitiesInOrder, getEntity } from './entities.js';
@@ -316,14 +316,28 @@ describe('placeItem puts something in a room, and refuses to put it anywhere els
     expect(world.buildOutcomes.refused.notInRoom).toBe(0);
   });
 
-  it('leaves the ledger by reference, because an item costs nothing YET', () => {
-    // A STATED GAP RATHER THAN A DESIGN. An item price is a designer's number and
-    // `ItemTypeData` has no such field; see `applyPlaceItem` for the parked question and what
-    // would falsify it. Pinned so that adding a price is a visible decision.
+  it('books a ZERO-amount row for an item type this content gives no price, and the balance holds', () => {
+    // THE HISTORICAL READING, WHICH IS WHAT THIS FILE'S CONTENT IS (G-075a). `bed` and `machine`
+    // declare no `purchaseCostPence`, and absence is not emptiness: it reads as FREE, exactly as
+    // a room type omitting `constructionCostPence` does. So the balance does not move.
+    //
+    // THE ROW IS APPENDED ANYWAY, and that is the half worth pinning. `applyPlaceItem` books one
+    // `itemPurchase` per successful placement UNCONDITIONALLY — `construction`'s rule, for
+    // `construction`'s reason — so `countItemPurchaseTransactions === placed` is exact even on
+    // content that predates prices, which is precisely the world where a conditional append
+    // would fail with nothing else noticing. This case read *"leaves the ledger by reference,
+    // because an item costs nothing YET"* until ADR-0111 closed that gap.
     const before = stepTick(funded(COST), content, [draw('hall', cell(0, 4, 2), fp(3, 2))]);
     const after = stepTick(before, content, [place('machine', cell(0, 5, 2))]);
-    expect(after.ledger).toBe(before.ledger);
+    expect(after.ledger).toHaveLength(before.ledger.length + 1);
+    const charge = after.ledger[after.ledger.length - 1];
+    expect(charge?.reason).toBe('itemPurchase');
+    expect(charge?.amount).toBe(0);
+    // NOT `-0`. The same money and not the same value, which is why `applyPlaceItem` computes
+    // `0 - cost`; `appendTransaction` rejects the negative zero at the choke point.
+    expect(Object.is(charge?.amount, -0)).toBe(false);
     expect(balanceOf(after.ledger)).toBe(balanceOf(before.ledger));
+    expect(countItemPurchaseTransactions(after.ledger)).toBe(after.buildOutcomes.placed);
   });
 
   it('records exactly one outcome per command, which is what the per-tick law compares', () => {

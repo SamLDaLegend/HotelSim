@@ -60,6 +60,18 @@
 // player a HIRE, and a hire IS a charge you choose — so it is this file's shape, not
 // settlement's, and it is the first thing since G-011 that will need a refusal reason here.
 //
+// AND `placeItem` JOINED THE CHOSEN-CHARGE SIDE AT G-075a (ADR-0111), needing no new reason at
+// all: an item has a price, `applyPlaceItem` books it as `itemPurchase` and refuses
+// `insufficientFunds`. The table above gains one row and the sentence above it is unchanged —
+// putting furniture in a room is a charge you CHOOSE.
+//
+//                            spawnEntity                 placeItem
+//   costs money              no                          yes, one `itemPurchase` tx
+//   insufficient cash        n/a                         refused, recorded
+//
+// That row is why the SHIPPED SCENARIO did not move a penny when the price arrived: it seeds
+// furniture through `spawnEntity`, the left column, exactly as it seeds rooms.
+//
 // I4: there is no stored balance here or anywhere. `applyCommands` folds `balanceOf`
 // ONCE per tick, on the first build-family command, into a TICK-LOCAL number that is
 // never hashed, never saved and discarded at the end of the tick — the same contract
@@ -330,8 +342,12 @@ export type BuildOutcomes = {
    * the number of recorded OUTCOMES, and it only fails usefully while each counter is moved
    * by one kind of thing. Folding item placements into `built` would also break
    * `countConstructionTransactions(ledger) === built`, the cross-subsystem law, because a
-   * placed item books no `construction` transaction — see `applyPlaceItem` for why it books
-   * nothing at all yet.
+   * placed item books no `construction` transaction.
+   *
+   * SINCE G-075a IT BOOKS AN `itemPurchase` INSTEAD OF NOTHING, and that turned this counter's
+   * argument into a second law rather than weakening it: `countItemPurchaseTransactions(ledger)
+   * === placed` is exact for any world ticked from 0 under this build. This docblock read *"see
+   * `applyPlaceItem` for why it books nothing at all yet"* until then.
    */
   readonly placed: number;
   /**
@@ -673,6 +689,49 @@ export function countConstructionTransactions(log: readonly Transaction[]): numb
   return count;
 }
 
+/**
+ * What this item type costs a player to place, in integer pence (G-075a, ADR-0111).
+ *
+ * `constructionCostOf`'s contract exactly, one table over: absence means FREE (the
+ * absence-is-not-emptiness reading), and an unknown kind is not this function's problem —
+ * `applyPlaceItem` has already established the kind against content.
+ *
+ * THE NUMBER IS A DESIGN STATEMENT AND THIS FUNCTION IS NOT WHERE IT IS ARGUED. See
+ * `purchaseCostPenceSchema` in `packages/content`, which carries the reference point and why
+ * each of the shipped three sits where it does. Nothing here derives it and nothing compares
+ * against it — which is exactly what keeps ADR-0013 §4 out of it.
+ */
+export function itemPurchaseCostOf(content: BoundContent, itemType: ContentId): number {
+  return findItemType(content, itemType)?.purchaseCostPence ?? 0;
+}
+
+/**
+ * How many item purchases this log records (G-075a).
+ *
+ * `countConstructionTransactions`' contract exactly, and it buys the same thing: for any world
+ * ticked from 0 under this build the law is
+ *
+ *   countItemPurchaseTransactions(world.ledger) === world.buildOutcomes.placed
+ *
+ * exactly. The two sides are written by different lines in different subsystems for different
+ * reasons, and they agree only if every successful placement did both — which is what makes a
+ * path that charges without recording, or records without charging, fail somewhere other than
+ * where it was written. It holds for a FREE item too, because the append is unconditional; see
+ * `TransactionReason`'s note on `itemPurchase` for why that is the rule here and the opposite
+ * of the one `floorConstruction` follows.
+ *
+ * Deliberately NOT asserted at load, for the reason the construction law is not: a save that
+ * predates G-075a legitimately has placements and no purchases, and the permanent v1 fixture's
+ * free-text reasons are not counted here.
+ */
+export function countItemPurchaseTransactions(log: readonly Transaction[]): number {
+  let count = 0;
+  for (const transaction of log) {
+    if (transaction.reason === 'itemPurchase') count += 1;
+  }
+  return count;
+}
+
 /** Everything one build-family command reads. Assembled by the `applyCommands` phase. */
 export type BuildInput = {
   /** The tick being simulated. `advanceTime` has not run yet. */
@@ -878,9 +937,16 @@ export function applyDrawRoom(
   // required item is hosted from any cell of the rectangle, and the origin is simply the one
   // cell every footprint has. `placeItem` is how a player moves furniture off it.
   //
-  // NO EXTRA CHARGE. One `construction` transaction per build, unconditionally, is what
-  // keeps `countConstructionTransactions === built` exact; what an item costs is a
-  // designer's number and therefore content, and therefore M6's to introduce.
+  // NO EXTRA CHARGE, AND SINCE G-075a THAT IS A DECISION RATHER THAN AN ABSENCE. This comment
+  // read "what an item costs is a designer's number and therefore content, and therefore M6's
+  // to introduce"; the number now exists (`ItemTypeData.purchaseCostPence`) and this build
+  // still does not pay it. A room type's `constructionCostPence` is the price of the room
+  // READY TO WORK: a draw that handed over an unfurnished room would produce `missingItem` —
+  // a room that houses nobody while costing upkeep — from the PRIMARY player verb, by default,
+  // and the player would need a second verb to undo it. The REQUIRED items come with the room;
+  // everything else is `placeItem`'s, and `placeItem` charges. One `construction` transaction
+  // per build, unconditionally, is also what keeps `countConstructionTransactions === built`
+  // exact, and a per-item row here would be an `itemPurchase` nothing in `placed` counts.
   for (const itemId of requiredItemsOf(input.content, roomType)) {
     draftSpawn(input.entities, itemId, at);
   }
@@ -934,14 +1000,48 @@ export function applyDrawRoom(
  * failure `Placement` in `validity.ts` records at length, because with an origin-keyed index
  * this verb produced dead furniture silently, with every gate green.
  *
- * IT CHARGES NOTHING, AND THAT IS A STATED GAP RATHER THAN A DESIGN. What an item costs is a
- * designer's number and therefore content (I3), and there is no such field on `ItemTypeData`;
- * inventing one here would ship a price nobody balanced, and booking it as `construction` would
- * break `countConstructionTransactions(ledger) === built`, the cross-subsystem law this file's
- * evidence rests on. Parked with its falsification test: **if a run can raise a hotel's
- * satisfaction by placing items and never move the balance, the item price is load-bearing and
- * belongs in content.** That run becomes possible the moment G-037 scores a room on what is in
- * it, which is the next goal.
+ * ==========================================================================================
+ * IT CHARGES, SINCE G-075a, AND THE GAP THAT USED TO BE STATED HERE IS CLOSED (ADR-0111).
+ *
+ * This block read *"IT CHARGES NOTHING, AND THAT IS A STATED GAP RATHER THAN A DESIGN"* and
+ * parked the question with a falsification test — *if a run can raise a hotel's satisfaction by
+ * placing items and never move the balance, the item price is load-bearing and belongs in
+ * content*. **The human ruled it before that run existed** (ADR-0111), on a sharper argument
+ * than the parked one: an item is a PROVIDER IN ITS OWN RIGHT (`ItemTypeData.provides`,
+ * `isProviding` in `validity.ts`) serving `refillPerTick + 1` concurrent guests, which is the
+ * same figure G-060's amenity clause is derived from — so a FREE item makes that clause's
+ * numerator irrelevant and re-opens the trap ADR-0107 closed. **The exploit did not exist,
+ * because no player could place an item; the tool creates it, so the charge lands first.**
+ *
+ * BOTH OF THE PARKED NOTE'S OBJECTIONS ARE ANSWERED RATHER THAN OVERRULED. The price is
+ * content (`ItemTypeData.purchaseCostPence`, required on disk, absent means free) and it is
+ * booked as `itemPurchase`, its own reason — so `countConstructionTransactions(ledger) ===
+ * built` is untouched, and `countItemPurchaseTransactions(ledger) === placed` is the same law
+ * one event over.
+ *
+ * THE CHARGE IS UNCONDITIONAL AND THE REFUSAL IS LAST. One `itemPurchase` row per successful
+ * placement, including a free item and including content that predates prices, for the reason
+ * `construction` is unconditional. `insufficientFunds` is checked AFTER `outOfBounds` and
+ * `notInRoom`, which is `applyDrawRoom`'s stated ordering: whether the player can afford a
+ * placement it could not make anyway is not a question worth answering, and answering it would
+ * make the reported reason depend on the balance.
+ *
+ * WHAT STILL COSTS NOTHING, STATED HERE SO IT IS NOT REDISCOVERED — and it is ONE asymmetry
+ * wearing three coats, the same one the ledger already had for rooms:
+ *
+ *   `spawnEntity`   the structural primitive. A scenario DESCRIBES a world; it does not buy
+ *                   one. The shipped hotel's furniture is seeded this way and cost it nothing,
+ *                   which is why this goal moved not one penny of the shipped economics.
+ *   `drawRoom`      still seeds a room type's `requires` items free. A room's
+ *                   `constructionCostPence` is the price of the room READY TO WORK, and a draw
+ *                   that produced an unfurnished (`missingItem`) room would make the primary
+ *                   player verb produce a dead room by default.
+ *   `moveItem`      a move is not a purchase. `resizeRoom` and `demolishRoom` DESTROY items
+ *                   with no refund, which is the same coin: money spent on furniture is spent.
+ *
+ * That asymmetry is why a demolished SEEDED room refunds money nobody paid (G-068's finding).
+ * It is a property of the two-doors design in this file's header, not an oversight, and the
+ * cure for it — if there is ever one — is a decision about `spawnEntity`, not about this verb.
  * ==========================================================================================
  */
 export function applyPlaceItem(input: BuildInput, itemType: ContentId, at: Cell): BuildResult {
@@ -949,7 +1049,7 @@ export function applyPlaceItem(input: BuildInput, itemType: ContentId, at: Cell)
   // Asked second, a room type absent from the item table would come back as "unknown item
   // type", which is true and useless — the caller's mistake is the verb, not the id. Content
   // is also free to define an id in BOTH tables, and there the order is the difference between
-  // a named refusal and a free room spawned through a verb that charges nothing.
+  // a named refusal and a room spawned through a verb that would charge it an ITEM's price.
   if (isRoomKind(input.content, itemType)) {
     throw new Error(
       `placeItem: "${itemType}" is a ROOM type, and a room is drawn rather than placed; see drawRoom`,
@@ -971,6 +1071,21 @@ export function applyPlaceItem(input: BuildInput, itemType: ContentId, at: Cell)
   if (roomAt(input.entities, input.content, at) === undefined) {
     return refuse(input, 'notInRoom');
   }
+  // AND WHAT THE FURNITURE COSTS (G-075a, ADR-0111). Last, for `applyDrawRoom`'s stated reason:
+  // it is the only refusal that can change without the player moving.
+  //
+  // THE SAME REFUSAL THE BUILD FAMILY ALREADY USES, not a new one. The player's mistake is one
+  // thing — you reached for something you cannot pay for — and a second reason keyed on the
+  // same fact is the drift `BuildRefusalReason`'s own docblock refuses for `breaksAnotherRoom`.
+  //
+  // `< 0`, so a placement that spends the player's last penny SUCCEEDS: the balance is allowed
+  // to reach exactly zero, which is `applyDrawRoom`'s boundary and `canDrawLoan`'s. There is no
+  // floor charge here, because an item cannot open a floor — it can only stand in a room that
+  // is already on one.
+  const cost = itemPurchaseCostOf(input.content, itemType);
+  if (input.balance - cost < 0) {
+    return refuse(input, 'insufficientFunds');
+  }
 
   draftSpawn(input.entities, itemType, at, UNIT_FOOTPRINT);
   // AN ITEM IS ONE CELL, AND THAT IS ENFORCED HERE RATHER THAN LEFT TO THE RENDERER. ADR-0047
@@ -979,13 +1094,23 @@ export function applyPlaceItem(input: BuildInput, itemType: ContentId, at: Cell)
   // `apps/game/src/view/depth.ts` still throws on one. This is the simulation half of that
   // prohibition: the player verb cannot create one.
   //
-  // THE LEDGER AND THE BALANCE ARE RETURNED BY REFERENCE, exactly as a refusal returns them:
-  // this command books no transaction, so an item placement allocates no log. See the note
-  // above for why there is no price and what would falsify that.
+  // ONE TRANSACTION PER SUCCESSFUL PLACEMENT, UNCONDITIONALLY — including a free item type,
+  // which books amount 0, and including content that predates prices entirely. That is
+  // `construction`'s rule and it buys the same thing: `countItemPurchaseTransactions ===
+  // placed` is a countable fact rather than an approximation, and it is written by two
+  // subsystems that agree only if every placement did both halves.
+  //
+  // `0 - cost`, never `-cost`: negating a zero cost yields `-0`, which is the same money but
+  // not the same value, and `appendTransaction` rejects it at the choke point.
+  //
+  // A REFUSAL STILL ALLOCATES NOTHING — `refuse` returns the ledger and the balance by
+  // reference, so a placement the player cannot afford is invisible in every part of world
+  // state except its own counter.
+  const ledger = appendTransaction(input.ledger, { tick: input.tick, amount: 0 - cost, reason: 'itemPurchase' });
   return {
-    ledger: input.ledger,
+    ledger,
     outcomes: { ...input.outcomes, placed: input.outcomes.placed + 1 },
-    balance: input.balance,
+    balance: input.balance - cost,
   };
 }
 
@@ -1221,8 +1346,14 @@ export function applyResizeRoom(
  * unlike a resize: a resize is an edit TO a room and may break that room, but an item is not a
  * room, so every room this touches is a room the player was not editing.
  *
- * IT CHARGES NOTHING, which needs no separate argument: `placeItem` charges nothing because
- * `ItemTypeData` has no price, and moving something cannot cost more than putting it there.
+ * IT CHARGES NOTHING, AND SINCE G-075a THAT NEEDS ITS OWN ARGUMENT RATHER THAN INHERITING
+ * `placeItem`'s. This line read *"`placeItem` charges nothing because `ItemTypeData` has no
+ * price"*, and both halves of that are now false: there is a price and `placeItem` charges it.
+ * **A MOVE IS NOT A PURCHASE.** The player already owns the thing and already paid the
+ * `itemPurchase` that put it in the world; charging again for carrying it across the room would
+ * be a second sale of one item, and it would make `countItemPurchaseTransactions === placed`
+ * false — the law is over PLACEMENTS. What a move might cost one day is a labour charge, which
+ * is a different number with a different name, and nothing in this goal invents one.
  * ==========================================================================================
  */
 export function applyMoveItem(input: BuildInput, id: EntityId, to: Cell): BuildResult {
@@ -1396,8 +1527,17 @@ export function applyDemolishRoom(input: BuildInput, id: EntityId): BuildResult 
   }
   // THE REFUND (G-011). Rounded once, in `applyBasisPoints`, from the room type's own
   // unrounded construction cost — never from a previously rounded value, which is how a
-  // penny appears from nowhere. The FURNITURE refunds nothing: what an item costs is a
-  // designer's number and M6's to introduce, and `buildRoom` charged nothing for it.
+  // penny appears from nowhere.
+  //
+  // THE FURNITURE REFUNDS NOTHING, AND SINCE G-075a THAT IS A DECISION RATHER THAN AN ABSENCE.
+  // This comment read "what an item costs is a designer's number and M6's to introduce, and
+  // `buildRoom` charged nothing for it"; the number now exists and a PLAYER-PLACED item was
+  // paid for. It still refunds nothing, deliberately: `stockValueOf` (loan.ts) walks room types
+  // only, so furniture has never contributed to the liquidation value a loan is gated on, and
+  // giving it a scrap value here without giving it one there would put two different answers to
+  // "what is this hotel worth" in two files. Money spent on an item is spent. A refund is
+  // G-075's later work (ADR-0111) and is out of G-075a's scope; whatever it decides, it decides
+  // for `stockValueOf` in the same commit.
   const refund = demolitionRefundOf(input.content, room.kind);
   return {
     ledger: appendTransaction(input.ledger, {

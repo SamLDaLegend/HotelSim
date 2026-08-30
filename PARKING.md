@@ -4604,3 +4604,25 @@ than weak. *Confirmed the day they differ.*
 non-negativity invariant `needs.ts` asserts at every commit and every load. **It is not a content
 edit.** The PERCEPTUAL half — a minibar for bedrooms, a vending machine for public rooms, both
 providing `guest_nourishment` — **is free, is content, and belongs to G-075a.**
+
+## ITEMS STACK WITHOUT LIMIT, AND SIX OF SEVEN ROOM TYPES ARE PUBLIC — parked 2026-08-30 with its test
+
+**Found by G-075a's builder while disproving ADR-0111's arithmetic.** `applyPlaceItem` produces
+exactly three refusals — `outOfBounds`, `notInRoom`, `insufficientFunds` — **and no `occupied` rule
+for items.** Verified. Six of the seven room types are `accessRule: public`, so **one 24-cell lounge
+accepts 24 vending machines: 360 concurrent guests of nourishment for one room's footprint.**
+
+**WHAT IT IS AND IS NOT.** It does **not** break G-060's ladder: `sets` counts ROOM TYPES, so stacked
+items buy capacity and **no stars**, and stars are what drive demand. Priced at G-075a it is a
+capital-efficient way to over-provision — arguably a legitimate strategy rather than an exploit.
+
+> **THE DEFECT IS PERCEPTUAL BEFORE IT IS ECONOMIC**, which is the shape the human keeps finding
+> first (the minibar). **Twenty-four vending machines in one lounge is the "reads as stupid" class
+> (ADR-0013)**, and G-075c's tool is what will hand a player the gesture.
+
+**FALSIFICATION TEST, so this is a result waiting for a goal rather than a note (§4):** place N
+identical providers in one public room, N = 1, 2, 4, 8, and read the served-need bands and revenue.
+**Refuted if the curve flattens** — if something already bounds concurrent engagement per room, the
+stacking buys nothing and only the picture is wrong. **Confirmed if capacity scales linearly with N**,
+in which case the question is whether the bound belongs in `placeItem` (a per-cell occupancy rule,
+the shape rooms already have) or in the engagement model.

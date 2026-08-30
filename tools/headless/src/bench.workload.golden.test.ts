@@ -594,7 +594,16 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   transaction exists to move and the LEDGER IS BYTE-IDENTICAL. No `World` field, no save
     //   bump, no migration. **THE OUTCOME TEST BELOW DID NOT MOVE, WHICH IS THE CONTROL**: same
     //   100 arrived, 27 checked out, 59 dissatisfied, 14 still in the hotel.
-    expect(hashState(plain)).toBe('fce3fdb5e8c00e69');
+    // - `fce3fdb5e8c00e69` -> `4d6050fd9a1ad339` AT G-075a, AND IT IS `World.contentHash` AND
+    //   NOTHING ELSE FOR THE THIRD GOAL RUNNING. ADR-0111 put a `purchaseCostPence` on every row
+    //   of `item-types.json`, and the fingerprint hashes the injected content whether or not this
+    //   workload ever reads the field. **THIS ARM PLACES NO ITEM**: `placeItem` is issued by no
+    //   scenario, no harness workload and no player — that is the whole reason the charge could
+    //   land before the button — so no `itemPurchase` transaction exists and the LEDGER IS
+    //   BYTE-IDENTICAL. No `World` field, no save bump, no migration. **THE OUTCOME TEST BELOW
+    //   DID NOT MOVE, WHICH IS THE CONTROL**: same 100 arrived, 27 checked out, 59 dissatisfied,
+    //   14 still in the hotel.
+    expect(hashState(plain)).toBe('4d6050fd9a1ad339');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -1072,7 +1081,12 @@ describe('the same workload with the player churning the building', () => {
     //   cadence and BUILDS NOTHING, so it never opens a floor and never pays the charge at any of
     //   its three values. **The eviction count this arm exists to produce is UNMOVED at 24**,
     //   which is the control.
-    expect(hashState(churn)).toBe('9d07bfcb1da0362f');
+    // `9d07bfcb1da0362f` -> `2c6b89636bc9890f` AT G-075a: `World.contentHash` and NOTHING else,
+    //   because ADR-0111 put a `purchaseCostPence` on every row of `item-types.json`. No `World`
+    //   field, no save bump, no migration, and no ledger line - this arm's player demolishes on a
+    //   cadence and PLACES NO ITEM, so it never pays the new charge. **The eviction count this
+    //   arm exists to produce is UNMOVED at 24**, which is the control.
+    expect(hashState(churn)).toBe('2c6b89636bc9890f');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

@@ -412,7 +412,18 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // diffing the whole 49-line report against the same run under a content directory identical
     // in every byte except this field: **exactly one line differs and it is `state hash`.** That
     // is the control this golden exists to be.
-    stateHash: '04c2df4cc528c5f0',
+    //
+    // G-075a: `04c2df4cc528c5f0` -> `66ff7eb4c0d02340`. **PURELY A CONTENT NUMBER FOR THE THIRD
+    // GOAL RUNNING, AND AGAIN NOT ONE OTHER FIELD OF THIS DOCUMENT MOVES.** ADR-0111 put a
+    // `purchaseCostPence` on every row of `item-types.json`, so an item costs money and
+    // `placeItem` books an `itemPurchase`. **THE DEFAULT INVOCATION PLACES NO ITEM** - no
+    // scenario, no harness workload and no player issues `placeItem`, which is the whole reason
+    // the charge could land BEFORE the button - so the only thing that can move is
+    // `World.contentHash`, which folds the fingerprint of every injected table. The furniture
+    // this run does have was seeded with `spawnEntity`, and `spawnEntity` charges nothing.
+    // `SAVE_SCHEMA_VERSION` stays 25 and `SUMMARY_SCHEMA_VERSION` stays 4 - no `World` field
+    // moved, and a price is content.
+    stateHash: '66ff7eb4c0d02340',
   },
   guests: {
     arrived: 32,
@@ -776,6 +787,15 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // contingent one — this run issues no build command at all, and the charge is levied only
     // BY a build. `build.floor.test.ts` is where it is non-zero.
     floorConstructionPennies: 0,
+    // G-075a: what FURNISHING cost, and how many items were bought. Both zero here for a
+    // STRUCTURAL reason rather than a contingent one, and it is the sharpest instance of that
+    // distinction in this document: `placeItem` is issued by no scenario, no harness workload
+    // and no player, so nothing in the shipped tree can move these two. The furniture this run
+    // DOES have - `--amenities 1` seeds one of each amenity and its required items - arrived
+    // through `spawnEntity`, which charges nothing. `item.price.test.ts` is where they are
+    // non-zero, against hand-built worlds.
+    itemPurchasePennies: 0,
+    itemPurchases: 0,
     loanDrawPennies: 0,
     loanFeePennies: 0,
     loanRepaymentPennies: 0,
@@ -955,6 +975,10 @@ const GOLDEN_2_DAYS_SEED_42 =
     'refunds     0p',
     // G-038c: the report gains ONE column, and it reads zero because this run builds nothing.
     'floors      0 opened, 0p',
+    // G-075a, ADDITIVE. The golden gains a ROW and no existing row moves: every other line of
+    // this 49-line document is byte-identical, which is the control that says a price on an item
+    // type charged nothing to a run that places no item.
+    'furnished   0 bought, 0p',
     'loans       0 drawn, 0 not needed, 0 not offered',
     'borrowed    0p, fees 0p, repaid 0p',
     'scrap value 750000p',
@@ -1114,7 +1138,11 @@ const GOLDEN_2_DAYS_SEED_42 =
     // G-070: `6a4260a6d4417d4a` -> `04c2df4cc528c5f0`, purely a CONTENT number — ADR-0109 put
     // `floorConstructionCostPence` at 1,000,000, the default run opens no floor, and the whole
     // 49-line report was diffed against the same run one field apart: THIS LINE AND NOTHING ELSE.
-    'state hash  04c2df4cc528c5f0',
+    // G-075a: `04c2df4cc528c5f0` -> `66ff7eb4c0d02340`, purely a CONTENT number - ADR-0111 put a
+    // `purchaseCostPence` on every row of `item-types.json`, the default run places no item at
+    // all, and the whole report was diffed against the same run one table apart: THIS LINE AND
+    // NOTHING ELSE.
+    'state hash  66ff7eb4c0d02340',
   ].join('\n') + '\n';
 
 /**
@@ -1650,6 +1678,7 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
       startingCapitalPennies: number;
       demolitionRefundPennies: number;
       floorConstructionPennies: number;
+      itemPurchasePennies: number;
       loanDrawPennies: number;
       balancePennies: number;
     };
@@ -1955,7 +1984,12 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
       s.money.revenuePennies +
       s.money.upkeepPennies +
       s.money.constructionPennies +
-      s.money.floorConstructionPennies;
+      s.money.floorConstructionPennies +
+      s.money.itemPurchasePennies;
+    // G-075a: AND A FIFTH, for the same reason and with the same standing. `itemPurchasePennies`
+    // is money the balance must account for the moment a player can place an item; it reads 0 on
+    // this arm because nothing in the shipped tree issues `placeItem`, and a fold that omitted
+    // it would silently stop agreeing with `balanceOf` on the first hotel that furnished itself.
     // G-038c: THE FOLD GAINS A FOURTH TERM, and that is the assertion rather than the number.
     // `floorConstructionPennies` is money the balance must account for; a fold that omitted it
     // would disagree with `balanceOf` by exactly 500,000p, which is what this line would catch.

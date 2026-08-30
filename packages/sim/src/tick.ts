@@ -533,8 +533,14 @@ function applyCommand(
     }
     case 'placeItem': {
       // A BUILD-FAMILY COMMAND, so the per-tick law below covers it: exactly one outcome is
-      // recorded, whether the item landed or the placement was refused. It books no
-      // transaction, so unlike its siblings it leaves the ledger by reference.
+      // recorded, whether the item landed or the placement was refused.
+      //
+      // SINCE G-075a IT BOOKS ONE `itemPurchase` PER SUCCESSFUL PLACEMENT (ADR-0111), so it is
+      // no longer the exception among its siblings — this comment read "it books no
+      // transaction, so unlike its siblings it leaves the ledger by reference". A REFUSED
+      // placement still leaves the ledger by reference, which is `refuse`'s contract and not
+      // this verb's. All of the behaviour, and the reason a seeded item is NOT charged, is in
+      // `build.ts`; this is the plumbing.
       accumulator.buildCommands += 1;
       const result = applyPlaceItem(buildInput(state, entities, accumulator), command.itemType, command.at);
       accumulator.ledger = result.ledger;
@@ -544,9 +550,11 @@ function applyCommand(
     }
     case 'resizeRoom': {
       // A ROOM IS EDITABLE (G-036c). Same plumbing as its siblings; all of the behaviour is in
-      // `build.ts`. It books no transaction, so like `placeItem` it leaves the ledger by
-      // reference — but it is still a build-family command, so the per-tick law below covers it
-      // and exactly one outcome is recorded whether the redraw landed or was refused.
+      // `build.ts`. It books no transaction, so it leaves the ledger by reference — the last
+      // build-family command that does, since G-075a gave `placeItem` a price and this line
+      // read "so like `placeItem` it leaves the ledger by reference". It is still a
+      // build-family command, so the per-tick law below covers it and exactly one outcome is
+      // recorded whether the redraw landed or was refused.
       accumulator.buildCommands += 1;
       const result = applyResizeRoom(
         buildInput(state, entities, accumulator),
