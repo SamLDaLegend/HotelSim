@@ -180,14 +180,25 @@ describe('the I2 harness reaches rooms that do not work', () => {
       // slightly different set of builds and one fewer of them lands in mid-air. Every reason is
       // still non-zero except the two this file pins at zero deliberately, which is the claim.
       // 42 -> 40 AT G-068, for the reason the banner above this call gives.
-      unsupported: 40,
+      // 40 -> 38 AT G-069, and it is the money for the sixth goal running. E-016's re-derivation
+      // put `floorConstructionCostPence` at 750,001; this log's build rotation crosses to an
+      // unoccupied floor TWICE, so it pays 1,500,002p for floors where it paid 1,000,000p and
+      // affords two fewer builds at this file's 40,000-tick horizon (14 -> 12,
+      // `insufficientFunds` 4 -> 6, measured paired on the two content files one field apart),
+      // and BOTH of the two that go were in mid-air.
+      // **THE OTHER FIVE ROWS DO NOT MOVE AT ALL**, which is the control this file has leaned on
+      // since G-041: nothing about which RULE bites changed, only how many rooms there are to
+      // bite on. Every reason is still produced.
+      unsupported: 38,
     });
   });
 
   it('contains rooms with nothing beneath them', () => {
     // 43 -> 42 AT G-046b, for the build-cadence reason the tally above states.
     // 42 -> 40 AT G-068. See the banner on the tally above: two fewer builds land in mid-air.
-    expect(tally.unsupported).toBe(40);
+    // 40 -> 38 AT G-069. See the tally above: the re-derived floor charge costs this log two
+    // builds at this horizon and both of them were floating.
+    expect(tally.unsupported).toBe(38);
   });
 
   it('contains rooms with no bed in them — AND THE COUNT IS TWO, which is still a knife edge', () => {

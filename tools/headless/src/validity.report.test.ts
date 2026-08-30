@@ -230,7 +230,22 @@ describe('the exit criterion is a measurement, not a tautology', () => {
       // the control here, and it is a better one than any of them: the rooms that work are the
       // ones the seeded plate and the affordable front of the walk provide, and neither moved.
       // ======================================================================================
-      unsupported: 16,
+      // ======================================================================================
+      // 16 -> 15 AT G-069, AND IT IS THE ONLY NUMBER IN THIS TALLY THAT MOVED. E-016's
+      // re-derivation put `floorConstructionCostPence` at 750,001, so this walk's ONE crossing
+      // to floor 1 costs 250,001p more and the LAST build of the run is refused for funds:
+      // built 29 -> 28, `insufficientFunds` 1 -> 2, and the room that is no longer there is one
+      // that stood on nothing. The same shape as G-038c's entry above, at a quarter the size,
+      // because the charge is levied once and this run only ever opens one floor.
+      //
+      // **`valid` IS UNMOVED AT 66 AND SO IS EVERY GUEST COLUMN**, which is the control and a
+      // better one than any single reason: 1,695 checkouts, 14,407,500p of revenue, 1,108 gave
+      // up, 9 + 4 evicted, all byte-identical. The rooms that WORK are the seeded plate and the
+      // affordable front of the walk, and a sink that bites at the tail of the run cannot reach
+      // either. The whole money delta is +74,999p = -250,001 floor + 250,000 construction
+      // + 75,000 upkeep (one bedroom, thirty nights) and it closes exactly.
+      // ======================================================================================
+      unsupported: 15,
       // THREE, AND EACH IS SEALED BY ROOMS ON ALL FOUR SIDES — no plot edge is doing any of the
       // work, and since G-038a-iii-a no plot edge COULD: the packing starts one row back, so
       // the near edge is the spine and a seal has to be bought with four real rooms.
@@ -318,7 +333,7 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     // a regular expression: the same run that took `noDoor` to 0 would have matched it with a
     // literal `0` in that slot. THREE reasons, at their counts, through a real process.
     expect(stdout).toContain(
-      'rooms bad   0 unplaced, 16 unsupported, 4 no door, 2 no corridor, 0 no route, 0 no item',
+      'rooms bad   0 unplaced, 15 unsupported, 4 no door, 2 no corridor, 0 no route, 0 no item',
     );
   }, 90_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 20,735ms
 });

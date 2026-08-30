@@ -577,7 +577,16 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   MOVE, WHICH IS THE CONTROL** and it is the strongest form of it this hash has carried:
     //   this arm builds NOTHING and demolishes NOTHING, so a purse it never spends cannot reach
     //   a single guest. Same 100 arrived, same split, same everything but the money.
-    expect(hashState(plain)).toBe('3966fdfed81b8dea');
+    // - `3966fdfed81b8dea` -> `5b8e6d7760ba8e0b` AT G-069, AND IT IS `World.contentHash` AND
+    //   NOTHING ELSE - the narrowest cause this hash has ever moved for. G-069 re-derived
+    //   `floorConstructionCostPence` 500,000 -> 750,001 in `economy.json` (E-016), and the
+    //   fingerprint hashes the injected content whether or not this workload ever reads the
+    //   field. **THIS ARM NEVER OPENS A FLOOR**: it builds nothing, so no `floorConstruction`
+    //   transaction exists to move and the LEDGER IS BYTE-IDENTICAL, including the opening
+    //   `startingCapital` line that moved at G-068. No `World` field, no save bump, no
+    //   migration. **THE OUTCOME TEST BELOW DID NOT MOVE, WHICH IS THE CONTROL**: same 100
+    //   arrived, 27 checked out, 59 dissatisfied, 14 still in the hotel.
+    expect(hashState(plain)).toBe('5b8e6d7760ba8e0b');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -1043,7 +1052,13 @@ describe('the same workload with the player churning the building', () => {
     //   migration. **The eviction count this arm exists to produce is UNMOVED at 24**, which is
     //   the control: this arm's player demolishes on a cadence and builds nothing, so a bigger
     //   purse changes which numbers are in the ledger and not which rooms come down.
-    expect(hashState(churn)).toBe('c72a686c74a425b8');
+    // `c72a686c74a425b8` -> `55bed0e72f7f3b43` AT G-069: `World.contentHash` and NOTHING else,
+    //   because E-016's re-derivation moved `floorConstructionCostPence` 500,000 -> 750,001. No
+    //   `World` field, no save bump, no migration, and no ledger line - this arm's player
+    //   demolishes on a cadence and BUILDS NOTHING, so it never opens a floor and never pays the
+    //   charge at either value. **The eviction count this arm exists to produce is UNMOVED at
+    //   24**, which is the control.
+    expect(hashState(churn)).toBe('55bed0e72f7f3b43');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

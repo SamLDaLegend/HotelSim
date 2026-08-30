@@ -4,8 +4,8 @@
 
 *As of 2026-08-30, the last goal to LAND is G-068 and **M5's remaining work is BLOCKED ON THE HUMAN**. Since G-051b closed the build loop: **G-059** landed E-014's ruling (a review measures the WHOLE STAY, facilities included); **G-061-G-065** seeded facilities, put the rating on screen and gave the player corridors, footprints and a guest voice; **G-066a/b** built the review feed, storing `spokenRemarkFrom`'s exact input set so rewording a joke leaves every save byte-identical; **G-046 and G-046b** made a door a PLACE, so BOTH HALVES OF E-012 ARE NOW ANSWERED — a guest walks to a doorway to go in (through-wall entries 64 -> 19) and to go out (exits 248 -> 49, 318 doorway exits in 2,880 ticks); **G-060** made the amenity clause count LOAD rather than variety, killing the fifth-star trap (498 storm-outs -> 0 at the same 24 bedrooms) with N DERIVED rather than fitted, the human's `1 per 8` agreeing at all five tier sizes and first disagreeing at 9; and **G-068** raised the purse, both amounts derived, `loanPrincipalPence` landing on 1,111,111 because it must net exactly one tier-1 build after a 10% fee. TWO GOALS QUEUED INDEPENDENTLY PROTECT EACH OTHER: G-046b moved no economic column at all, because G-060 had meanwhile given every rung service headroom, so an extra tick comes out of slack rather than out of a stay. OPEN ON THE HUMAN, AND THE LOOP WAITS ON BOTH: **E-016**, where raising the purse falsified `floorConstructionCostPence`'s derivation (*a hotel must not open its second storey out of the money it opened with*: `750,000 > 500,000` TRUE became `750,000 > 1,000,000` FALSE) and NO CAPITAL SATISFIES BOTH REQUIREMENTS, the field unchanged and its prose marked broken rather than false; and **G-067**, where a stranger must play it and THE LOSE STATE'S REQUIREMENT COMES FROM THAT GOAL'S FIFTH QUESTION rather than from a guess (ADR-0108 settled that bankruptcy is SURVIVABLE, not what it should feel like). GATES: `pnpm verify` is FOURTEEN ROWS and the exit is read from `$?` — never grep for `VERIFY_EXIT`, which the tool never emits. **Unreliable: 2 gates, 0 defects**, and a THIRD is a stop condition (§2.0) — `check:scaling` unrepaired (no found cause, no margin) and I4 repaired on a MARGIN rather than a tally (90,000ms against a 27,761ms worst, 3.24x against 1.41x noise), because a tally of green runs is not evidence about an instrument. OWED, EACH WITH ITS DISCHARGE POINT: `check:stamp` compares the four digests to EACH OTHER and the I2 fact declares `shipped: null`, so the I2 hash is compared against NOTHING (parked as its own goal, gate untouched); `stash@{0}` holds an unexplained 94-line `validity.ts` insertion from G-052a; `stepTowards`' untested fallback is out of scope twice over and is the named cause of the 70 remaining through-wall entries, parked with a parity falsification test (re-run the census at `guestCellsPerTick` 2 or 4); and `loanRepaymentPerNightPence` has NO derivation, so a loan now takes 112 nights to repay where it took 30. THE RULE THIS PROJECT KEEPS RE-LEARNING, now in its fourth and fifth instances (ADR-0013, ADR-0086, ADR-0106): A CLAIM'S WARRANT DOES NOT TRAVEL WITH ITS WORDS — a perceptual criterion needs a perceptual check, a gate's name claims one clause and not a class, and a parked falsification test is a condition for a BELIEF and not a target for a BUILD, which is how G-066b's exit criterion came to demand 525 rows of comedy prose before anybody checked it was reachable.*
 
-- **State**: save **v25** · summary **v4** · I2 `03e094c9e66ef6d5` · measure golden
-  `3966fdfed81b8dea` *(**both moved at G-059 and that move IS BEHAVIOUR**: the review scorer changed
+- **State**: save **v25** · summary **v4** · I2 `ddb101ca9c1687ee` · measure golden
+  `5b8e6d7760ba8e0b` *(**both moved at G-059 and that move IS BEHAVIOUR**: the review scorer changed
   and `reviewOutcomes` is world state. `c967bdb98dac9b0d` / `a57925e09896e3a4` -> the pair above; no
   `World` field, save stays v25, no migration, `World.contentHash` unmoved. Before that, **both moved
   TWICE at G-051a, each time for ONE cause that is NOT
@@ -4568,3 +4568,70 @@ threshold rather than a vibe.
 the goal. **It is not coddling the build**: handing someone a 400px window would test the layout
 threshold instead of the five questions the protocol exists to answer, and would burn the one
 session's worth of ignorance on a defect already recorded.
+
+## WATCH #39 — 2026-08-30 — THE SECOND STOREY IS EARNED, AND THE LEDGER SAYS SO TO THE PENNY
+
+**Instrument**: `recording/g069-second-storey.json` (JSONL, 97 frames, gitignored), `--days 4 --seed
+42 --rooms 1 --build 1440 --record-every 60`. **Read by the orchestrator out of the frames rather
+than taken on the builder's report.**
+
+| tick | balance | floors | floor charge | refusals |
+|---|---|---|---|---|
+| 0 | 1,000,000 | — | — | 0 |
+| 60 | 1,000,000 | −1, 0 | — | **1** — day 1's attempt REFUSED |
+| 2,820 | 1,018,500 | −1, 0 | — | **2** — day 2 refused, and the hotel is now TRADING |
+| 2,940 | **11,499** | −1, 0, **1** | **−750,001** | 2 |
+
+**`1,011,500 − 750,001 − 250,000 = 11,499`, exactly.** Two refusals, then the storey opens on **day
+three, out of money the hotel earned** — which is the requirement (*a hotel must not open its second
+storey out of the money it opened with*) doing precisely what it says rather than a rule that always
+refuses.
+
+**AND THE MIDDLE ROW IS WHAT MAKES IT A MEASUREMENT.** At tick 2,820 the balance is **1,018,500 —
+above the opening purse** — and the build is STILL refused, because floor + room is 1,000,001 against
+a till that has not yet cleared it net of upkeep. *A rule that refused at tick 1 and granted at tick
+2 would be indistinguishable from a rule that just costs more.*
+
+### THE VALUE IS THE PENCE MINIMUM, AND THE ROUND ANSWER WAS PRICED RATHER THAN DISMISSED
+
+`floorCost > openingCapital − cheapestRoom = 750,000`, strict, over integer pence, so the admissible
+set is `{750,001, …}` and **750,001 is its minimum** — the same reading G-068 took on both of its
+fields, and the only member that needs no SECOND sentence to select it. **The penny is forced by the
+strictness, not chosen as a margin.**
+
+**`4 x cheapestRoom = 1,000,000` was rejected as a DESIGN decision and priced so the human's ruling
+is a one-field edit with numbers on it**, one deterministic run per probe: **500,000 opened the
+storey at tick 2 (day 1, out of opening capital); 750,001 opens it at tick 2,882; 1,000,000 opens it
+at tick 17,282 (day 13).** *`3 x 250,000 = 750,000` was played as a NEGATIVE arm and builds at tick 1
+on money nobody earned.*
+
+### ONE RENDER OBSERVATION, WHICH IS NOT AN ECONOMY DEFECT
+
+**The storey takes ~99% of the till in a single click** — 1,000,001p of a 1,011,500p balance. Nothing
+in the HUD says so before it happens. **Recorded for the render side and NOT patched here**; it is
+also material for G-067, because *"I clicked a thing and my money vanished"* is exactly the kind of
+report a stranger gives and the kind this project would otherwise argue about.
+
+### TWO ERRORS OF THE ORCHESTRATOR'S, BOTH CAUGHT BY THE BUILDER
+
+1. **The brief demanded "BYTE-IDENTICAL, state hash included" and that is UNSATISFIABLE BY
+   CONSTRUCTION for any content change.** `World.contentHash` is a `World` field (world.ts:64), it is
+   in the serialisation map, and `hashState(world) = hashJson(worldToJson(world))` — **verified by
+   the orchestrator in the source, not accepted on report.** So every content edit moves every arm's
+   hash. Proved twice by the builder, including with a behaviourally inert rename. **G-068's brief
+   asked for byte-identical ECONOMIC COLUMNS, which is achievable; this brief escalated it to the
+   hash and broke it.** *A less careful builder could have "satisfied" it by weakening the check.*
+2. **E-016's HEADING over-claimed** — *"AND NO CAPITAL SATISFIES BOTH"* reads as a collision between
+   two REQUIREMENTS; it was a collision between one capital and one **stale value**. Both
+   requirements hold at (1,000,000, 750,001), which is what shipped. **The entry's body was correct
+   all along**, so only the heading was wrong; corrected in place, along with the same over-claim
+   mirrored on `scenarioSchema`.
+
+### AND A GAP IN THE REQUIREMENT ITSELF, REPORTED NOT PATCHED
+
+It says *the money it opened with*, but the shipped scenario also opens with **STOCK**
+(`seededStock: "supplementsCapital"`), and `demolishRoom` converts that to money on rooms the host
+placed free — **so a player who scraps the inherited hotel has more than `openingCapitalPence` on day
+one.** Widening the sentence to *money or stock* changes the requirement, so it is the human's.
+**This is the same asymmetry G-068 hit from the other side**: demolishing a seeded room makes a hotel
+richer, which is also why the harness cannot produce a bankruptcy.

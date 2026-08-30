@@ -678,11 +678,27 @@ describe('THE CURRENCY CAN BE BOUGHT INTO — a paid facility moves the rating',
     // That is a property of a schedule that cannot see a rung — `--build`'s own documented rule
     // — rather than of the economy, and the verdict this case is named for (four stars, scale
     // outstanding, rooms stranded) is unmoved.
-    expect(inherited.rating.shortfall.map((clause) => clause.counting)).toEqual([
-      'rooms',
-      'sets',
-      'distinctTypes',
-    ]);
+    //
+    // AND BACK TO TWO AT G-069, WHICH IS THE SAME SCHEDULE ARTEFACT RUNNING THE OTHER WAY AND
+    // IS RECORDED RATHER THAN CELEBRATED. E-016's re-derivation put `floorConstructionCostPence`
+    // at 750,001, so this walk's ONE crossing to a new floor lands later, the `--buy-facility`
+    // walk's sparse 20,000-tick attempt meets a fuller wallet, and the SECOND facility type is
+    // bought again — `distinctTypes` leaves the shortfall. Measured paired, one deterministic
+    // run per arm, the two content files one field apart, `--days 365 --seed 42 --rooms 12
+    // --amenities 2 --build 1440 --buy-facility 20000`:
+    //
+    //     charge      stars  shortfall                        built  valid  closing balance
+    //     500,000       4    rooms, sets, distinctTypes          36     26        208,000p
+    //     750,001       4    rooms, sets                         38     23          1,499p
+    //
+    // **A MORE EXPENSIVE FLOOR BOUGHT MORE ROOMS AND MORE FACILITIES ON THIS ARM, AND THAT IS
+    // NOT AN ECONOMIC FINDING** — it is `--build`'s documented blindness, exactly as G-068's
+    // paragraph above says of the movement in the other direction. Two schedules that cannot
+    // see a rung race for the same wallet, and anything that changes the timing changes who
+    // wins. The verdict this case is named for — four stars, SCALE outstanding, rooms stranded
+    // — is unmoved at every value the charge has taken, which is why the case survives the
+    // churn beneath it.
+    expect(inherited.rating.shortfall.map((clause) => clause.counting)).toEqual(['rooms', 'sets']);
     expect(inherited.rooms.invalid.unsupported).toBeGreaterThan(0);
   }, 90_000);
 

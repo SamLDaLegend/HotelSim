@@ -6,7 +6,7 @@
 
 - **Schemas**: save **v25** (G-052a — the world gained a `staff` payroll, and `migrateV23ToV24` writes the empty one a pre-G-052a world had; before that v23 at G-038b-i — the world gained a `lift` and a `liftQueue`, and the departure table gained a row; a guest gained a `partyId` at G-040a; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `03e094c9e66ef6d5` · measure golden `3966fdfed81b8dea`. *(**Both MOVED AT G-059, and this time it IS
+  `ddb101ca9c1687ee` · measure golden `5b8e6d7760ba8e0b`. *(**Both MOVED AT G-059, and this time it IS
   BEHAVIOUR** — the review scorer changed and `reviewOutcomes` is world state. `c967bdb98dac9b0d` /
   `a57925e09896e3a4` -> the pair above. **NO `World` FIELD, so save stays v25 with no migration**, and
   `World.contentHash` did NOT move because no content file was touched. Previously **MOVED TWICE at G-051a, each time for
@@ -5435,7 +5435,64 @@ The lose STATE itself — what happens when you go broke, what tells the player,
 recovery *arithmetically possible*; it does not make it *a mechanic*.
 
 ## G-069 — The second storey is earned again: `floorConstructionCostPence` re-derived
-Status: **IN-PROGRESS 2026-08-30. E-016's DERIVABLE half, taken WITHOUT a ruling and the reason is stated.** Milestone: M5 · Owner pair: economy-engineer / balance-critic
+Status: **DONE 2026-08-30. `floorConstructionCostPence` 500,000 -> 750,001. The design half of E-016 is still OPEN.** Owner pair: economy-engineer / (orchestrator-verified)
+
+> **750,001 IS THE PENCE MINIMUM OF THE ADMISSIBLE SET, AND THE PENNY IS FORCED BY THE STRICTNESS
+> RATHER THAN CHOSEN AS A MARGIN.** `floorCost > openingCapital - cheapestRoom = 750,000`, strict,
+> over integer pence. Inputs read off the files by the test, not off the brief: `openingCapitalPence`
+> 1,000,000 (`scenarios.json`), cheapest `constructionCostPence` 250,000 (`room-types.json`, five
+> types tie), lower endpoint >= 250,000 enforced at `bindContent`. **Same reading G-068 took on both
+> of its fields, and the only member of the set that needs no SECOND sentence to select it.**
+
+**THE ROUND ANSWER WAS PRICED RATHER THAN DISMISSED, so the human's remaining ruling is a one-field
+edit with numbers on it** — `--seed 42 --build 1440`, shipped hotel, one deterministic run per probe:
+
+| charge | the second storey opens on |
+|---|---|
+| 500,000 (shipped, broken) | tick 2 — **day 1, out of opening capital** |
+| **750,001 (shipped now)** | tick 2,882 — **day 3, after two nights of trade** |
+| 1,000,000 (`4 x cheapestRoom`) | tick 17,282 — day 13 |
+
+*`3 x 250,000 = 750,000` was played as a NEGATIVE arm and builds at tick 1 on money nobody earned —
+wrong by exactly the margin, which is why the round multiple is a trap here.*
+
+**THE PREDICTION HELD ON THE ECONOMICS AND ONE CLAUSE OF IT WAS UNSATISFIABLE.** Twelve no-floor arms
+— G-060's eleven rungs plus the shipped scenario — came back with **every field of the JSON summary
+byte-identical**, zero dissatisfied at every rung, revenue ladder preserved. **But the brief's "state
+hash included" is FALSE BY CONSTRUCTION for any content change**: `World.contentHash` is a `World`
+field, it is in the serialisation map, and `hashState` hashes the whole world — **verified by the
+orchestrator in the source rather than accepted on report.** G-068's brief asked for byte-identical
+ECONOMIC COLUMNS, which is achievable; this brief escalated it to the hash and broke it.
+
+**BOTH HALVES OF THE REQUIREMENT ARE MEASURED**, in the new `storey.report.test.ts`: the refusal
+(`built 0`, `insufficientFunds 1`, no floor charge, no revenue), **an anti-vacuity arm with ONE PENNY
+more capital that succeeds** with capital + both charges = 0 exactly, **a second with one penny LESS
+charge that builds at tick 1 on nothing earned**, and proof it is not a wall — refused on day 2,
+opens on day 3. Proof of bite by the CLAUDE.md recipe: 750,000 turns 6 cases red; moving
+`openingCapitalPence` reddens the derivation itself, **which is the exact silent falsification E-016
+was.**
+
+**WATCH #39 reads it out of the frames**, and the middle row is what makes it a measurement: at tick
+2,820 the balance is **1,018,500 — ABOVE the opening purse — and the build is STILL refused**, because
+floor + room is 1,000,001 net of upkeep. *A rule that refused at tick 1 and granted at tick 2 would
+be indistinguishable from a rule that merely costs more.* Then `1,011,500 - 750,001 - 250,000 =
+11,499`, to the penny.
+
+**E-016's HEADING WAS THE ORCHESTRATOR'S AND OVER-CLAIMED.** *"No capital satisfies both"* reads as a
+collision between two REQUIREMENTS; it was a collision between one capital and one **stale value**.
+Both hold at (1,000,000, 750,001). **The entry's body was right all along**; heading corrected, and
+the same over-claim mirrored on `scenarioSchema` corrected with it.
+
+**STILL OPEN AND STILL THE HUMAN'S**: whether to keep this requirement at all, or price the storey at
+the round 1,000,000. **And a GAP IN THE REQUIREMENT AS WRITTEN, reported not patched** — it says *the
+money it opened with*, but the scenario also opens with STOCK (`seededStock: "supplementsCapital"`)
+which `demolishRoom` converts to money on rooms the host placed free, **so a player who scraps the
+inherited hotel has more than `openingCapitalPence` on day one.** *The same asymmetry G-068 hit from
+the other side, and the reason the harness cannot produce a bankruptcy.*
+
+**ONE RENDER OBSERVATION, NOT AN ECONOMY DEFECT**: the storey takes **~99% of the till in a single
+click** (1,000,001p of 1,011,500p) and nothing warns first. Material for G-067 — *"I clicked a thing
+and my money vanished"* is exactly the report a first-time player gives. Milestone: M5 · Owner pair: economy-engineer / balance-critic
 
 G-068 raised `openingCapitalPence` to 1,000,000 on the human's ruling (ADR-0108) and **falsified a
 third field's derivation**. `floorConstructionCostPence`'s stated requirement is *a hotel must not be

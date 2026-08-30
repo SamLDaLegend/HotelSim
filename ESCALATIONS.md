@@ -2469,6 +2469,37 @@ lose-state goal waits.**
 
 ---
 
+## E-016 [PARTLY RESOLVED 2026-08-30 — the arithmetic taken, the design question still OPEN] — RAISING THE PURSE FALSIFIED A THIRD FIELD'S DERIVATION
+
+**Resolution of the derivable half (G-069):** `floorConstructionCostPence` **500,000 -> 750,001**,
+the minimum of the admissible set in pence, matching the reading G-068 took on both of its fields.
+**Both requirements now hold simultaneously at (1,000,000, 750,001).**
+
+> **THIS HEADING USED TO READ *"AND NO CAPITAL SATISFIES BOTH"* AND THAT WAS AN OVER-CLAIM BY THE
+> ORCHESTRATOR, CAUGHT BY G-069's BUILDER.** It reads as a collision between the two REQUIREMENTS.
+> It was a collision between one capital and one **stale value** of the other field. **The body below
+> is correct** — it says the derivation is unsatisfied and the field unchanged at 500,000 — **so only
+> the heading was wrong**, and the same over-claim was mirrored on `scenarioSchema` and is corrected
+> there too.
+
+**STILL OPEN, AND IT IS THE DESIGN HALF:** whether to keep the requirement at all, or to price the
+storey at the round `4 x cheapestRoom = 1,000,000` instead of the pence minimum. **Priced rather
+than argued, so the ruling is a one-field edit with numbers on it** — `--seed 42 --build 1440`,
+shipped hotel, one deterministic run per probe: **500,000 opened the storey at tick 2 (day 1, out of
+opening capital); 750,001 opens it at tick 2,882 (day 3, after two nights of trade); 1,000,000 opens
+it at tick 17,282 (day 13).** *3 x 250,000 = 750,000 was played as a negative arm and builds at tick
+1 on money nobody earned.*
+
+**AND A GAP IN THE REQUIREMENT ITSELF, FOUND BY G-069 AND NOT PATCHED.** It says *the money it opened
+with*, but the shipped scenario also opens with **STOCK** (`seededStock: "supplementsCapital"`),
+which `demolishRoom` converts to money at `demolitionRefundBasisPoints` on rooms the host placed
+free — **so a player who scraps the inherited hotel has more than `openingCapitalPence` on day one.**
+Widening the sentence to *money or stock* CHANGES the requirement, so it is the human's;
+`seededStock: 'drawnFromCapital'` is named as the switch that closes it from the other end. *This is
+the same asymmetry G-068 hit from the other side: demolishing a seeded room makes a hotel richer.*
+
+### The original entry follows.
+
 ## E-016 — RAISING THE PURSE FALSIFIED A THIRD FIELD'S DERIVATION, AND NO CAPITAL SATISFIES BOTH
 
 **Raised 2026-08-30 at G-068's VERIFY. Found by the builder, which DECLINED TO FIX IT because the

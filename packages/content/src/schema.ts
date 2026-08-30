@@ -2014,8 +2014,12 @@ export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
  *     which is the one failure `balance-critic`'s charter names in a single line — *"an economy
  *     where cash piles up with nothing to spend it on has stopped being a game."*
  *
- *     Measured on `--days 30 --seed 42` with the shipped starting hotel, at all three build
- *     cadences an operator would try (1440, 60, 5 ticks):
+ *     Measured at `openingCapitalPence` **500,000**, WHICH IS NOT THE SHIPPED CAPITAL ANY MORE
+ *     (G-068 raised it to 1,000,000). The table is kept because it is the reading the 500,000
+ *     charge was chosen against, and because a wall is a JOINT property of the charge and the
+ *     purse; the CURRENT window is the re-measured table below, and this one governs nothing.
+ *     `--days 30 --seed 42` with the shipped starting hotel, at all three build cadences an
+ *     operator would try (1440, 60, 5 ticks):
  *
  *         charge       rooms built      floors opened      closing balance
  *         (none)       4                0                  25,500 – 38,000p
@@ -2025,77 +2029,113 @@ export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
  *         750,000      **0**            **0**              **956,000p, UNSPENDABLE**
  *
  *     At 750,000 the hotel cannot reach the 1,000,000p a floor plus its first room costs, so it
- *     builds NOTHING in a month at any cadence and sits on nearly a million pence. The wall is
- *     therefore between 625,000 and 750,000 on the shipped content, and the shipped value must
- *     be below it with room to spare.
+ *     builds NOTHING in a month at any cadence and sits on nearly a million pence. The wall was
+ *     therefore between 625,000 and 750,000 AT THAT CAPITAL. It moved with the purse; see below.
  *
  * ---------------------------------------------------------------------------
- * SHIPPED: 500,000 — TWICE THE CHEAPEST ROOM, and derived rather than picked.
+ * SHIPPED: 750,001 — AND THE PENNY ON THE END IS THE DERIVATION, NOT A TYPO (G-069).
  *
- * THE REQUIREMENT: **a hotel must not be able to open its second storey out of the money it
- * opened with.** A floor that comes free with the opening balance is a fee rather than a sink,
- * and the build loop's first real decision would be made before the hotel had traded for a
- * single night. The charge is only ever levied BY A BUILD, so the quantity that has to clear the
- * opening capital is the PAIR:
+ * THE REQUIREMENT, UNCHANGED SINCE G-038c: **a hotel must not be able to open its second storey
+ * out of the money it opened with.** A floor that comes free with the opening balance is a fee
+ * rather than a sink, and the build loop's first real decision would be made before the hotel had
+ * traded for a single night. The charge is only ever levied BY A BUILD, so the quantity that has
+ * to clear the opening capital is the PAIR:
  *
  *     floorConstructionCostPence + cheapest constructionCostPence  >  openingCapitalPence
  *
- * (`openingCapitalPence` on `scenarioSchema`, and it was `economySchema`'s own `startingCapitalPence`
- * until G-057. The inequality and both of its numbers are unchanged — only the address is.)
+ * ITS TWO INPUTS, EACH NAMED WITH ITS FILE AND NEITHER QUOTED HERE AS AN AUTHORITY.
+ * `purse.derivation.test.ts` in `tools/headless` reads both off disk and recomputes this number,
+ * so a retune of either reddens rather than rots:
  *
- * Walking the whole multiples of the cheapest room, which is the unit a designer thinks in:
+ *     openingCapitalPence            `scenarios.json`   -> read by `firstScenario`
+ *     cheapest constructionCostPence `room-types.json`  -> read by `minConstructionCostOf`
  *
- *     1x = 250,000   ->  250,000 + 250,000 = 500,000  =  the opening capital. Payable on day
- *                        one, out of the box, having earned nothing. REJECTED.
- *     2x = 500,000   ->  500,000 + 250,000 = 750,000  >  500,000. The hotel must trade first.
- *                        ACCEPTED, and it is the SMALLEST multiple that clears the bound, which
- *                        is the conservative direction: the cheapest floor that is still earned.
+ * On the shipped tables that is `floorCost > 1,000,000 - 250,000 = 750,000`, and because the
+ * inequality is STRICT over integer pence (ADR-0002) the admissible set is {750,001, 750,002, …}.
  *
- * 500,000 also sat comfortably below the measured wall above — the hotel reached it inside the
- * month at every cadence and closed on 168,500p rather than on 956,000p it could not spend.
+ * ---------------------------------------------------------------------------
+ * WHICH READING OF "SMALLEST SUFFICIENT" THIS FIELD TAKES, STATED BECAUSE THE TWO READINGS GIVE
+ * DIFFERENT INTEGERS AND THIS FIELD HAS USED BOTH.
+ *
+ * READING TAKEN — **the minimum of the admissible set, in pence: 750,001.** It is the move
+ * `openingCapitalPence` and `loanPrincipalPence` both made at G-068 (1,000,000 exactly; and
+ * 1,111,111, whose predecessor nets one penny short), and it is the only value in the set that
+ * needs no second sentence to select it. A strict inequality over integers has a minimum, that
+ * minimum is one unit above the bound, and one penny is the smallest quantity this economy can
+ * represent — so the penny is FORCED BY THE STRICTNESS rather than chosen as a margin.
+ *
+ * READING REJECTED — **the smallest whole multiple of the cheapest room: 4 x 250,000 =
+ * 1,000,000.** This is what the field's own G-038c derivation did: it walked 1x and 2x and
+ * shipped 2x = 500,000, where the pence minimum at that capital was 250,001. Its justification
+ * was that a multiple of a room is *"the unit a designer thinks in"* — which is aesthetic, and
+ * the premise *the charge is a whole multiple of a room* appears nowhere in the requirement.
+ * Selecting 1,000,000 is therefore a statement about HOW MUCH the second storey should cost to
+ * earn — a design decision, and E-016 reserved exactly that one to the human.
+ *
+ * NEITHER READING MAY SHIP 3x = 750,000. It is the tempting round answer and it fails by exactly
+ * the margin: 750,000 + 250,000 = 1,000,000 is NOT GREATER THAN 1,000,000, and a hotel that can
+ * afford the floor and the room with nothing left over has still opened its second storey out of
+ * its opening money.
+ *
+ * BOTH READINGS ARE MEASURED, SO THE RULING IS A ONE-FIELD EDIT WITH NUMBERS ON IT. Arm:
+ * `--seed 42 --build 1440` on the shipped starting hotel, `--ticks` bisected for the first
+ * `floorConstruction` transaction. One deterministic run per probe — exact integers out of a sim
+ * with no wall clock, so there is nothing to aggregate and a median would be a category error.
+ * Regime: win32, 12-core developer box, quiet.
+ *
+ *         charge         second storey opens on
+ *           500,000      tick 2      — DAY 1, out of opening capital. THE THING FORBIDDEN.
+ *           750,001      tick 2,882  — DAY 3, after two nights of trade.
+ *         1,000,000      tick 17,282 — DAY 13.
+ *
+ * So the shipped value is not a formality the requirement satisfies on a technicality: it costs
+ * the hotel two nights of trading. What 4x would buy over it is TEN MORE DAYS, and that
+ * difference is the design question, priced.
  * ---------------------------------------------------------------------------
  *
  * ---------------------------------------------------------------------------
- * ##########################################################################################
- * AND THE INEQUALITY ABOVE IS FALSE AT HEAD SINCE G-068. **THE SHIPPED VALUE IS OWED A HUMAN
- * RULING, AND THE PARAGRAPH IS KEPT RATHER THAN STRUCK BECAUSE IT IS THE THING THAT BROKE.**
- *
- * ADR-0108 gave `openingCapitalPence` a requirement of its own — *a bare plot can build the first
- * tier* — and that forces 1,000,000. The inequality now reads
- *
- *     500,000 + 250,000 = 750,000  >  1,000,000     FALSE
- *
- * so a hotel CAN open its second storey out of the money it opened with, which is exactly what
- * this field exists to prevent. **No capital satisfies both**: the tier forces >= 1,000,000 and
- * this inequality forces < 750,000. A human ruling outranks a derivation, so G-068 moved the
- * capital and left this number where it was, with the collision written down on both fields.
- *
- * WHAT THE RE-DERIVATION GIVES, so the ruling is one line rather than a campaign. Walking the
- * whole multiples of the cheapest room against the NEW capital:
- *
- *     3x =   750,000  ->    750,000 + 250,000 = 1,000,000  =  the opening capital. Payable on
- *                           day one. REJECTED, by the same clause that rejected 1x above.
- *     4x = 1,000,000  ->  1,000,000 + 250,000 = 1,250,000  >  1,000,000. ACCEPTED, and the
- *                           smallest multiple that clears the bound.
- *
- * AND THE UPPER ENDPOINT MOVED WITH THE CAPITAL, RE-MEASURED RATHER THAN ASSUMED TO TRANSFER
- * (G-068). Same campaign as the table above — `--days 30 --seed 42 --build {1440, 60, 5}` on the
- * shipped starting hotel, one deterministic run per cell, exact integers, win32/12cpu quiet — at
- * `openingCapitalPence` 1,000,000:
+ * AND THE UPPER ENDPOINT MOVED WITH THE CAPITAL, RE-MEASURED RATHER THAN ASSUMED TO TRANSFER.
+ * Same campaign as the historical table above — `--days 30 --seed 42 --build {1440, 60, 5}` on
+ * the shipped starting hotel, one deterministic run per cell, exact integers, win32/12-core
+ * quiet — at `openingCapitalPence` 1,000,000. Re-run at G-069 rather than carried over from
+ * G-068's session, and the four rows the two campaigns share came back identical:
  *
  *         charge         rooms built      floors opened      closing balance
  *           500,000      6 / 4 / 3        1 / 1 / 2          151,000 – 351,000p
- *           750,000      4 / 3 / 2        1 / 1 / 2           16,000 – 423,500p
+ *           750,001      4 / 2 / 1        1 / 1 / 1          147,999 – 655,499p
  *         1,000,000      2 / 1 / 1        1 / 1 / 1          165,500 – 428,000p
  *         1,250,000      1 / 1 / 1        1 / 1 / 1          203,000 – 208,000p
  *         1,500,000      **0 / 0 / 0**    **0 / 0 / 0**      **1,728,000p, UNSPENDABLE**
  *
- * The wall is therefore between 1,250,000 and 1,500,000 at this capital, where it was between
- * 625,000 and 750,000 at the old one. **4x = 1,000,000 sits inside the window** — the hotel still
- * opens a floor inside the month at every cadence and closes on 165,500p rather than on cash it
- * cannot spend. So the re-derivation and the measurement agree, and what is missing is only the
- * ruling: G-068's brief names TWO fields, and this is a third.
- * ##########################################################################################
+ * The wall is between 1,250,000 and 1,500,000 at this capital, where it was between 625,000 and
+ * 750,000 at the old one. **750,001 sits well inside the window**: the hotel still opens a floor
+ * inside the month at every cadence and still has something worth buying at the end of it.
+ * ---------------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT G-069 DID NOT DECIDE, AND HOW TO REVERSE IT IN ONE FIELD.
+ *
+ * E-016 offered two answers: raise this number, or RETIRE the requirement — *"with a purse that
+ * can build a whole first tier, you may not open a second storey on day one may simply no longer
+ * be a rule worth having"*. **G-069 took the arithmetic and left the design.** Re-deriving a
+ * threshold whose stated requirement is unchanged and one of whose inputs moved is what section
+ * 2.1 already says to do; retiring the requirement is a call about what the game wants, and that
+ * is the human's. Leaving 500,000 was never the neutral third option — it shipped a requirement
+ * that READ true and MEASURED false, which is the ADR-0007 class in the file where derivations
+ * live.
+ *
+ * TO RETIRE IT: delete the requirement above and the `describe` block in
+ * `purse.derivation.test.ts` that re-runs it, and set this field back to whatever the sink is
+ * then worth. The lower endpoint (`assertAFloorCostsAtLeastARoom`) and the measured wall survive
+ * that deletion; nothing else in the tree depends on the inequality.
+ *
+ * ONE HONEST GAP IN THE REQUIREMENT AS WRITTEN, REPORTED RATHER THAN PATCHED. It says *the money
+ * it opened with*, and the shipped scenario also opens with STOCK (`seededStock:
+ * "supplementsCapital"`), which `demolishRoom` will convert to money at
+ * `demolitionRefundBasisPoints` on rooms the host placed free. A player who scraps the hotel they
+ * inherited therefore has more than `openingCapitalPence` on day one. Widening the requirement to
+ * *money OR stock* is a change to the sentence and so is the human's; `seededStockPolicySchema`
+ * already records the `drawnFromCapital` switch that would close it from the other end.
  * ---------------------------------------------------------------------------
  *
  * OPTIONAL, AND ABSENCE MEANS FREE. That is a TRUE HISTORICAL STATEMENT and not a default: every
@@ -2496,22 +2536,26 @@ export const openingStaffSchema = z.array(staffPostingSchema).min(1).optional();
  * and nothing else.
  *
  * ---------------------------------------------------------------------------
- * AND IT COLLIDES WITH `floorConstructionCostPenceSchema`, WHICH IS RECORDED HERE RATHER THAN
- * RESOLVED HERE. **OWED — a human call, raised by G-068.**
+ * IT COLLIDED WITH `floorConstructionCostPenceSchema` FOR ONE GOAL, AND THE OTHER FIELD YIELDED.
  *
  * That field derives ITSELF from this one, through *a hotel must not be able to open its second
  * storey out of the money it opened with*:
  *
  *     floorConstructionCostPence + cheapest constructionCostPence  >  openingCapitalPence
  *
- * It read 500,000 + 250,000 = 750,000 > 500,000 and HOLDS NO LONGER: 750,000 > 1,000,000 is
- * false, so the shipped economy now lets a hotel open its second storey on day one. There is no
- * capital that satisfies both requirements — the first forces >= 1,000,000 and the second forces
- * < 750,000 — so one of the two must yield, and ADR-0108 is a human ruling that outranks a
- * derivation. G-068 therefore moved THIS number and left that one, with the conflict written on
- * both fields instead of a false inequality left standing on either. See
- * `floorConstructionCostPenceSchema` for the re-derivation and for G-068's re-measurement of its
- * window at this capital.
+ * It read 500,000 + 250,000 = 750,000 > 500,000, and raising THIS number to 1,000,000 made it
+ * read 750,000 > 1,000,000, which is FALSE — the shipped economy briefly let a hotel open its
+ * second storey on day one. No capital satisfies both requirements at a floor charge of 500,000:
+ * the first forces >= 1,000,000 and the second forces < 750,000. ADR-0108 is a human ruling and
+ * outranks a derivation, so G-068 moved THIS number, left that one, and raised E-016 rather than
+ * ship a false inequality on either field.
+ *
+ * **G-069 CLOSED IT ON THE OTHER SIDE: `floorConstructionCostPence` is 750,001.** The requirement
+ * is unchanged and this capital is unchanged; what moved is the field whose input this is. There
+ * was never a collision between the two REQUIREMENTS, only between this capital and one stale
+ * value of that charge. See `floorConstructionCostPenceSchema` for the re-derivation, for which
+ * reading of "smallest sufficient" it took, and for the half E-016 left open — RETIRING the
+ * requirement, which is still the human's and is still a one-field revert.
  * ---------------------------------------------------------------------------
  *
  * (G-057 MOVED THIS NUMBER BETWEEN TABLES AND DID NOT RE-SIZE IT — re-sizing was a balance

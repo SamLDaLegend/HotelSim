@@ -1,9 +1,9 @@
-// G-068 — THE PURSE IS DERIVED, AND BOTH DERIVATIONS ARE RE-RUN AGAINST THE FILES THEY CAME FROM.
+// G-068/G-069 — THE PURSE IS DERIVED, AND EVERY DERIVATION IS RE-RUN AGAINST THE FILES IT CAME FROM.
 //
 // ##########################################################################################
 //  ADR-0108 (human, resolving E-015) is TWO rulings, and they derive TWO DIFFERENT FIELDS with
 //  TWO DIFFERENT REQUIREMENTS. Collapsing them into one edit would leave one ruling unenforced,
-//  so they are two `describe` blocks here and neither reads the other's answer:
+//  so they are separate `describe` blocks here and none of them reads another's answer:
 //
 //      CAN A NEW HOTEL START?        openingCapitalPence   `scenarios.json`
 //        a bare plot can build the first tier
@@ -11,19 +11,30 @@
 //      CAN A BROKE HOTEL COME BACK?  loanPrincipalPence    `economy.json`
 //        a hotel that has LOST its rooms can borrow its way to the first tier again
 //
-//  This file is those two sentences made re-runnable. It is `amenity.derivation.test.ts`'s
+//  AND SINCE G-069 A THIRD, WHICH IS HERE BECAUSE IT DERIVES FROM THE FIRST:
+//
+//      CAN IT BUY A SECOND STOREY ON DAY ONE?  floorConstructionCostPence  `economy.json`
+//        a hotel must NOT be able to open its second storey out of the money it opened with
+//
+//  Raising `openingCapitalPence` at G-068 falsified that third derivation (E-016) precisely
+//  because it is an INPUT to it. Two derivations that share an input belong in one file, so the
+//  day the input moves they go red together instead of one of them rotting quietly.
+//
+//  This file is those three sentences made re-runnable. It is `amenity.derivation.test.ts`'s
 //  arrangement, which is `partiesPerDaySchema`'s: the number lives in content, the derivation
 //  lives beside it in the schema, and a test recomputes it from OTHER files so that a retune
 //  reddens rather than rots.
 // ##########################################################################################
 //
 // IT IS NOT THE TEST RECOMPUTING ITS OWN CLAIM'S DEFINITION. The quantities under test are
-// `openingCapitalPence` and `loanPrincipalPence`. Every input to the arithmetic is in a
-// DIFFERENT file:
+// `openingCapitalPence`, `loanPrincipalPence` and `floorConstructionCostPence`. Every input to
+// each one's arithmetic is in a table the quantity itself does not live in:
 //
 //   star-tiers.json   what the FIRST TIER asks for — which room types, how many, counted how
 //   room-types.json   what each of those rooms COSTS, and what scrapping one returns
 //   economy.json      what a draw's fee is (`loanFeeBasisPoints`) — the loan half only
+//   scenarios.json    what the hotel OPENS WITH — the floor charge's half, and the one input
+//                     that moved at G-068 and took a derivation down with it
 //
 // AND THE FEE ARITHMETIC IS THE SIM'S OWN `applyBasisPoints`, NOT A SECOND COPY OF IT
 // (ADR-0021). A rounding rule spelled twice is a penny appearing from nowhere.
@@ -38,6 +49,7 @@ import {
   demolitionRefundOf,
   firstEconomy,
   firstScenario,
+  floorConstructionCostOf,
   minConstructionCostOf,
   starTiersInOrder,
 } from '@hotelsim/sim';
@@ -161,6 +173,72 @@ describe('THE TWO FIELDS ANSWER DIFFERENT QUESTIONS, and the file says so with a
     const economy = firstEconomy(content);
     expect(economy?.loanPrincipalPence ?? 0).toBeGreaterThan(scenario?.openingCapitalPence ?? 0);
     expect(netOfOneDraw(economy?.loanPrincipalPence ?? 0)).toBe(scenario?.openingCapitalPence);
+  });
+});
+
+describe('CAN THE SECOND STOREY BE BOUGHT WITH THE OPENING PURSE? — `floorConstructionCostPence`', () => {
+  // ======================================================================================
+  // THE THIRD FIELD, ADDED AT G-069, AND IT IS HERE RATHER THAN IN A FILE OF ITS OWN BECAUSE
+  // IT DERIVES FROM ONE OF THE TWO ABOVE. `openingCapitalPence` is an INPUT to this one, which
+  // is exactly why raising it at G-068 falsified this one (E-016). Two derivations that share
+  // an input belong in the same file, so the day the input moves both go red together.
+  //
+  // THE REQUIREMENT, STATED AND UNCHANGED SINCE G-038c: *a hotel must not be able to open its
+  // second storey out of the money it opened with.* The charge is levied only BY A BUILD, so
+  // the quantity that has to clear the opening capital is the PAIR — the floor and the cheapest
+  // room that could stand on it.
+  //
+  // WHAT THIS FILE DOES NOT DECIDE. E-016's other answer — RETIRE the requirement — is a design
+  // call and is still the human's. `floorConstructionCostPenceSchema` says how to take it: this
+  // block and that paragraph come out together, and the field goes back to whatever the sink is
+  // then worth. Nothing here forecloses it.
+  // ======================================================================================
+
+  /** What it costs to open the second storey and put the cheapest possible room on it. */
+  function priceOfTheSecondStorey(): number {
+    return floorConstructionCostOf(content) + minConstructionCostOf(content);
+  }
+
+  function openingCapital(): number {
+    const scenario = firstScenario(content);
+    expect(scenario).toBeDefined();
+    return scenario?.openingCapitalPence ?? 0;
+  }
+
+  it('costs STRICTLY MORE than the opening capital, recomputed from the scenario and the price list', () => {
+    // The requirement, run. STRICTLY: a hotel that can afford the floor and the room with
+    // nothing left over has still opened its second storey out of its opening money.
+    expect(priceOfTheSecondStorey()).toBeGreaterThan(openingCapital());
+  });
+
+  it('and is the SMALLEST charge that does — one penny less and the purse covers it', () => {
+    // §2.1's direction and G-068's precedent on the two fields above: the conservative choice is
+    // the smallest sufficient one, and the knife edge is what proves nobody rounded. Every
+    // larger value needs a SECOND sentence to select it — how much trading the storey should
+    // cost — and that sentence is the design decision E-016 reserved to the human.
+    expect(priceOfTheSecondStorey() - 1).toBeLessThanOrEqual(openingCapital());
+  });
+
+  it('and it still clears the LOWER endpoint, which is a different rule and enforced elsewhere', () => {
+    // `assertAFloorCostsAtLeastARoom` in `packages/sim/src/content.ts` refuses content whose
+    // floor is cheaper than the cheapest room, so a player never climbs instead of filling
+    // (ADR-0047 B2). Asserted here so the two endpoints are visible together: the requirement
+    // above pushes this number UP and that one is the floor beneath it, and a re-derivation that
+    // satisfied one by breaking the other would pass this file and throw at `bindContent`.
+    expect(floorConstructionCostOf(content)).toBeGreaterThanOrEqual(minConstructionCostOf(content));
+  });
+
+  it('and on the SHIPPED tables the derivation returns 750,001 — the penny is stated, not tidied', () => {
+    // The intermediate reading, pinned separately from the law above, so that a retune goes red
+    // WITH the numbers in it. THE READING OF "SMALLEST SUFFICIENT" TAKEN HERE IS THE MINIMUM OF
+    // THE ADMISSIBLE SET IN PENCE, not the smallest whole multiple of a room: a strict inequality
+    // over integers has a minimum, it is one unit above the bound, and one penny is the smallest
+    // quantity ADR-0002 can represent. 3 x 250,000 = 750,000 is the tempting round answer and it
+    // FAILS BY EXACTLY THE MARGIN — 750,000 + 250,000 is not greater than 1,000,000.
+    expect(floorConstructionCostOf(content)).toBe(750_001);
+    expect(openingCapital()).toBe(1_000_000);
+    expect(minConstructionCostOf(content)).toBe(250_000);
+    expect(priceOfTheSecondStorey()).toBe(1_000_001);
   });
 });
 

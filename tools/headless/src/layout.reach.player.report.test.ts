@@ -205,9 +205,19 @@ describe('THE EXIT CRITERION: `unreachable` reaches 0 with a full-height shaft d
     // **`unsupported` 15 -> 16 and every other row is byte-identical, `valid` included.** That
     // is the same shape as the two re-records above it, arriving from the money side.
     // ========================================================================================
+    // ========================================================================================
+    // RE-RECORDED AT G-069, ONE NUMBER, AND IT IS THE SAME ROOM ARRIVING FROM THE OTHER SIDE.
+    // E-016's re-derivation put `floorConstructionCostPence` at 750,001, so this walk's single
+    // crossing to floor 1 costs 250,001p more and the last build of the run is refused for
+    // funds: **`unsupported` 16 -> 15 and every other row is byte-identical, `valid` included.**
+    // The build G-068's purse bought is the build this sink takes back, so this tally is exactly
+    // the one it read before that goal. **What this file asserts is `unreachable`, and one fewer
+    // room in mid-air makes nothing unreachable**: the shaft still joins every strip a player
+    // can build in, and the row that matters is still 0.
+    // ========================================================================================
     expect(arm(true).invalid).toEqual({
       missingItem: 0,
-      unsupported: 16,
+      unsupported: 15,
       noDoor: 4,
       noCorridor: 2,
       unplaced: 0,

@@ -6,6 +6,6 @@
     "loanFeeBasisPoints": 1000,
     "loanRepaymentPerNightPence": 10000,
     "liquidationRoomsMax": 4,
-    "floorConstructionCostPence": 500000
+    "floorConstructionCostPence": 750001
   }
 ]

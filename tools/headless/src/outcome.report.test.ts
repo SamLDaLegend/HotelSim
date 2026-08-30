@@ -770,7 +770,28 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // guest is standing in a room whose support is demolished on the tick it lands. The reason
     // is not DEAD, `outcome.test.ts` is green, and the criterion two tests up still reads five
     // non-zero reasons.
-    expect(count('evictedRoomUnusable')).toBe(2);
+    // 2 -> 4 AT G-069, AND THIS IS THE FIRST MOVEMENT ON THIS ROW THAT NEEDS NO RULING FROM THE
+    // BLOCK ABOVE: the line it draws is between a THIN row and a DEAD one, and the row got
+    // THICKER. E-016's re-derivation put `floorConstructionCostPence` at 750,001, so this arm's
+    // player affords a different set of builds and four guests rather than two are standing in a
+    // room whose support is demolished on the tick it lands. The row is pinned at what it IS,
+    // the schedule is not retuned, and the criterion two tests up still reads five non-zero
+    // reasons.
+    //
+    // MEASURED PAIRED, one deterministic run per arm, the two content files one field apart, on
+    // this block's own `ARGS`. The whole departure table, because a single row would hide which
+    // way this arm went:
+    //
+    //     charge     checkedOut  gaveUp  leftDissatisfied  evictedGone  evictedUnusable  built
+    //     500,000        28        540         1,295            47             2           14
+    //     750,001        33        507         1,321            47             4           13
+    //
+    // **`valid` IS UNMOVED AT 6 AND `evictedRoomGone` AT 47.** The hotel that WORKS is the same
+    // hotel; what moved is the thirteenth and fourteenth rooms the player threw into mid-air and
+    // the ticks on which they went up, and a guest standing in one of those on the tick the
+    // demolish walk reaches it is what this row counts. Revenue closes on the checkout count as
+    // it always does: 33 x 8,500 = 280,500p against 28 x 8,500 = 238,000p.
+    expect(count('evictedRoomUnusable')).toBe(4);
     // The two rows that still have headroom, for contrast — and `checkedOut`, which no longer
     // does, pinned exactly rather than under a bound it would have to be given to clear.
     // 16 -> 50 AT G-054, AND THIS ROW GETS ITS HEADROOM BACK. **Three times as many guests
@@ -784,7 +805,12 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // 41 -> 28 AT G-046b, the same trade one goal on and a larger one: a second threshold tick
     // per journey against two amenity sets for forty rooms, so thirteen more guests run out of
     // patience before they run out of stay. The two rows below still have headroom.
-    expect(count('checkedOut')).toBe(28);
+    // 28 -> 33 AT G-069, AND IT IS THE FIRST TIME THIS ROW HAS RISEN SINCE G-054. E-016's
+    // re-derived floor charge costs this walk one build (14 -> 13), so one fewer room stands in
+    // mid-air taking upkeep and one fewer is demolished under somebody. The hotel that WORKS is
+    // the same six rooms; what changed is how much of the run's money went into rooms that never
+    // housed anybody. The closed form still holds: 33 x 8,500p = 280,500p of revenue.
+    expect(count('checkedOut')).toBe(33);
     expect(count('gaveUp')).toBeGreaterThan(50);
     expect(count('evictedRoomGone')).toBeGreaterThan(1);
     // AND THE ROW THAT ABSORBED THEM, so the collapse above is visibly a SHIFT rather than a
@@ -803,7 +829,13 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // different ticks, so twenty-four guests that used to walk out unhappy are accounted for
     // elsewhere. The five reasons still sum to the departures the conservation law counts,
     // which is what the next test asserts — and that test did not move.
-    expect(count('leftDissatisfied')).toBe(1_295);
+    // 1,295 -> 1,321 AT G-069, and it is the other side of `gaveUp` 540 -> 507 plus the five
+    // extra checkouts: a hotel that wastes one fewer build has rooms available on slightly
+    // different ticks, so twenty-six guests that used to leave without ever getting a room now
+    // get one and are disappointed in it instead. The five reasons still sum to the departures
+    // the conservation law counts, which is what the next test asserts — and that test did not
+    // move.
+    expect(count('leftDissatisfied')).toBe(1_321);
   }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 16,946ms
 
   it('and the numbers close, through a real process rather than in-memory', () => {
