@@ -5750,7 +5750,7 @@ Giving a corridor a cost (that is the parked note's own trigger and a content de
 change to `layCorridor` in `packages/sim`.
 
 ## G-072 — The warning stops crying wolf on day one
-Status: **PLANNED 2026-08-30. Small, derivable, and it should land BEFORE G-067.** Milestone: M5 · Owner pair: render-engineer / render-critic
+Status: **IN-PROGRESS 2026-08-30. Nothing blocks it — it was queued by reflex, not by dependency.** Milestone: M5 · Owner pair: render-engineer / render-critic
 
 **G-070's own finding 4, reported by its builder rather than smoothed over:** the shipped opening
 scenario **warns on day 1 and never again**, with **76 nights of runway**. Measured, `--ticks 14400
