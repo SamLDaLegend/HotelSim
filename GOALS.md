@@ -6046,17 +6046,41 @@ falls out of the design rather than being set here.
 **A `suits` FIELD IS NEEDED EVEN IF NOTHING ENFORCES IT**, because the palette has to group by room
 type and the grouping must live in content (I3), not in the UI.
 
+**AND THE SAME NEED MAY BE SERVED BY DIFFERENT ITEMS IN DIFFERENT ROOMS — this is a REQUIREMENT, not
+a nicety.** A `minibar` in a bedroom and a `vending_machine` in a public room both provide
+`guest_nourishment`; **what differs is which room each READS correctly in.** *An item that is right
+functionally and wrong perceptually is a defect a player sees before any number moves.*
+
 ### THE FORK, WITH A RECOMMENDATION — and it does NOT block the catalogue
 
 Whether the SIM refuses an unsuitable placement is a separate decision from whether the catalogue
 exists. **The catalogue is needed under either answer, so build it and leave the rule alone.**
 
-**RECOMMENDED: SUGGEST, DO NOT ENFORCE.** Three reasons, and the third is the strongest:
-`placeItem` today has exactly ONE rule — the cell must be in a room — documented and deliberate;
-ADR-0046 §4.2 called it *"the primary player verb"* without a suitability constraint; and **because
-provision is borrowed by the host room, a vending machine in a bedroom makes that bedroom serve
-nourishment.** *Enforcing suitability would DELETE an emergent player choice that the existing rules
-already make interesting.* **Flagged for the human; not taken here.**
+**RECOMMENDED: SUGGEST, DO NOT ENFORCE** — `placeItem` today has exactly ONE rule, the cell must be
+in a room, documented and deliberate; ADR-0046 §4.2 called it *"the primary player verb"* without a
+suitability constraint; and because provision is BORROWED by the host room, a vending machine in a
+bedroom makes that bedroom serve nourishment.
+
+> **AND THE HUMAN FOUND A THIRD ANSWER THAT IS BETTER THAN EITHER, WHICH SPLITS THIS QUESTION IN
+> TWO.** Verbatim: *"A vending machine in a room is perceptually weird, but a minibar isn't. One
+> would think having a vending machine in your room would actually be bad, whilst providing
+> nourishment it would create noise and light."*
+>
+> **THE PERCEPTUAL HALF IS FREE AND IT IS THIS GOAL'S.** A `minibar` and a `vending_machine` can BOTH
+> `provide: [guest_nourishment]` and differ only in which rooms they suit. **The weirdness disappears
+> with NO mechanic**, and it settles what `suits` is FOR: **not a restriction — a VOCABULARY.** Each
+> room type gets the items that read correctly in it. *That is what the human asked for and it needs
+> nothing new.*
+>
+> **THE "ACTUALLY BAD" HALF IS A NEW MECHANIC AND IT DISSOLVES THE ENFORCEMENT QUESTION.** Do not
+> REFUSE the placement — let the CONSEQUENCE teach. **Measured: nothing in this simulation can harm a
+> need.** `needs.ts:58` — *"every number in it is a non-negative safe integer"* — and
+> `fitBasisPoints` expresses only HOW WELL something serves; the four need types carry
+> `capacityTicks`, `refillPerTick` and `serviceFloorBasisPoints`, all serving, none degrading.
+> **Parked as its own goal, because the chain it would close is one THIS SESSION finished building:
+> vending machine in a bedroom -> guest sleeps badly -> worse review -> THE GUEST SAYS SO IN THE FEED
+> (G-066a/b).** Placement becomes legible through systems that already exist rather than through a
+> refusal message. **Not this goal. Open on the human.**
 
 ### Exit criteria
 
