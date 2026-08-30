@@ -37,7 +37,7 @@
 // the only things that enter it are the commands `commandsFor` hands to a tick.
 // ---------------------------------------------------------------------------------------
 
-import { createWorld, entranceCell, UNIT_FOOTPRINT } from '@hotelsim/sim';
+import { createWorld, entranceCell, solvencyOf, UNIT_FOOTPRINT } from '@hotelsim/sim';
 import type { Cell, RemarkRecord } from '@hotelsim/sim';
 import { Application } from 'pixi.js';
 import { loadContent, loadRemarkBook, loadSpeedLadder, loadSpriteRefs } from './content.js';
@@ -47,6 +47,7 @@ import {
   renderGuestPositions,
   renderHud,
   renderRemarks,
+  renderSolvency,
   renderTools,
   renderTransport,
   wordsOf,
@@ -57,6 +58,7 @@ import { fastestRung, rungById } from './ladder.js';
 import { createMotion, observeMotion } from './motion.js';
 import { describeFeed, REMARKS_SHOWN } from './remarks.js';
 import { createScenario } from './scenario.js';
+import { describeSolvency } from './solvency.js';
 import {
   commandsFor,
   createSession,
@@ -98,6 +100,7 @@ function hostElement(id: string): HTMLElement {
 const stage = hostElement('stage');
 const hudHost = hostElement('hud');
 const remarksHost = hostElement('remarks');
+const solvencyHost = hostElement('solvency');
 const transportHost = hostElement('transport');
 const guestsHost = hostElement('guests');
 const toolsHost = hostElement('tools');
@@ -493,6 +496,21 @@ app.ticker.add(() => {
     walls,
   });
   renderGuestPositions(guestsHost, driver.world, GUEST_POSITIONS_SHOWN);
+
+  // WHETHER THE HOTEL IS LOSING, AND HOW LONG RECOVERY REMAINS POSSIBLE (G-070, ADR-0109).
+  //
+  // EVERY FRAME, DELIBERATELY, WHERE THE FEED IS REDRAWN ONLY WHEN THE RING MOVES. The two have
+  // different reasons and the difference is not an oversight: the feed is several lines of
+  // selectable prose, and replacing that DOM at the ticker's rate is what makes text
+  // unselectable. This is two short lines with no controls and `pointer-events: none`, so there
+  // is nothing for a redraw to interrupt — and its inputs are the CASH and the LAST NIGHT, both
+  // of which the player is watching change. A warning that arrives a simulated hour late is a
+  // warning about a hotel that is not there any more.
+  //
+  // NOTHING IS COMPUTED HERE. `solvencyOf` decides the numbers and whether there is anything to
+  // say; `describeSolvency` returns `null` when there is not, and `renderSolvency` draws nothing
+  // at all for a `null`. One selection path (G-066b's rule).
+  renderSolvency(solvencyHost, describeSolvency(solvencyOf(driver.world, content)));
 
   // WHAT THE LAST FEW DEPARTURES SAID. Redrawn when the ring moves or the panel is toggled,
   // never every frame: replacing DOM at the ticker's rate is what makes text unselectable and

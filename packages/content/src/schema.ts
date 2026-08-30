@@ -2033,13 +2033,13 @@ export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
  *     therefore between 625,000 and 750,000 AT THAT CAPITAL. It moved with the purse; see below.
  *
  * ---------------------------------------------------------------------------
- * SHIPPED: 750,001 — AND THE PENNY ON THE END IS THE DERIVATION, NOT A TYPO (G-069).
+ * SHIPPED: 1,000,000 — THE ROUND `4 x cheapestRoom`, RULED BY THE HUMAN (ADR-0109, closing E-016).
  *
- * THE REQUIREMENT, UNCHANGED SINCE G-038c: **a hotel must not be able to open its second storey
- * out of the money it opened with.** A floor that comes free with the opening balance is a fee
- * rather than a sink, and the build loop's first real decision would be made before the hotel had
- * traded for a single night. The charge is only ever levied BY A BUILD, so the quantity that has
- * to clear the opening capital is the PAIR:
+ * THE REQUIREMENT, UNCHANGED SINCE G-038c AND UNCHANGED BY THE RULING: **a hotel must not be able
+ * to open its second storey out of the money it opened with.** A floor that comes free with the
+ * opening balance is a fee rather than a sink, and the build loop's first real decision would be
+ * made before the hotel had traded for a single night. The charge is only ever levied BY A BUILD,
+ * so the quantity that has to clear the opening capital is the PAIR:
  *
  *     floorConstructionCostPence + cheapest constructionCostPence  >  openingCapitalPence
  *
@@ -2052,45 +2052,50 @@ export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
  *
  * On the shipped tables that is `floorCost > 1,000,000 - 250,000 = 750,000`, and because the
  * inequality is STRICT over integer pence (ADR-0002) the admissible set is {750,001, 750,002, …}.
+ * **THE SHIPPED VALUE SATISFIES THAT REQUIREMENT WITH MARGIN RATHER THAN AT THE MINIMUM**: it is
+ * 1,000,000, which is 249,999p above the smallest admissible charge.
  *
  * ---------------------------------------------------------------------------
  * WHICH READING OF "SMALLEST SUFFICIENT" THIS FIELD TAKES, STATED BECAUSE THE TWO READINGS GIVE
- * DIFFERENT INTEGERS AND THIS FIELD HAS USED BOTH.
+ * DIFFERENT INTEGERS AND THIS FIELD HAS SHIPPED BOTH.
  *
- * READING TAKEN — **the minimum of the admissible set, in pence: 750,001.** It is the move
- * `openingCapitalPence` and `loanPrincipalPence` both made at G-068 (1,000,000 exactly; and
- * 1,111,111, whose predecessor nets one penny short), and it is the only value in the set that
- * needs no second sentence to select it. A strict inequality over integers has a minimum, that
- * minimum is one unit above the bound, and one penny is the smallest quantity this economy can
- * represent — so the penny is FORCED BY THE STRICTNESS rather than chosen as a margin.
+ * READING TAKEN — **the smallest whole multiple of the cheapest room that clears the bound:
+ * 4 x 250,000 = 1,000,000.** The multiple is what makes it selectable without a second
+ * arithmetic sentence: `3x` is refused BY THE REQUIREMENT (see below) and `4x` is the next one
+ * up, so "the smallest multiple that clears it" picks exactly one integer out of the admissible
+ * set. What the multiple ITSELF asserts — that a floor charge is a whole number of rooms, i.e.
+ * how much trading the second storey should cost to earn — is a DESIGN statement, and E-016
+ * reserved that one to the human, who took it at ADR-0109 with the price in hand (ten more days;
+ * see the campaign below).
  *
- * READING REJECTED — **the smallest whole multiple of the cheapest room: 4 x 250,000 =
- * 1,000,000.** This is what the field's own G-038c derivation did: it walked 1x and 2x and
- * shipped 2x = 500,000, where the pence minimum at that capital was 250,001. Its justification
- * was that a multiple of a room is *"the unit a designer thinks in"* — which is aesthetic, and
- * the premise *the charge is a whole multiple of a room* appears nowhere in the requirement.
- * Selecting 1,000,000 is therefore a statement about HOW MUCH the second storey should cost to
- * earn — a design decision, and E-016 reserved exactly that one to the human.
+ * READING REJECTED — **the minimum of the admissible set, in pence: 750,001.** This is what
+ * G-069 shipped, on §2.1's "smallest sufficient" and G-068's precedent on `openingCapitalPence`
+ * and `loanPrincipalPence`. It is still the correct reading of the ARITHMETIC and it is still
+ * recomputed by `purse.derivation.test.ts` as the bound this field must clear; what it is not is
+ * the shipped value, because the ruling above chose the margin over the knife edge. **The pence
+ * minimum is not wrong here, it is out-voted** — and it is recorded rather than deleted so that
+ * a reader can tell a retired reading from a falsified one (ADR-0084).
  *
  * NEITHER READING MAY SHIP 3x = 750,000. It is the tempting round answer and it fails by exactly
  * the margin: 750,000 + 250,000 = 1,000,000 is NOT GREATER THAN 1,000,000, and a hotel that can
  * afford the floor and the room with nothing left over has still opened its second storey out of
- * its opening money.
+ * its opening money. **That refusal is what forces the multiple to 4**, and it is the reason the
+ * two readings are one multiple apart rather than adjacent.
  *
- * BOTH READINGS ARE MEASURED, SO THE RULING IS A ONE-FIELD EDIT WITH NUMBERS ON IT. Arm:
+ * BOTH READINGS ARE MEASURED, SO THE RULING WAS A ONE-FIELD EDIT WITH NUMBERS ON IT. Arm:
  * `--seed 42 --build 1440` on the shipped starting hotel, `--ticks` bisected for the first
  * `floorConstruction` transaction. One deterministic run per probe — exact integers out of a sim
  * with no wall clock, so there is nothing to aggregate and a median would be a category error.
- * Regime: win32, 12-core developer box, quiet.
+ * Regime: win32, 12-core developer box, quiet. Measured at G-069, i.e. BEFORE the ruling:
  *
  *         charge         second storey opens on
  *           500,000      tick 2      — DAY 1, out of opening capital. THE THING FORBIDDEN.
  *           750,001      tick 2,882  — DAY 3, after two nights of trade.
- *         1,000,000      tick 17,282 — DAY 13.
+ *         1,000,000      tick 17,282 — DAY 13.   <- SHIPPED
  *
  * So the shipped value is not a formality the requirement satisfies on a technicality: it costs
- * the hotel two nights of trading. What 4x would buy over it is TEN MORE DAYS, and that
- * difference is the design question, priced.
+ * the hotel twelve nights of trading, where the pence minimum cost it two. **That difference —
+ * TEN DAYS — was the design question, and it was priced before it was ruled on.**
  * ---------------------------------------------------------------------------
  *
  * ---------------------------------------------------------------------------
@@ -2108,12 +2113,15 @@ export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
  *         1,500,000      **0 / 0 / 0**    **0 / 0 / 0**      **1,728,000p, UNSPENDABLE**
  *
  * The wall is between 1,250,000 and 1,500,000 at this capital, where it was between 625,000 and
- * 750,000 at the old one. **750,001 sits well inside the window**: the hotel still opens a floor
- * inside the month at every cadence and still has something worth buying at the end of it.
+ * 750,000 at the old one. **The shipped 1,000,000 is its own row and it sits inside the window**:
+ * the hotel still opens a floor inside the month at every cadence — 2 / 1 / 1 rooms built,
+ * 1 / 1 / 1 floors opened — and still closes on 165,500 – 428,000p, so it has something worth
+ * buying at the end of it. That row was measured at G-069 as the ALTERNATIVE and is now the
+ * shipped one; nothing about it was re-derived by the ruling, only chosen.
  * ---------------------------------------------------------------------------
  *
  * ---------------------------------------------------------------------------
- * WHAT G-069 DID NOT DECIDE, AND HOW TO REVERSE IT IN ONE FIELD.
+ * WHAT G-069 DID NOT DECIDE, WHAT ADR-0109 THEN DID, AND HOW TO REVERSE THE REST IN ONE FIELD.
  *
  * E-016 offered two answers: raise this number, or RETIRE the requirement — *"with a purse that
  * can build a whole first tier, you may not open a second storey on day one may simply no longer
@@ -2124,10 +2132,15 @@ export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
  * that READ true and MEASURED false, which is the ADR-0007 class in the file where derivations
  * live.
  *
- * TO RETIRE IT: delete the requirement above and the `describe` block in
- * `purse.derivation.test.ts` that re-runs it, and set this field back to whatever the sink is
- * then worth. The lower endpoint (`assertAFloorCostsAtLeastARoom`) and the measured wall survive
- * that deletion; nothing else in the tree depends on the inequality.
+ * **ADR-0109 (human, 2026-08-30) THEN TOOK THE DESIGN HALF AND CLOSED E-016**, and it took it in
+ * the smaller of the two available directions: it chose 1,000,000 over 750,001 — how much
+ * trading the storey costs to earn — and **it did NOT retire the requirement.** The sentence
+ * above still stands, still binds, and is still re-run against the files on disk.
+ *
+ * TO RETIRE IT — still available, still one field: delete the requirement above and the
+ * `describe` block in `purse.derivation.test.ts` that re-runs it, and set this field back to
+ * whatever the sink is then worth. The lower endpoint (`assertAFloorCostsAtLeastARoom`) and the
+ * measured wall survive that deletion; nothing else in the tree depends on the inequality.
  *
  * ONE HONEST GAP IN THE REQUIREMENT AS WRITTEN, REPORTED RATHER THAN PATCHED. It says *the money
  * it opened with*, and the shipped scenario also opens with STOCK (`seededStock:
@@ -2550,12 +2563,15 @@ export const openingStaffSchema = z.array(staffPostingSchema).min(1).optional();
  * outranks a derivation, so G-068 moved THIS number, left that one, and raised E-016 rather than
  * ship a false inequality on either field.
  *
- * **G-069 CLOSED IT ON THE OTHER SIDE: `floorConstructionCostPence` is 750,001.** The requirement
- * is unchanged and this capital is unchanged; what moved is the field whose input this is. There
- * was never a collision between the two REQUIREMENTS, only between this capital and one stale
- * value of that charge. See `floorConstructionCostPenceSchema` for the re-derivation, for which
- * reading of "smallest sufficient" it took, and for the half E-016 left open — RETIRING the
- * requirement, which is still the human's and is still a one-field revert.
+ * **G-069 CLOSED IT ON THE OTHER SIDE and ADR-0109 THEN RE-PRICED IT: `floorConstructionCostPence`
+ * is 1,000,000.** (It was 750,001 for one goal — the pence minimum — and the human took the round
+ * `4 x cheapestRoom` instead, closing E-016.) The requirement is unchanged and this capital is
+ * unchanged; what moved is the field whose input this is. There was never a collision between the
+ * two REQUIREMENTS, only between this capital and one stale value of that charge. See
+ * `floorConstructionCostPenceSchema` for the re-derivation, for which reading of "smallest
+ * sufficient" it took and why the other one was out-voted rather than falsified, and for the half
+ * E-016 left open — RETIRING the requirement, which is still the human's and is still a one-field
+ * revert.
  * ---------------------------------------------------------------------------
  *
  * (G-057 MOVED THIS NUMBER BETWEEN TABLES AND DID NOT RE-SIZE IT — re-sizing was a balance

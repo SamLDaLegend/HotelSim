@@ -55,14 +55,29 @@
 // `guest_comfort` — the reading round 3 was written to refuse, arrived at deliberately and
 // for a stated reason rather than by drift.
 //
-// THE CENSUS, MEASURED ON THIS BUILD (it was `1345 / 3 / 1 / 2` before G-014a):
+// THE CENSUS, RE-MEASURED AT G-070 (it was `1345 / 3 / 1 / 2` before G-014a, and the figures
+// below were `1075 / 1 / 1 / 2` from G-014a until this goal):
 //
-//   finished 1075 · roomWentBad 1 · itemDisappeared 1 · itemSurvived 2
-//   itemSurvived @ tick 6,801  (entity 23,  arm_chair, guest_comfort)
-//   itemSurvived @ tick 59,901 (entity 105, arm_chair, guest_comfort)
-//   roomWentBad  observed @ tick 26,010 (entity 19, hotel_cafe, guest_nourishment), from the
-//                despawn command scheduled at 26,009 — the census reads state after the tick
-//                has run, so the command and the observation are one apart. See below.
+//   finished 11,628 · roomWentBad 1 · itemDisappeared 1 · itemSurvived 3
+//   itemSurvived    @ tick 6,731  (entity 36,  arm_chair, guest_comfort)
+//   itemSurvived    @ tick 26,010 (entity 34,  arm_chair, guest_comfort)
+//   itemSurvived    @ tick 59,851 (entity 120, arm_chair, guest_comfort)
+//   roomWentBad     @ tick 18,008 (entity 27,  games_room, guest_entertainment)
+//   itemDisappeared @ tick 97,301 (entity 242, arm_chair, guest_comfort), from the AIMED despawn
+//                   scheduled at 97,300 — the census reads state after the tick has run, so the
+//                   command and the observation are one apart.
+//
+// **`finished` WAS AN ORDER OF MAGNITUDE OUT AND HAD BEEN FOR SEVERAL GOALS**, which is worth
+// more than the correction: the line said "MEASURED ON THIS BUILD" and 1,075 was measured on a
+// build several ahead of ADR-0054's need rates. The CASES below were green throughout, because
+// every one of them is written against a CAUSE and a `> 0` bar rather than against these names —
+// which is the property this file's next paragraph already claimed and this is the second time
+// it has paid off.
+//
+// AND THE `roomWentBad` NARRATIVE BELOW IS NOW WRONG IN ITS PARTICULARS AND RIGHT IN ITS POINT:
+// the survivor is no longer the café at tick 26,010 (that event is an `itemSurvived` now) but a
+// GAMES ROOM at tick 18,008. It is still ONE EVENT FROM VACUOUS and it is still INCIDENTAL —
+// nothing in `determinism-log.ts` was written to produce it.
 //
 // READ THE `roomWentBad` LINE BEFORE TRUSTING THIS FILE'S COVERAGE. It fell from 3 to 1, and
 // the two events it lost were both guests engaged with a sealed GAMES ROOM — a room that
@@ -276,10 +291,17 @@ describe('EVERY RELEASE CAUSE OCCURS INSIDE THE I2 PROOF (G-013)', () => {
     // ONE EVENT FROM VACUOUS SINCE G-014a, AND SAYING SO IS THE POINT OF THIS COMMENT. This
     // read 3 before that goal; two of the three were guests engaged with a sealed GAMES ROOM,
     // and the sealing pass now targets a lounge instead (see the header). The survivor is
-    // INCIDENTAL: the DESPAWN walk removes entity id 19 at tick 26,009 and that entity is a
-    // café with a guest in it. Not the demolish walk — `determinism-log.ts` runs the two as
-    // different passes on different cadences, so a reader hunting a demolish near 26,010
-    // finds nothing.
+    // INCIDENTAL: nothing in `determinism-log.ts` was written to produce it.
+    //
+    // WHICH EVENT THE SURVIVOR IS WAS RE-MEASURED AT G-070 AND HAD MOVED. This paragraph said
+    // *"the DESPAWN walk removes entity id 19 at tick 26,009 and that entity is a café with a
+    // guest in it"*; on this build the survivor is a **GAMES ROOM, entity 27, at tick 18,008**,
+    // and the 26,010 event is now an `itemSurvived` on an arm chair. **The case was green
+    // throughout, because it is written against the CAUSE and a `> 0` bar** — which is the
+    // property the next paragraph claims and the second time in this file it has paid off.
+    // Neither the despawn walk nor the demolish walk is aimed at this; they run as different
+    // passes on different cadences, so a reader hunting a demolish near either tick finds
+    // nothing.
     // The assertion is deliberately left at `> 0` rather than raised to a number this build
     // happens to hit: tightening it would pin a coincidence, and the honest response to thin
     // coverage is to widen the log, which is a decision above this file.
@@ -287,6 +309,26 @@ describe('EVERY RELEASE CAUSE OCCURS INSIDE THE I2 PROOF (G-013)', () => {
   }, 120_000);
 
   it('an ITEM DISAPPEARS from under a guest — cause (c)', () => {
+    // ==================================================================================
+    // THIS CASE WENT RED AT G-070 AND THE THING IT CAUGHT WAS OLDER THAN THE CHANGE THAT
+    // TRIPPED IT, WHICH IS THE ARRANGEMENT WORKING EXACTLY AS ADVERTISED.
+    //
+    // ADR-0109 moved `floorConstructionCostPence` 750,001 -> 1,000,000, which changes how many
+    // builds this log affords and therefore which id every later spawn takes; this row fell to
+    // ZERO. Measured on a replay at both charges, listing every window in which an item is
+    // engaged:
+    //
+    //   charge 750,001   itemDisappeared 1 — tick 58,491, entity 122 (arm_chair). INCIDENTAL,
+    //                    from the `id = 3k + 1` walk, NOT from the aimed pass.
+    //   charge 1,000,000 itemDisappeared 0.
+    //   BOTH ARMS        entity id 24 — the id the AIMED despawn named — has NO engagement
+    //                    window anywhere in 100,000 ticks. **The aimed pass was a deterministic
+    //                    no-op at both charges and this row was living on an accident.**
+    //
+    // The repair is in `determinism-log.ts` (θ-b1, re-aimed to id 242, whose measured window is
+    // 97,246..97,304 and contains the pass's unchanged tick). The bar stays at `> 0` for the
+    // reason `roomWentBad`'s does: tightening it would pin a coincidence.
+    // ==================================================================================
     expect(census().itemDisappeared).toBeGreaterThan(0);
   }, 120_000);
 

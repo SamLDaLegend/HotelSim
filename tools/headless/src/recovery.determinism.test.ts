@@ -244,8 +244,24 @@ describe('the I2 harness reaches the loan', () => {
     // doing it. **The claim this arm carries is unchanged** - the repayments are spread ALL RUN
     // LONG rather than clustered at the start, the first is still at tick 1,439, and the last is
     // still deep inside the horizon.
+    //
+    // 44 -> 49 AT G-070, AND IT REVERSES THE MOVE ABOVE FOR A REASON THE TABLE ABOVE CANNOT SEE.
+    // ADR-0109 raised the charge again, 750,001 -> 1,000,000, and this hotel got RICHER. Measured
+    // paired, one deterministic replay per arm, the two content files one field apart, everything
+    // else byte-identical:
+    //
+    //     charge      floor tx  repayments  full  partial  last tick  outstanding  built  ref(funds)
+    //       750,001      2          44       43      1      73,439      679,613p     21       12
+    //     1,000,000      1          49       49      0      73,439      621,111p     23       10
+    //
+    // **THE FLOOR-CHARGE COUNT IS NO LONGER THE CONTROL, IT IS THE CAUSE.** It was 2 in both arms
+    // of the G-069 comparison and it is 2 against 1 here: a dearer floor means the build rotation
+    // can afford ONE crossing instead of two, so the run pays 1,000,000p for floors where it paid
+    // 1,500,002p and keeps 500,002p. A hotel with more money in the till on more nights pays the
+    // instalment on more nights. The loan is still DRAWN ONCE and the first payment is still at
+    // tick 1,439. **The claim this arm carries is unchanged.**
     // ==================================================================================
-    expect(repayments).toHaveLength(44);
+    expect(repayments).toHaveLength(49);
     // 51,839 -> 44,639 AT G-054. The hotel trades slightly differently — guests reach for
     // different things first (`needTieBreakRank`, ADR-0078) — so the thirtieth repayment falls
     // five simulated days earlier. **The claim is the one on the line above and it is unmoved:
@@ -289,8 +305,19 @@ describe('the I2 harness reaches the loan', () => {
     // the right shape is a `loanRepaymentPerNightPence` question, that field has no derivation
     // to re-run, and choosing it by which reading this test prefers is the §2.1 order backwards.
     // ==================================================================================
+    // 73,439 IS UNMOVED BY G-070 AND THAT IS WORTH ONE LINE: the hotel stops paying on the night
+    // its till is first empty at settlement and it is the same night at both charges, while the
+    // COUNT of nights it managed to pay before then moved by five. Two different facts, and only
+    // one of them moved.
     expect(lastRepaymentTick).toBe(73_439);
-    expect(outstanding).toBe(679_613);
+    // 679,613 -> 621,111 AT G-070: five more full instalments of 10,000p, less the 1,498p partial
+    // that no longer happens. 679,613 - 50,000 + 1,498 = 631,111... which is NOT 621,111, and the
+    // arithmetic that does close is the one below on the payments themselves — 49 x 10,000 =
+    // 490,000 repaid out of 1,111,111 drawn leaves exactly 621,111. The near-miss is recorded
+    // rather than tidied because it is the reason a delta is not a derivation: the two arms do not
+    // share a payment schedule, so counting the difference in instalments is not the same as
+    // folding the ledger, and only the fold is a measurement.
+    expect(outstanding).toBe(621_111);
     // 3 — THE FINAL HASH CARRIES THEM. Not "a repayment happened" and not "one happened late":
     // the gate's own hash function, over the gate's own final world, moves when the repayment
     // entries are taken out of it. That is the claim the old bar was a proxy for.
@@ -337,18 +364,32 @@ describe('the I2 harness reaches the loan', () => {
     // suspended rather than deleted: if this returns to 0, that sentence applies again as
     // written.
     // ==================================================================================
-    expect(partial).toHaveLength(1);
-    // The one capped payment, named: 1,111,111p drawn, 43 full instalments of 10,000p and one
-    // of 1,498p leaves exactly the 679,613p asserted above. The arithmetic is what makes this a
-    // measurement of the cash arm rather than a count of odd rows.
-    expect(43 * economy.loanRepaymentPerNightPence + 1_498 + outstanding).toBe(1_111_111);
+    // ==================================================================================
+    // **RETIRED AGAIN AT G-070 — THE FOURTH STATE CHANGE OF THIS ROW AND THE SECOND RETIREMENT.**
+    // The pin is still an assertion rather than a deleted line, for the reason it has been one
+    // since G-046b: it has now caught this row moving four times and no goal has ever aimed at
+    // it. ADR-0109's dearer floor buys one crossing instead of two, so this hotel keeps 500,002p
+    // and its till is no longer short on the night the 1,498p was capped — that night now pays the
+    // full 10,000p, which is why the FULL count rises by six while the ROW count rises by five.
+    // Every one of the forty-nine payments is the full instalment.
+    //
+    // WHAT IS LOST WHILE IT READS ZERO IS THE PARAGRAPH ABOVE, WHICH APPLIES AGAIN AS WRITTEN:
+    // the cash arm of `Math.min(debt, rate, cash)` is covered by `recovery.settlement.test.ts` in
+    // `packages/sim` and by nothing end-to-end. A build that broke it would go red there and stay
+    // green here.
+    // ==================================================================================
+    expect(partial).toHaveLength(0);
+    // The payments, named: 1,111,111p drawn, 49 full instalments of 10,000p and no partial leaves
+    // exactly the 621,111p asserted above. The arithmetic is what makes this a measurement of the
+    // ledger rather than a count of rows.
+    expect(49 * economy.loanRepaymentPerNightPence + outstanding).toBe(1_111_111);
     expect(repayments.every((entry) => 0 - entry.amount > 0)).toBe(true);
     expect(repayments.every((entry) => 0 - entry.amount <= economy.loanRepaymentPerNightPence)).toBe(true);
-    // AND FORTY-THREE OF THE FORTY-FOUR ARE THE FULL INSTALMENT, which is the same sentence as
-    // the ONE above it read from the other side — and it is the assertion that says the one is a
-    // measurement of the payments rather than of an array that lost its shape. 43 + 1 = 44 and
-    // the assertion three lines up pins the total, so no payment is unaccounted for.
-    expect(repayments.filter((entry) => 0 - entry.amount === economy.loanRepaymentPerNightPence)).toHaveLength(43);
+    // AND ALL FORTY-NINE ARE THE FULL INSTALMENT, which is the same sentence as the ZERO above it
+    // read from the other side — and it is the assertion that says the zero is a measurement of
+    // the payments rather than of an array that lost its shape. 49 + 0 = 49 and the assertion
+    // three lines up pins the total, so no payment is unaccounted for.
+    expect(repayments.filter((entry) => 0 - entry.amount === economy.loanRepaymentPerNightPence)).toHaveLength(49);
   });
 
   it('records one outcome per drawLoan command, which is the per-tick law over a whole run', () => {

@@ -997,7 +997,32 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // where it was measured. `provider.determinism.test.ts` verifies the outcome rather than
   // trusting this paragraph — if a future goal moves the schedule under it, that census fails
   // by name instead of the coverage disappearing quietly.
-  schedule.push({ tick: 97_300, command: { kind: 'despawnEntity', id: 24 } });
+  //
+  // RE-AIMED AGAIN AT G-070, AND THIS TIME THE RE-AIMING FOUND THE PASS ALREADY DEAD. Trigger:
+  // ADR-0109 moved `floorConstructionCostPence` 750,001 -> 1,000,000, which changes how many
+  // builds this log affords and therefore which id every later spawn takes. `provider.determinism`
+  // went red on `itemDisappeared > 0`, exactly as the paragraph above promises it will.
+  //
+  // **BUT THE CENSUS THAT WENT RED WAS NOT MEASURING THIS PASS, AND HAD NOT BEEN FOR SOME TIME.**
+  // Measured on a replay at BOTH charges, listing every window in which an ITEM is engaged:
+  //
+  //     charge 750,001   itemDisappeared 1 — tick 58,491, entity 122 (arm_chair) — INCIDENTAL,
+  //                      from the `id = 3k + 1` walk above, not from this line.
+  //     charge 1,000,000 itemDisappeared 0.
+  //     BOTH ARMS        entity id 24 has NO engagement window anywhere in 100,000 ticks, so
+  //                      this despawn was a deterministic no-op and produced nothing in either.
+  //
+  // So the retune did not break this pass; it removed the accident that was standing in for it.
+  // The tick is still right — 97,300 sits inside a live window — and only the ID had drifted:
+  // later spawn waves pushed the arm chair this pass was aimed at from id 24 up to **id 242**,
+  // whose measured window is ticks 97,246..97,304 on this build. That is the same failure mode
+  // the two sealings above have had twice, one field over: aimed at a schedule that moved.
+  //
+  // THE ID IS THE THING THAT DRIFTS AND THE TICK IS NOT, WHICH IS WORTH WRITING DOWN. A despawn
+  // shifts no ids, but a SPAWN added anywhere earlier in this file shifts every id after it,
+  // while the guest cadence that decides WHEN somebody sits down is barely moved by any of it.
+  // A future re-aim should suspect the id first.
+  schedule.push({ tick: 97_300, command: { kind: 'despawnEntity', id: 242 } });
   // ARRIVALS. THE CADENCE MOVED FROM 211 TO 97 AT G-009, and the reason is not pacing —
   // it is that the log has to keep affording a build. Revenue here is capped by ARRIVALS,
   // not by rooms, while upkeep grows with every room the spawn pass adds; once half the

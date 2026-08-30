@@ -186,10 +186,25 @@ describe('the I2 harness reaches rooms that do not work', () => {
       // affords two fewer builds at this file's 40,000-tick horizon (14 -> 12,
       // `insufficientFunds` 4 -> 6, measured paired on the two content files one field apart),
       // and BOTH of the two that go were in mid-air.
+      // 38 -> 41 AT G-070, AND IT GOES THE WAY NOBODY WOULD GUESS: ADR-0109 raised the charge
+      // AGAIN, 750,001 -> 1,000,000, and this log now builds MORE rooms rather than fewer.
+      // Measured paired on two content files one field apart, everything else byte-identical,
+      // at this file's 40,000-tick horizon:
+      //
+      //     charge      floorConstruction tx   built   insufficientFunds   unsupported
+      //       750,001   2                      12      6                   38
+      //     1,000,000   1                      14      4                   41
+      //
+      // **THE CAUSE IS THE FLOOR COUNT, NOT THE ROOM COUNT.** A dearer floor means the rotation
+      // can afford to CROSS ONTO one unoccupied floor instead of two, so the log pays 1,000,000p
+      // for floors where it paid 1,500,002p — 500,002p that goes on rooms instead. Every room
+      // this rotation places lands on floors 5..19 with nothing beneath it, so two more
+      // affordable builds are three more floating rooms (the third is an id-walk shift: two more
+      // builds move every later id, so the `3k + 1` and `5k + 2` walks take a different set).
       // **THE OTHER FIVE ROWS DO NOT MOVE AT ALL**, which is the control this file has leaned on
       // since G-041: nothing about which RULE bites changed, only how many rooms there are to
       // bite on. Every reason is still produced.
-      unsupported: 38,
+      unsupported: 41,
     });
   });
 
@@ -198,7 +213,9 @@ describe('the I2 harness reaches rooms that do not work', () => {
     // 42 -> 40 AT G-068. See the banner on the tally above: two fewer builds land in mid-air.
     // 40 -> 38 AT G-069. See the tally above: the re-derived floor charge costs this log two
     // builds at this horizon and both of them were floating.
-    expect(tally.unsupported).toBe(38);
+    // 38 -> 41 AT G-070. See the tally above: a DEARER floor buys FEWER FLOORS and therefore more
+    // rooms, and every room this rotation places is a floating one.
+    expect(tally.unsupported).toBe(41);
   });
 
   it('contains rooms with no bed in them — AND THE COUNT IS TWO, which is still a knife edge', () => {
@@ -435,7 +452,16 @@ describe('the replay is the thing the gate runs', () => {
     // 4 -> 3 AT G-068 — the horizon's half of the 1 -> 2 move at 40,000 ticks, and in the other
     // direction. See the banner on the 40,000-tick tally: the id-walking passes step over the
     // churn now, so which rooms lose their beds moved, and the two horizons moved by one each.
-    expect(tally.missingItem).toBe(3);
+    //
+    // 3 -> 4 AT G-070, AND THIS ONE IS NOT THE FLOOR CHARGE — IT IS THE RE-AIMED DESPAWN, which
+    // is worth separating because the two changes landed in the same commit and the OTHER row on
+    // this arm did move with the charge. Attribution, measured: at 1,000,000 with the despawn
+    // still aimed at its old id this row read 3, and it reads 4 once the despawn is aimed at the
+    // arm chair it was always meant to take (`determinism-log.ts`, θ-b1). Taking an arm chair
+    // out from under a guest also takes it out of the LOUNGE that requires one, so the same
+    // command that restores release cause (c) adds one `missingItem` — one room, one reason, and
+    // both of them are the pass doing its job rather than a defect.
+    expect(tally.missingItem).toBe(4);
     // G-038c: 76 -> 75. The log's player builds land on floors 5..19 and the first one on each
     // floor now pays `floorConstructionCostPence` as well (ADR-0047 B8), so one fewer is
     // affordable over the run — and the rooms this walk builds are the ones standing on nothing.
@@ -479,7 +505,11 @@ describe('the replay is the thing the gate runs', () => {
     // is the claim this arm makes.
     // 79 -> 80 AT G-046b, moving the OTHER way from the 43 -> 42 above — different horizon,
     // different balance, and the claim this arm makes is that every reason is still produced.
-    expect(tally.unsupported).toBe(80);
+    // 80 -> 81 AT G-070, the horizon's half of the 38 -> 41 above and by the same mechanism:
+    // ADR-0109's dearer floor buys ONE crossing instead of two, so the rotation spends 500,002p
+    // more on rooms — `built` 21 -> 23, `insufficientFunds` 12 -> 10, measured paired on two
+    // content files one field apart. Every reason is still produced.
+    expect(tally.unsupported).toBe(81);
     expect(tally.unplaced).toBe(0);
   });
 

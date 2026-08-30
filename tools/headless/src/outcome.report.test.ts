@@ -785,13 +785,23 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     //     charge     checkedOut  gaveUp  leftDissatisfied  evictedGone  evictedUnusable  built
     //     500,000        28        540         1,295            47             2           14
     //     750,001        33        507         1,321            47             4           13
+    //   1,000,000        28        520         1,319            44             1           12
     //
     // **`valid` IS UNMOVED AT 6 AND `evictedRoomGone` AT 47.** The hotel that WORKS is the same
     // hotel; what moved is the thirteenth and fourteenth rooms the player threw into mid-air and
     // the ticks on which they went up, and a guest standing in one of those on the tick the
     // demolish walk reaches it is what this row counts. Revenue closes on the checkout count as
     // it always does: 33 x 8,500 = 280,500p against 28 x 8,500 = 238,000p.
-    expect(count('evictedRoomUnusable')).toBe(4);
+    //
+    // 4 -> 1 AT G-070, THIN AGAIN AND STILL FIRING, so the line the block above draws applies for
+    // the fourth time: the row is pinned at what it IS and the schedule is not retuned, because
+    // the reason is not DEAD. ADR-0109 put `floorConstructionCostPence` at 1,000,000; this walk
+    // affords one fewer build (13 -> 12) and one fewer room in mid-air is one fewer room to be
+    // standing in when the demolish walk reaches it. Measured paired, same invocation, the two
+    // content files one field apart — the third row of the table above. **`valid` IS STILL 6 and
+    // the floor charge is levied ONCE in both arms**, so this is the player's rooms moving and
+    // not the hotel's. Revenue still closes on the checkout count: 28 x 8,500 = 238,000p.
+    expect(count('evictedRoomUnusable')).toBe(1);
     // The two rows that still have headroom, for contrast — and `checkedOut`, which no longer
     // does, pinned exactly rather than under a bound it would have to be given to clear.
     // 16 -> 50 AT G-054, AND THIS ROW GETS ITS HEADROOM BACK. **Three times as many guests
@@ -810,7 +820,11 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // mid-air taking upkeep and one fewer is demolished under somebody. The hotel that WORKS is
     // the same six rooms; what changed is how much of the run's money went into rooms that never
     // housed anybody. The closed form still holds: 33 x 8,500p = 280,500p of revenue.
-    expect(count('checkedOut')).toBe(33);
+    // 33 -> 28 AT G-070, BACK TO EXACTLY THE FIGURE G-069 RAISED IT FROM, and the mechanism is
+    // G-069's run once more in the same direction: ADR-0109 takes the charge to 1,000,000, the
+    // walk affords one fewer build again (13 -> 12), and the money goes into the floor instead of
+    // into rooms. The closed form still holds: 28 x 8,500p = 238,000p of revenue.
+    expect(count('checkedOut')).toBe(28);
     expect(count('gaveUp')).toBeGreaterThan(50);
     expect(count('evictedRoomGone')).toBeGreaterThan(1);
     // AND THE ROW THAT ABSORBED THEM, so the collapse above is visibly a SHIFT rather than a
@@ -835,7 +849,12 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // get one and are disappointed in it instead. The five reasons still sum to the departures
     // the conservation law counts, which is what the next test asserts — and that test did not
     // move.
-    expect(count('leftDissatisfied')).toBe(1_321);
+    // 1,321 -> 1,319 AT G-070, TWO ROWS, and it is the smallest this line has ever moved. The
+    // other four rows move by 5, 13, 3 and 3 (see the table above), so nearly all of ADR-0109's
+    // effect on this arm lands somewhere other than here. The five reasons still sum to the
+    // departures the conservation law counts, which is what the next test asserts — and that
+    // test did not move.
+    expect(count('leftDissatisfied')).toBe(1_319);
   }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 16,946ms
 
   it('and the numbers close, through a real process rather than in-memory', () => {

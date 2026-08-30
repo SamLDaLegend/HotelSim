@@ -211,12 +211,35 @@ describe('CAN THE SECOND STOREY BE BOUGHT WITH THE OPENING PURSE? — `floorCons
     expect(priceOfTheSecondStorey()).toBeGreaterThan(openingCapital());
   });
 
-  it('and is the SMALLEST charge that does — one penny less and the purse covers it', () => {
-    // §2.1's direction and G-068's precedent on the two fields above: the conservative choice is
-    // the smallest sufficient one, and the knife edge is what proves nobody rounded. Every
-    // larger value needs a SECOND sentence to select it — how much trading the storey should
-    // cost — and that sentence is the design decision E-016 reserved to the human.
-    expect(priceOfTheSecondStorey() - 1).toBeLessThanOrEqual(openingCapital());
+  it('and it is a WHOLE MULTIPLE OF THE CHEAPEST ROOM, which is the reading the human took', () => {
+    // ======================================================================================
+    // THE READING CHANGED AT ADR-0109 AND THIS CASE IS THE ONE THAT SAYS WHICH ONE IS SHIPPED.
+    //
+    // It read `priceOfTheSecondStorey() - 1 <= openingCapital()` until 2026-08-30 — the KNIFE
+    // EDGE, asserting that one penny less would have been affordable. G-069 shipped the pence
+    // minimum (750,001) under that case and PRICED the alternative beside it; **E-016's design
+    // half was always the human's and they took the round multiple.** So the knife edge is not
+    // a law that broke, it is a law that was RETIRED BY A RULING, and asserting it here would
+    // now assert the thing the ruling rejected.
+    //
+    // WHAT REPLACES IT IS NOT WEAKER, IT IS A DIFFERENT SENTENCE WITH ITS OWN BITE: the charge
+    // is `4 x` the cheapest room this content prices, recomputed from `room-types.json` rather
+    // than spelled. A retune of the price list still reddens this file — which is the whole
+    // reason the derivation lives in a test — and 4 is the multiplier the ruling names.
+    // ======================================================================================
+    expect(floorConstructionCostOf(content)).toBe(4 * minConstructionCostOf(content));
+  });
+
+  it('and the requirement is met with MARGIN rather than at the minimum, and the margin is stated', () => {
+    // The pence minimum is still computable and is still the bound the requirement draws; what
+    // has changed is that the shipped value sits ABOVE it rather than ON it. Both numbers are
+    // recomputed here so the gap is a reading rather than a claim: at the shipped tables the
+    // minimum sufficient charge is 750,001 and the shipped charge is 1,000,000, so the second
+    // storey costs 249,999p more than the requirement alone would force.
+    const pennyMinimum = openingCapital() - minConstructionCostOf(content) + 1;
+    expect(pennyMinimum).toBe(750_001);
+    expect(floorConstructionCostOf(content)).toBeGreaterThan(pennyMinimum);
+    expect(floorConstructionCostOf(content) - pennyMinimum).toBe(249_999);
   });
 
   it('and it still clears the LOWER endpoint, which is a different rule and enforced elsewhere', () => {
@@ -228,17 +251,21 @@ describe('CAN THE SECOND STOREY BE BOUGHT WITH THE OPENING PURSE? — `floorCons
     expect(floorConstructionCostOf(content)).toBeGreaterThanOrEqual(minConstructionCostOf(content));
   });
 
-  it('and on the SHIPPED tables the derivation returns 750,001 — the penny is stated, not tidied', () => {
-    // The intermediate reading, pinned separately from the law above, so that a retune goes red
-    // WITH the numbers in it. THE READING OF "SMALLEST SUFFICIENT" TAKEN HERE IS THE MINIMUM OF
-    // THE ADMISSIBLE SET IN PENCE, not the smallest whole multiple of a room: a strict inequality
-    // over integers has a minimum, it is one unit above the bound, and one penny is the smallest
-    // quantity ADR-0002 can represent. 3 x 250,000 = 750,000 is the tempting round answer and it
-    // FAILS BY EXACTLY THE MARGIN — 750,000 + 250,000 is not greater than 1,000,000.
-    expect(floorConstructionCostOf(content)).toBe(750_001);
+  it('and on the SHIPPED tables the derivation returns 1,000,000 — the round multiple, ruled', () => {
+    // The intermediate reading, pinned separately from the laws above, so that a retune goes red
+    // WITH the numbers in it. THE READING OF "SMALLEST SUFFICIENT" TAKEN HERE IS THE SMALLEST
+    // WHOLE MULTIPLE OF THE CHEAPEST ROOM THAT CLEARS THE BOUND, not the minimum of the
+    // admissible set in pence — 4 x 250,000. 3 x 250,000 = 750,000 is the tempting round answer
+    // and it FAILS BY EXACTLY THE MARGIN: 750,000 + 250,000 is not greater than 1,000,000, which
+    // is why the multiple is 4 and not 3.
+    expect(floorConstructionCostOf(content)).toBe(1_000_000);
     expect(openingCapital()).toBe(1_000_000);
     expect(minConstructionCostOf(content)).toBe(250_000);
-    expect(priceOfTheSecondStorey()).toBe(1_000_001);
+    expect(priceOfTheSecondStorey()).toBe(1_250_000);
+    // AND THE MULTIPLE BELOW IT IS REFUSED BY THE REQUIREMENT ITSELF, recomputed rather than
+    // asserted: three rooms' worth of floor plus the room that stands on it is EXACTLY the
+    // opening purse, and the inequality is strict.
+    expect(3 * minConstructionCostOf(content) + minConstructionCostOf(content)).toBe(openingCapital());
   });
 });
 

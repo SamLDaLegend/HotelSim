@@ -36,6 +36,7 @@ import {
   createValidityCache,
   createWorld,
   entranceCell,
+  solvencyOf,
   starRatingOf,
   stepTick,
   UNRATED,
@@ -82,6 +83,11 @@ import { describeRating } from '../src/rating.js';
 // it: a recorded frame has no HUD, and a caption that phrased a guest's review in its own
 // words would be a second opinion about the thing the player is actually shown.
 import { describeFeed, REMARKS_SHOWN } from '../src/remarks.js';
+// AND THE SAME THREE FACTS THE WARNING PANEL PRINTS (G-070), from the same formatter, for the
+// reason above it: a recorded frame has no HUD, and ADR-0013 requires a perceptual finding to
+// carry a FRAME REFERENCE. A caption that phrased the lose state in its own words would be a
+// second opinion about the thing the player is actually shown.
+import { describeSolvency, solvencyLine } from '../src/solvency.js';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, escape, frameSvg, hex } from './svg.js';
 import { createScenario } from '../src/scenario.js';
 import { floorsOf, guestsOnFloor, viewFor } from '../src/view/camera.js';
@@ -270,8 +276,15 @@ for (let tick = 0; tick <= ticks; tick += 1) {
       // recordings. An empty feed contributes no lines at all, which is why a hotel nobody has
       // left yet writes the caption it always wrote.
       const feed = describeFeed(content, remarkBook, current.recentRemarks, REMARKS_SHOWN);
+      // WHETHER THIS HOTEL IS LOSING, AT THIS TICK (G-070). Above the rating and below the feed,
+      // and ABSENT ENTIRELY when the hotel is not losing — `describeSolvency` returns `null` and
+      // this line contributes nothing, exactly as an empty feed does. So a solvent hotel writes
+      // the caption it always wrote, and a frame that carries this line is a frame in which the
+      // simulation says the hotel is losing.
+      const solvency = describeSolvency(solvencyOf(current, content));
       const caption = [
         ...feed.map((line) => `said ${line.score}  ${line.text}`),
+        solvency === null ? '' : `losing money  ${solvencyLine(solvency)}`,
         `stars ${rating.stars} · next ${rating.next}`,
         rating.earnedBy === null ? '' : `earned by ${rating.earnedBy}`,
         `tick ${current.tick} · floor ${floor} · walls ${walls} · bodies at ` +

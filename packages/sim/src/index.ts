@@ -391,6 +391,11 @@ export {
   nightlyUpkeepOf,
   settleNight,
 } from './settlement.js';
+// G-070, ADR-0109. The lose state is a MEASUREMENT and not a rule: nothing in `packages/sim`
+// reads `solvencyOf`, and its whole purpose is to give a host one answer to "is this hotel
+// losing, and how long has it got" instead of two.
+export type { Solvency } from './solvency.js';
+export { isLosing, solvencyOf } from './solvency.js';
 export type { StaffId, StaffMember, StaffStore } from './staff.js';
 export {
   assertStaffStoreInvariants,

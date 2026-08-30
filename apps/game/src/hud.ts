@@ -27,9 +27,11 @@ import {
 } from '@hotelsim/sim';
 import type { BoundContent, Guest, RoomTypeData, StarRating, World } from '@hotelsim/sim';
 import type { SpeedRung } from '@hotelsim/content';
+import { moneyOf } from './money.js';
 import { describeRating } from './rating.js';
 import type { FeedLine } from './remarks.js';
 import { describeAction } from './session.js';
+import type { SolvencyText } from './solvency.js';
 import type { ResolvedAction } from './session.js';
 import type { Tool } from './input.js';
 
@@ -38,8 +40,6 @@ export function describeGuestPosition(guest: Guest): string {
   return `#${guest.id} ${describeCell(guest.at)}`;
 }
 
-/** Integer minor units in one pound (ADR-0002: money is pence, never a float). */
-const PENCE_PER_POUND = 100;
 /** In-game minutes in an in-game hour. A clock face, not a play speed. */
 const MINUTES_PER_HOUR = 60;
 
@@ -67,12 +67,10 @@ export function clockOf(world: World): string {
   return `day ${dayOf(world) + 1}  ${pad(Math.floor(minutes / MINUTES_PER_HOUR))}:${pad(minutes % MINUTES_PER_HOUR)}`;
 }
 
-/** Pence to pounds, for display only. The arithmetic below never re-enters the ledger. */
-export function moneyOf(pence: number): string {
-  const sign = pence < 0 ? '-' : '';
-  const absolute = Math.abs(pence);
-  return `${sign}£${Math.floor(absolute / PENCE_PER_POUND).toLocaleString('en-GB')}.${pad(absolute % PENCE_PER_POUND)}`;
-}
+// PENCE TO POUNDS MOVED TO `money.ts` AT G-070 AND IS RE-EXPORTED HERE, so nothing that imported
+// it from this file had to change. It moved because `solvency.ts` and `scripts/record-frames.ts`
+// both need it and neither may see a DOM type — the argument `rating.ts` makes in full.
+export { moneyOf };
 
 export type HudState = {
   readonly world: World;
@@ -414,6 +412,63 @@ export function renderRemarks(host: HTMLElement, lines: readonly FeedLine[], sho
     row.append(score, ' ', text);
     host.append(row);
   }
+}
+
+/**
+ * THE LOSE STATE, ON SCREEN (G-070, ADR-0109).
+ *
+ * ---------------------------------------------------------------------------------------
+ * IT IS DRAWN OVER THE STAGE AND COSTS THE HUD ZERO CELLS, WHICH IS E-013's ANSWER AND IS THE
+ * SAME MOVE `renderRemarks` MADE AT G-066b. E-013 is an OPEN human complaint about how much of
+ * the page the chrome takes, and WATCH #38 measured it: at 1440x900 the stage gets 67.2%, and at
+ * 404x419 the HUD alone needs 368 of 419 pixels and the stage collapses to ZERO. A new chrome
+ * row — or a cell in a strip that already wraps — would make a measured, open complaint worse.
+ * So `#solvency` is absolutely positioned INSIDE `#stage`, the grid gains NO ROW, every control
+ * keeps the distance from the top of the page it had, and the cost is a corner of the picture.
+ *
+ * IT IS ALSO THE RIGHT PLACE ON ITS OWN MERITS. A warning in the twentieth cell of a wrapping
+ * strip is a warning a player scans past; on the picture, in its own box, it is the only thing
+ * on screen that looks like an alarm.
+ *
+ * WHEN IT IS NOT LOSING IT DRAWS NOTHING AT ALL — `replaceChildren()` and return, so the box
+ * has no border, no padding and no height. `describeSolvency` returns `null` and this function
+ * never invents a "you are fine" state: the visibility rule lives in `packages/sim` and this is
+ * the surface that obeys it.
+ *
+ * `pointer-events: none` IS LOAD-BEARING, NOT POLISH — `#remarks`' argument exactly. The stage
+ * is the build surface: a click that lands here must reach the canvas underneath, or the panel
+ * would silently eat the player's drags in the corner it covers.
+ *
+ * NOTHING HERE HOLDS STATE and nothing here computes economics. The three strings are a fold
+ * over the ledger and the entity store performed by `solvencyOf`, phrased by `describeSolvency`,
+ * and this function writes DOM.
+ * ---------------------------------------------------------------------------------------
+ */
+export function renderSolvency(host: HTMLElement, text: SolvencyText | null): void {
+  host.replaceChildren();
+  if (text === null) return;
+  // THE HEADER SAYS WHAT KIND OF THING THIS IS, because three numbers on a dark panel do not.
+  // It also says the ruling: nothing is being taken away, this is a warning (ADR-0109).
+  const header = document.createElement('div');
+  header.className = 'sh';
+  header.textContent = 'losing money';
+  host.append(header);
+
+  // ONE ROW, THREE CELLS, IN THE HUMAN'S OWN ORDER — what am I, why am I that, what next.
+  const row = document.createElement('div');
+  row.className = 'sr';
+  for (const [index, part] of [text.cash, text.burn, text.runway].entries()) {
+    if (index > 0) {
+      const dot = document.createElement('span');
+      dot.className = 'k';
+      dot.textContent = ' · ';
+      row.append(dot);
+    }
+    const span = document.createElement('span');
+    span.textContent = part;
+    row.append(span);
+  }
+  host.append(row);
 }
 
 export type TransportHandlers = {

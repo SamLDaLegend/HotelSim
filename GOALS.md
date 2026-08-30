@@ -6,7 +6,7 @@
 
 - **Schemas**: save **v25** (G-052a — the world gained a `staff` payroll, and `migrateV23ToV24` writes the empty one a pre-G-052a world had; before that v23 at G-038b-i — the world gained a `lift` and a `liftQueue`, and the departure table gained a row; a guest gained a `partyId` at G-040a; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `ddb101ca9c1687ee` · measure golden `5b8e6d7760ba8e0b`. *(**Both MOVED AT G-059, and this time it IS
+  `058a2e86ff88b44a` · measure golden `fce3fdb5e8c00e69`. *(**Both MOVED AT G-059, and this time it IS
   BEHAVIOUR** — the review scorer changed and `reviewOutcomes` is world state. `c967bdb98dac9b0d` /
   `a57925e09896e3a4` -> the pair above. **NO `World` FIELD, so save stays v25 with no migration**, and
   `World.contentHash` did NOT move because no content file was touched. Previously **MOVED TWICE at G-051a, each time for
@@ -5551,7 +5551,71 @@ Retiring the requirement (**the human's, still open**); `loanRepaymentPerNightPe
 derivation at all and is a separate debt; and anything about the lose state.
 
 ## G-070 — The player is told they are losing, and how long they have to fix it
-Status: **IN-PROGRESS 2026-08-30. RULED (ADR-0109, human): the lose state WARNS and changes nothing mechanically.** Milestone: M5 · Owner pair: render-engineer / render-critic
+Status: **DONE 2026-08-30. M5's last buildable item — and it shipped with a day-one false alarm its own builder reported, now G-072.** Owner pair: render-engineer / (orchestrator-verified)
+
+> **NOTHING IS STORED AND NO SAVE BUMP.** `solvencyOf(world, content)` in a new
+> `packages/sim/src/solvency.ts`, derived at read time from the append-only ledger and the entity
+> store — the pattern G-051a's rating and G-066a's ring both used. The HUD does no arithmetic and
+> holds no selection (G-066b's rule).
+
+**THE THREE FACTS, AND THE THIRD BORROWS AN EXISTING MECHANISM.** Cash is `balanceOf(ledger)`. The
+burn is the night's net, walked backwards from the last `upkeep` line with an early break — **O(one
+night), not O(ledger)** — because `settleNight` appends exactly one `upkeep` per night, so **the
+cadence marker is already in the log and nothing needs storing.** The runway is
+`floor((balance + stockValueOf(entities)) / −lastNight)`, and that numerator is **`canDrawLoan`'s own
+gate quantity, taken verbatim**.
+
+**THE BRIEF'S "LAST NIGHT'S NET SETTLEMENT" WAS FALSE AS LITERALLY WRITTEN, AND THE BUILDER PROVED IT
+FROM THE BLOCK'S OWN OTHER CONSTRAINT.** The settlement's transactions (`wages`, `upkeep`,
+`loanRepayment`) are ALL money out, so their net is never positive — **every hotel would warn every
+night, a profitable one included**, contradicting *"it must not fire when it is noise."* The two
+could not both hold. Resolved to the night's net **TRADE**, with the partition a
+`Record<TransactionReason, boolean>` so a new reason is a TYPE ERROR, and all ten asserted against
+`TRANSACTION_REASONS`. **`startingCapital` is the forcing case**: dated tick 0, inside night 0, it
+would have made every hotel's first night read **+1,000,000p**.
+
+**THE BURN IS CHECKED AGAINST TWO SPAWNED CLI RUNS' BALANCES**, `--days 29` against `--days 30` —
+two folds of two whole ledgers reading no reason, no tick and no classification, **so the check is
+genuinely independent of the selector it is checking.** A HUD that agrees with itself proves nothing.
+
+**THE BOUNDARY IS THREE ARMS ONE PENNY APART**: net `+1` silent, net **exactly `0` silent** (zero is
+not losing, and `reserves / 0` is not a number of nights), net `−1` warns — reporting 399,999 nights
+rather than suppressing them. **And both CLI arms are IN CREDIT, one warning and one not**, which is
+the pair ADR-0109 rests on.
+
+**ONE RUNWAY CASE IS UNREACHABLE RATHER THAN UNFOUND, AND THE BOUND IS PINNED.** *Deep in debt WITH
+runway* was produced: balance **−2,000,000p**, liquidation 3,000,000p, burn −60,000p, **16 nights** —
+*a rule triggered by the SIGN of the balance would have been shouting since night 17.* *In credit
+with NO runway* cannot occur: measured off `room-types.json`, the worst refund-to-upkeep ratio is
+**43 nights** (`hotel_spa`), so **every room a hotel owns brings at least that many nights with it.**
+Pinned as a case, so a retune that makes the state reachable goes RED rather than leaving the
+paragraph quietly false.
+
+**E-013 COST: ZERO PIXELS OF CHROME.** `#solvency` is absolutely positioned inside `#stage`, out of
+flow, exactly as `#remarks` has been since G-066b — **structural and checkable by reading
+`index.html`**, not measured in a browser, and the builder said so rather than implying a reading it
+could not take.
+
+**AND IT SHIPPED A FALSE ALARM ITS OWN BUILDER REPORTED (finding 4).** The shipped opening scenario
+**warns on day 1 and never again**, with 76 nights of runway — true, and firing on a hotel that is
+fine. **A defect against this block's own *"it must not fire when it is noise"***, met as written
+(a PROFITABLE hotel stays silent) and missed in intent, because a third case existed that neither arm
+covered. **G-072**, and it should land before G-067.
+
+**THREE FINDINGS BEYOND THE GOAL.** *(1)* A **pre-existing DEAD PASS in the I2 log**: the aimed
+despawn for release cause (c) targeted entity id 24, which **has no engagement window anywhere in
+100,000 ticks**, and the test was passing on an INCIDENTAL despawn from another walk. The tick was
+right and the id had drifted to 242. **ADR-0007's class inside the determinism harness, for the
+second time this session.** *(2)* **The dearer floor makes two harnesses build MORE rooms, not
+fewer** — the I2 log crosses ONE unoccupied floor instead of two and keeps 500,002p. *(3)* A header
+census read **1,075 under a line saying "MEASURED ON THIS BUILD"; the real figure is 11,628** — every
+case stayed green because they are written against a CAUSE and a `> 0` bar.
+
+**ADR-0109 ruling 2 shipped with it**: `floorConstructionCostPence` **750,001 -> 1,000,000**, the
+round `4 x cheapestRoom`. The schema now records the pence minimum as **out-voted, not falsified**,
+and the requirement met **with 249,999p of margin** rather than at the minimum. Measured: the storey
+opens at **tick 17,281, day 13**, against tick 2,881. **Prediction held** — the default golden moved
+**exactly one line**, the state hash, against a content directory identical in every other byte. Milestone: M5 · Owner pair: render-engineer / render-critic
 
 **M5's last buildable item.** There is no bankruptcy state at all today: the balance goes negative
 and nothing happens.
@@ -5684,6 +5748,64 @@ asked for. **But (b) owes the rectangle's meaning, and demolish still needs (a) 
 
 Giving a corridor a cost (that is the parked note's own trigger and a content decision), and any
 change to `layCorridor` in `packages/sim`.
+
+## G-072 — The warning stops crying wolf on day one
+Status: **PLANNED 2026-08-30. Small, derivable, and it should land BEFORE G-067.** Milestone: M5 · Owner pair: render-engineer / render-critic
+
+**G-070's own finding 4, reported by its builder rather than smoothed over:** the shipped opening
+scenario **warns on day 1 and never again**, with **76 nights of runway**. Measured, `--ticks 14400
+--every 720 --seed 7`: present at t001440 and t002160, absent at t000000, t000720 and at every frame
+from t002880 to t014400.
+
+> **THE NUMBER IS TRUE AND THE ALARM IS FALSE**, and that is a defect against G-070's own block,
+> which says *"it must not fire when it is noise."* The exit criterion was met as written — a
+> PROFITABLE hotel stays silent — and the intent was not, because a third case existed that neither
+> arm covered: **a hotel that is fine and had one structurally bad first night.**
+
+### THE CAUSE IS STRUCTURAL, NOT A TUNING MISS
+
+`stayDurationTicks` is 1,440 against `TICKS_PER_DAY` 1,440, and **a guest pays on CHECKOUT**. So a
+guest arriving on day 1 checks out on day 2, and **night 0 contains a full night's upkeep against
+structurally zero room revenue.** The shipped hotel's −£605 is nine rooms of upkeep and nothing else.
+
+**That is not a burn rate. It is a startup artefact**, and reporting it as a rate is the same class as
+a benchmark's warm-up run — a reading taken in a regime the claim is not about.
+
+### THE FIX MUST BE DERIVED, AND IT IS
+
+**Do not report a burn for a night in which no stay could have completed.** The first night that can
+contain a checkout falls out of `stayDurationTicks` against `TICKS_PER_DAY` — **no constant is
+chosen**, which is what makes this different from the threshold ADR-0109 and §2.1 both refuse.
+
+**A THRESHOLD ON NIGHTS REMAINS FORBIDDEN.** *"Only warn below N nights"* would be a number nobody
+can source, and G-070 refused it correctly. **This is not that**: it does not ask how bad the burn
+must be, it asks whether the night is EVIDENCE about a rate at all.
+
+### Exit criteria
+
+1. **The shipped opening scenario is silent on day 1**, measured on the same recording arm that
+   found it (`--ticks 14400 --every 720 --seed 7`), with the frames named.
+2. **AND A GENUINELY FAILING HOTEL STILL WARNS AS EARLY AS IT HONESTLY CAN.** *This is the
+   anti-vacuity half and the one that matters* — a fix that simply delays every warning by a night
+   has bought silence rather than accuracy. The arm G-070 used (`--rooms 1 --amenities 0`, night net
+   −2,500p) must still warn, and the goal states on which night and why that is the earliest honest
+   one.
+3. **G-070's boundary trio still holds**: net `+1` silent, net exactly `0` silent, net `−1` warns.
+4. `pnpm verify` — fourteen rows, fourteen PASS, exit read from `$?`. **No save bump. I2 should not
+   move** — this is a read-time selector, exactly as G-070 was.
+
+### Why it should land before G-067
+
+**A stranger's first day is the single most valuable minute in the playtest**, and G-067's protocol
+opens by asking what they made of the first five minutes unprompted. **A false alarm in that window
+does not just waste itself — it teaches the player that the warning line is noise**, which
+contaminates question 5 for the rest of the session. *It is cheaper to fix the alarm than to explain
+it away in the write-up.*
+
+### Out of scope
+
+Any threshold on how bad the burn must be; any change to the three facts; and the warning's WORDING,
+which is G-067's to judge.
 
 ## G-067 — A stranger plays it, and the protocol is written BEFORE they do
 Status: **READY 2026-08-30 — every dependency has landed and this is the ONLY remaining M5 item. It cannot be run by an agent.** Milestone: M5 · Owner pair: (human-run) / orchestrator-analysed

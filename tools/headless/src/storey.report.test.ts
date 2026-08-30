@@ -130,18 +130,33 @@ describe('THE REQUIREMENT MEASURES TRUE: the opening purse does not buy a second
     expect(refused.money.constructionPennies).toBe(0);
   });
 
-  it('ANTI-VACUITY: ONE PENNY more capital and the same invocation SUCCEEDS', () => {
+  it('ANTI-VACUITY: ONE PENNY apart, the same invocation REFUSES and then SUCCEEDS', () => {
     // ======================================================================================
-    // The whole of this goal's claim, in one comparison. 1,000,001p buys the floor (750,001p)
-    // and the cheapest room (250,000p) with nothing left over; 1,000,000p does not. Identical
-    // seed, plot, layout, schedule and content in every other byte.
+    // The whole of this goal's claim, in one comparison, and BOTH SIDES OF IT ARE RUN HERE.
+    // The pair costs 1,250,000p — the floor (1,000,000p) and the cheapest room (250,000p) —
+    // so a purse of 1,249,999p is refused and a purse of 1,250,000p buys it with nothing left
+    // over. Identical seed, plot, layout, schedule and content in every other byte: one penny
+    // cannot change any of those, so the difference is attributable to the price and to
+    // nothing else.
+    //
+    // THE KNIFE EDGE MOVED WITH THE CHARGE, NOT WITH THE REQUIREMENT (ADR-0109). It sat at
+    // 1,000,000/1,000,001 while the charge was the pence minimum. The requirement still binds
+    // at 750,000 — see `purse.derivation.test.ts` — and the shipped charge now clears it with
+    // 249,999p of margin, so the purse that affords the storey is no longer the purse the
+    // requirement forbids by one penny. **Both facts are measured, one here and one there.**
     // ======================================================================================
-    const afforded = summaryOf(dayOne(['--content', scratch({ openingCapitalPence: 1_000_001 })]));
-    expect(afforded.money.startingCapitalPennies).toBe(1_000_001);
+    const short = summaryOf(dayOne(['--content', scratch({ openingCapitalPence: 1_249_999 })]));
+    expect(short.money.startingCapitalPennies).toBe(1_249_999);
+    expect(short.build.built).toBe(0);
+    expect(short.build.refused.insufficientFunds).toBe(1);
+    expect(short.build.floorConstructionTransactions).toBe(0);
+
+    const afforded = summaryOf(dayOne(['--content', scratch({ openingCapitalPence: 1_250_000 })]));
+    expect(afforded.money.startingCapitalPennies).toBe(1_250_000);
     expect(afforded.build.built).toBe(1);
     expect(afforded.build.refused.insufficientFunds).toBe(0);
     expect(afforded.build.floorConstructionTransactions).toBe(1);
-    expect(afforded.money.floorConstructionPennies).toBe(-750_001);
+    expect(afforded.money.floorConstructionPennies).toBe(-1_000_000);
     expect(afforded.money.constructionPennies).toBe(-250_000);
     // And it spent the lot: the penny is the whole of the difference between the two arms.
     expect(
@@ -153,7 +168,7 @@ describe('THE REQUIREMENT MEASURES TRUE: the opening purse does not buy a second
 
   it('THE TRAP, PLAYED: at 3 x the cheapest room the purse buys the storey on day one', () => {
     // ======================================================================================
-    // 750,000 is the tempting round answer — three cheapest rooms, and one penny below the
+    // 750,000 is the tempting round answer — three cheapest rooms, and one multiple below the
     // shipped charge. It fails BY EXACTLY THE MARGIN: 750,000 + 250,000 = 1,000,000 is not
     // GREATER than the opening capital, and a hotel that can afford the floor and the room with
     // nothing left over has still opened its second storey out of its opening money. This arm
@@ -173,17 +188,42 @@ describe('THE REQUIREMENT MEASURES TRUE: the opening purse does not buy a second
   });
 });
 
-describe('AND IT IS A GATE, NOT A WALL: the hotel earns the storey in two nights', () => {
-  it('is still refused on the SECOND daily attempt, one night of trade in', () => {
-    // Tick 1441. One night has settled — revenue in, upkeep out — and it is not enough.
-    const twoAttempts = summaryOf([
-      '--ticks', '2881', '--seed', '42', '--rooms', '1', '--build', '1440',
+describe('AND IT IS A GATE, NOT A WALL: the hotel earns the storey in twelve nights', () => {
+  // ========================================================================================
+  // THESE TWO ARMS RUN THE SHIPPED STARTING HOTEL, AND THE ARM ABOVE THEM RUNS `--rooms 1`.
+  // The difference is deliberate and it is stated because it changes what each block measures.
+  //
+  //   the block above  ONE BEDROOM, so the only money on the table at tick 1 is the opening
+  //                    capital and nothing a hotel earned. That is the requirement's own
+  //                    sentence — *the money it opened with* — and it wants the thinnest hotel.
+  //   this block       THE SHIPPED STARTING HOTEL (`--rooms 3 --amenities 1`, nine seeded
+  //                    rooms), because "how long does a player wait for the second storey" is a
+  //                    question about the hotel a player actually opens with. It is also the
+  //                    arm `floorConstructionCostPenceSchema`'s campaign measured and the arm
+  //                    ADR-0109 was priced on.
+  //
+  // IT MOVED HERE AT ADR-0109 AND THE REASON IS A MEASUREMENT, NOT A PREFERENCE. This block ran
+  // `--rooms 1` while the charge was 750,001, where the storey came at tick 2,881. At 1,000,000
+  // that arm is still refused at tick 28,801 with a balance of 1,098,000p against a price of
+  // 1,250,000p, climbing about 5,750p a night — roughly seven more weeks. A one-bedroom hotel
+  // takes that long because it has one bedroom, not because the sink is a wall, so measuring
+  // the gate on it would have reported the harness rather than the game.
+  // ========================================================================================
+
+  it('is still refused on the TWELFTH daily attempt, eleven nights of trade in', () => {
+    // Tick 17,281 is the twelfth attempt (`BUILD_START_TICK` is 1 and `--build 1440` fires one
+    // a day). Eleven nights have settled — revenue in, upkeep out — and the till holds
+    // 1,264,000p against a price of 1,250,000p... and it is STILL REFUSED, because this horizon
+    // stops one tick before the attempt that spends it. See the arm below.
+    const eleven = summaryOf([
+      '--ticks', '17281', '--seed', '42', '--build', '1440',
     ]);
-    expect(twoAttempts.build.refused.insufficientFunds).toBe(2);
-    expect(twoAttempts.build.floorConstructionTransactions).toBe(0);
+    expect(eleven.build.refused.insufficientFunds).toBe(12);
+    expect(eleven.build.built).toBe(0);
+    expect(eleven.build.floorConstructionTransactions).toBe(0);
   });
 
-  it('and OPENS IT on the third, at tick 2,881 — day 3', () => {
+  it('and OPENS IT on the thirteenth, at tick 17,281 — day 13', () => {
     // ======================================================================================
     // THE OTHER TAIL, AND IT IS THE ONE `balance-critic`'s charter names: an economy where cash
     // piles up with nothing to spend it on has stopped being a game. A charge derived to be
@@ -191,15 +231,18 @@ describe('AND IT IS A GATE, NOT A WALL: the hotel earns the storey in two nights
     // This is the knife edge measured from the other side — the smallest number of ticks at
     // which the storey is bought — and it goes red in BOTH directions: sooner means the purse
     // covers it, much later means the sink has become a wall.
+    //
+    // TICK 2,881 -> TICK 17,281 AT ADR-0109, which is TEN MORE DAYS of trade, and that is the
+    // price the human had in hand when they took the round multiple over the pence minimum.
     // ======================================================================================
-    const third = summaryOf([
-      '--ticks', '2882', '--seed', '42', '--rooms', '1', '--build', '1440',
+    const thirteenth = summaryOf([
+      '--ticks', '17282', '--seed', '42', '--build', '1440',
     ]);
-    expect(third.build.refused.insufficientFunds).toBe(2);
-    expect(third.build.built).toBe(1);
-    expect(third.build.floorConstructionTransactions).toBe(1);
-    expect(third.money.floorConstructionPennies).toBe(-750_001);
-    // It was paid for out of TRADE: the hotel earned more than the penny it was short by.
-    expect(third.money.revenuePennies).toBeGreaterThan(0);
+    expect(thirteenth.build.refused.insufficientFunds).toBe(12);
+    expect(thirteenth.build.built).toBe(1);
+    expect(thirteenth.build.floorConstructionTransactions).toBe(1);
+    expect(thirteenth.money.floorConstructionPennies).toBe(-1_000_000);
+    // It was paid for out of TRADE: the hotel earned more than the 250,000p it was short by.
+    expect(thirteenth.money.revenuePennies).toBeGreaterThan(0);
   });
 });

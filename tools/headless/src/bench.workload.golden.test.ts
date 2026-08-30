@@ -586,7 +586,15 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   `startingCapital` line that moved at G-068. No `World` field, no save bump, no
     //   migration. **THE OUTCOME TEST BELOW DID NOT MOVE, WHICH IS THE CONTROL**: same 100
     //   arrived, 27 checked out, 59 dissatisfied, 14 still in the hotel.
-    expect(hashState(plain)).toBe('5b8e6d7760ba8e0b');
+    // - `5b8e6d7760ba8e0b` -> `fce3fdb5e8c00e69` AT G-070, AND IT IS `World.contentHash` AND
+    //   NOTHING ELSE FOR THE SECOND GOAL RUNNING. ADR-0109 put `floorConstructionCostPence` at
+    //   1,000,000 in `economy.json` (the round `4 x cheapestRoom`, closing E-016), and the
+    //   fingerprint hashes the injected content whether or not this workload ever reads the
+    //   field. **THIS ARM NEVER OPENS A FLOOR**: it builds nothing, so no `floorConstruction`
+    //   transaction exists to move and the LEDGER IS BYTE-IDENTICAL. No `World` field, no save
+    //   bump, no migration. **THE OUTCOME TEST BELOW DID NOT MOVE, WHICH IS THE CONTROL**: same
+    //   100 arrived, 27 checked out, 59 dissatisfied, 14 still in the hotel.
+    expect(hashState(plain)).toBe('fce3fdb5e8c00e69');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -1058,7 +1066,13 @@ describe('the same workload with the player churning the building', () => {
     //   demolishes on a cadence and BUILDS NOTHING, so it never opens a floor and never pays the
     //   charge at either value. **The eviction count this arm exists to produce is UNMOVED at
     //   24**, which is the control.
-    expect(hashState(churn)).toBe('55bed0e72f7f3b43');
+    // `55bed0e72f7f3b43` -> `9d07bfcb1da0362f` AT G-070: `World.contentHash` and NOTHING else,
+    //   because ADR-0109 moved `floorConstructionCostPence` 750,001 -> 1,000,000. No `World`
+    //   field, no save bump, no migration, and no ledger line - this arm's player demolishes on a
+    //   cadence and BUILDS NOTHING, so it never opens a floor and never pays the charge at any of
+    //   its three values. **The eviction count this arm exists to produce is UNMOVED at 24**,
+    //   which is the control.
+    expect(hashState(churn)).toBe('9d07bfcb1da0362f');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {
