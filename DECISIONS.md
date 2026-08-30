@@ -10631,3 +10631,56 @@ compares against; nothing compares against a price, exactly as `room-types.json`
 derived).
 
 **G-075c becomes the TOOL** — render, and it may not ship before G-075a.
+
+---
+
+## ADR-0112 — ITEMS GET A FORM, NOT A SHADE. E-017 resolved; the seven-role cap is temporary and the same work lifts it.
+
+**RULED 2026-08-30 BY THE HUMAN**, resolving E-017 after three amendments of measurement.
+
+> *"1 — Some form of basic rendering — We should also be able to determine WHERE in the room —
+> currently it just 'is in the room'. 2 — No it's not a permanent cap. 4 — Not sure just yet."*
+
+### 1 — LUMINANCE STOPS BEING THE SOLE DISCRIMINATOR (E-017 option (a))
+
+**Rejected by this ruling: lowering the floor for items, and narrowing the comparison population.**
+The human took the option that costs the most and pays twice — *and the second half of ruling 1 says
+why it was never only about telling colours apart.*
+
+**The arithmetic that forced it, for the record:** with luminance alone, N ids can do no better than
+`span ** (1/(N-1))`, and WCAG contrast tops out at **21:1**. Shipped span gives **7**; the widest band
+that can physically exist gives **12**; 28 items would need a span of **1.19e+3**. **The ceiling was
+physics, not this palette.**
+
+### 2 — THE SEVEN-ROOM-TYPE CAP IS NOT PERMANENT, WHICH MAKES IT THE SAME GOAL
+
+`room` sits at exactly seven with **4.0% of margin**. **The human ruled the cap temporary**, so the
+render work must lift it for **every** role rather than special-casing items — *otherwise M6's first
+new room type re-raises E-017 under a different heading.*
+
+### 3 — "WHERE IN THE ROOM", AND WHAT IS ALREADY TRUE
+
+**Measured before interpreting, because two readings are possible and they are different jobs:**
+
+- **The simulation ALREADY stores an item's cell.** `placeItem` is *"BY CELL, NOT BY ROOM ID … WHERE
+  in the room an item stands is the player's choice"* (`commands.ts:110`).
+- **A guest ALREADY walks to the item itself.** `standingCell` returns `engagedProvider.at` before it
+  falls back to the room — so a guest using a pool table stands at the pool table.
+- **The renderer already draws each item at its own cell**, on a 16x16 plate.
+
+> **SO WHAT IS ROOM-LEVEL IS THE CONSEQUENCE, NOT THE POSITION.** Whether a need is served does not
+> depend on where the item sits; any item in a valid room serves. **Position is stored, walked to and
+> drawn — and it does not yet MATTER.**
+
+**THIS ADR TAKES THE RENDER READING**, because it is the clause the human attached to *"some form of
+basic rendering"*: **the picture must make an item's position legible** — which of a room's cells
+holds what. *The deeper reading — position having a CONSEQUENCE, so that layout is something a player
+optimises — is `HOTELSIM.md`'s third clause, "the room is scored on what it contains", and it is
+G-037a, still OWED.* **Named here so the two are not conflated, and so the human can say if they
+meant the second.**
+
+### 4 — THE PLAYTEST STAYS DEFERRED
+
+*"Not sure just yet."* **G-067 is not re-opened by this ADR** and its ADR-0110 reasoning stands: a
+stranger's ignorance is a one-shot instrument and the build must first be able to show what it is
+for.
