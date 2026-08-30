@@ -6064,6 +6064,59 @@ one place the two must agree.
 
 Any change to the export format, to `replay.ts`'s document validation, or to what the recorder draws.
 
+## G-077 — A thing on the floor has a FORM, and you can see where it stands
+Status: **IN-PROGRESS 2026-08-30. RULED (ADR-0112, human). UNBLOCKS G-075b and G-075c, which are finished and waiting on the `items-blocked-on-e017` branch.** Milestone: M5 · Owner pair: render-engineer / render-critic
+
+**The human, resolving E-017:** *"Some form of basic rendering — we should also be able to determine
+WHERE in the room — currently it just 'is in the room'."* And, on the cap: ***"No it's not a permanent
+cap."***
+
+### WHY COLOUR ALONE CANNOT CARRY IT — the arithmetic, so nobody re-derives it
+
+With luminance as the sole discriminator, N ids can do no better than `span ** (1/(N-1))`, and **WCAG
+contrast tops out at 21:1**. Shipped span **6.0929 -> 7 ids**; the widest band that can physically
+exist -> **12**; 28 items would need **1.19e+3**. **The ceiling is physics.** `palette.contrast`'s
+floor of 1.3 and 28 distinct colours cannot both hold, in any palette, ever.
+
+### What is owed
+
+1. **A FORM per item, not a shade.** Shape, glyph, silhouette — the discriminator stops being
+   luminance alone. **Placeholder art is explicitly sanctioned** (ADR-0014, human): *"flat coloured
+   shapes, clear silhouettes."*
+2. **IT MUST LIFT THE CAP FOR EVERY ROLE, NOT JUST ITEMS.** `room` is at seven with 4.0% of margin and
+   **the human ruled the cap temporary** — so a fix that special-cases items leaves M6's first new
+   room type to re-raise E-017 under another heading. **Demonstrate the eighth: add a throwaway
+   eighth room type in a scratch content dir and show the gate stays green.**
+3. **POSITION MUST BE LEGIBLE.** *Measured before interpreting (ADR-0112 §3): the sim ALREADY stores
+   an item's cell, a guest ALREADY walks to it (`standingCell` returns `engagedProvider.at`), and the
+   renderer already draws it there.* **So this is about the PICTURE making it readable — which of a
+   room's cells holds what — not about adding a fact the simulation lacks.** *The deeper reading,
+   position having a CONSEQUENCE, is G-037a and OWED; do not deliver half of it.*
+
+### THE GATE IS NOT THE ENEMY HERE, AND MUST NOT BE EDITED TO PASS
+
+`palette.contrast.test.ts` exists because a human watched the first build and could not read it —
+*"lots of washout of bars"* — and its header says it certifies only that **that specific failure has
+not returned.** **§9 forbids editing it to make this build pass.** If the discriminator moves off
+luminance, the honest change is that the test measures **what now carries the separation**, and it
+must say so at the point of use, naming what it no longer checks (ADR-0086).
+
+### Exit criteria
+
+1. `pnpm verify` — fourteen rows, fourteen PASS, exit read from `$?`, **with G-075b's 28 items in the
+   tree.**
+2. **An eighth room type in a scratch content directory does not redden the gate.** *That is ruling 2,
+   made checkable.*
+3. **A WATCH with frame references**: a furnished room in which the items are distinguishable, and
+   **which cell each stands in is readable from the frame.** *The orchestrator may report what the
+   frames contain; whether it READS is the human's (ADR-0013).*
+4. **No sim change.** `packages/sim` should have a zero-line diff — this is a render goal.
+
+### Out of scope
+
+Room scoring (**G-037a, OWED**). Real art (ADR-0014 keeps that a separate track). Any change to what
+`placeItem` refuses.
+
 ## G-076 — A session records the content it was played under
 Status: **DONE 2026-08-30, with G-075a — the two are INSEPARABLE and say so below.** Owner pair: sim-engineer / (orchestrator-verified)
 

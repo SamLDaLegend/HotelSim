@@ -2546,6 +2546,18 @@ instalments and 631,111p still outstanding at 100,000 ticks. **Reported, not tun
 
 ---
 
+## E-017 [RESOLVED 2026-08-30 — human ruling, ADR-0112] — THE PALETTE CAPS EVERY CONTENT ROLE AT SEVEN
+
+**Resolution: option (a) — LUMINANCE STOPS BEING THE SOLE DISCRIMINATOR.** *"Some form of basic
+rendering."* Lowering the floor and narrowing the comparison population were both rejected; the
+human took the option that costs most and pays twice. **And ruling 2 — *"no it's not a permanent
+cap"* — makes the fix apply to EVERY role, not just items**, because otherwise M6's first new room
+type re-raises this under another heading. **A third clause came with it — *"we should also be able
+to determine WHERE in the room"* — and ADR-0112 §3 measures what is already true before
+interpreting it.**
+
+### The original entry follows.
+
 ## E-017 — THE PALETTE CAPS EVERY CONTENT ROLE AT SEVEN, AND ROOM TYPES ARE AT SEVEN TODAY
 
 **Raised 2026-08-30 at G-075b's VERIFY. Found by its builder, which left the test RED rather than
