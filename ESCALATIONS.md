@@ -2693,3 +2693,35 @@ re-creating the vending-machine-in-a-bedroom defect the human named.*
 pictures exist at 3x and 6x, and the ceiling is now known to be physical rather than incidental.
 **What is missing is a person looking at a furnished room at 1:1**, which ADR-0013 reserves and §9
 forbids the orchestrator from routing around.
+
+### E-017 AMENDMENT 3 (2026-08-30) — A THIRD OPTION THE ORCHESTRATOR HAD NOT OFFERED: the POPULATION may be wrong, not only the threshold
+
+**Amendments 1 and 2 argued that the FLOOR was derived for a different subject and that no palette
+can seat 28 ids under it. Both stand. Neither asked whether the COMPARISON SET is right.**
+
+**A player never sees twenty-eight item colours together.** In any one room, only the items whose
+`suits` names that room can stand — **at most SIX** on the shipped catalogue (6, 6, 5, 6, 6, 5, 6).
+
+| N | 5 | **6** | 7 | 28 |
+|---|---|---|---|---|
+| ceiling | 1.5606 | **1.4354** | 1.3515 | 1.0692 |
+
+> **SIX FITS COMFORTABLY.** So a test that compared **items which can stand in the same room** rather
+> than **all items in the role** would be satisfiable at 28 items with the floor untouched, the
+> discriminator untouched, and the catalogue untouched.
+
+**AND IT IS NOT OBVIOUSLY SOUND, WHICH IS WHY IT IS OFFERED RATHER THAN TAKEN.** Two items that never
+share a room can still share a FRAME — adjacent rooms on one floor — and the failure this test was
+derived from was precisely *adjacent* fills washing out against each other. **Whether the eye's
+comparison set is "one room" or "one screen" is a perceptual question**, which is the same kind of
+question as the floor itself, and ADR-0013 reserves it.
+
+**It is also a change to what a gate COMPARES, which is a gate change** — §9 — and the orchestrator
+will not take it. **But it is a genuinely different third answer**, and the human should have it
+before ruling:
+
+- **(a)** items stop being separated by luminance — *also lifts the room cap*;
+- **(d)** the floor changes for items, with a human looking;
+- **(e) THE POPULATION changes: items are compared against items they can CO-OCCUR with.** *No floor
+  moves, no discriminator changes, and the room-role cap of seven is untouched — so it does NOT help
+  M6's breadth problem, which (a) does.*
