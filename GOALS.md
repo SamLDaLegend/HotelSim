@@ -5551,7 +5551,16 @@ Retiring the requirement (**the human's, still open**); `loanRepaymentPerNightPe
 derivation at all and is a separate debt; and anything about the lose state.
 
 ## G-067 — A stranger plays it, and the protocol is written BEFORE they do
-Status: **PLANNED 2026-08-29. Blocked on G-060 and G-046b landing; the PROTOCOL is not blocked and is stated here.** Milestone: M5 · Owner pair: (human-run) / orchestrator-analysed
+Status: **READY 2026-08-30 — every dependency has landed and this is the ONLY remaining M5 item. It cannot be run by an agent.** Milestone: M5 · Owner pair: (human-run) / orchestrator-analysed
+
+> **G-060 and G-046b landed, so nothing blocks this but the absence of a person.** The build a
+> stranger would meet is `7cd5be7`: doors both ways, the ladder counting LOAD, the purse at
+> 1,000,000, the review feed on screen, and — WATCH #38 — **the rating line now naming BOTH
+> requirements for the next star**, which is the complaint G-051b left open.
+>
+> **The orchestrator cannot discharge this goal and will not simulate it.** Every other M5 item was
+> closed by measurement; this one is closed by a person who does not know how the game works, and
+> **the value of that ignorance is the thing being spent.**
 
 **Nobody who does not already know how this game works has ever played it.** WATCH #33 is the only
 human observation in the project and it is the human who commissioned the game, wrote its charter
