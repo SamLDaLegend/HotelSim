@@ -4635,3 +4635,43 @@ placed free — **so a player who scraps the inherited hotel has more than `open
 one.** Widening the sentence to *money or stock* changes the requirement, so it is the human's.
 **This is the same asymmetry G-068 hit from the other side**: demolishing a seeded room makes a hotel
 richer, which is also why the harness cannot produce a bankruptcy.
+
+## WATCH #41 — 2026-08-30 — THE ITEM TOOL IN THE REAL RENDERER, AND WHAT THIS INSTRUMENT CANNOT SETTLE
+
+**Instrument**: the shipped game at `http://localhost:5180`, viewport **800x512**, no console errors,
+day 3, 16 guests. **G-075b's catalogue and G-075c's tool are UNCOMMITTED in the working tree**
+(blocked on E-017); this is the tree as it stands.
+
+### VERIFIED IN THE RUNNING GAME, not in a harness
+
+- **The palette is live and grouped by content's `suits`**: seven `optgroup`s — Conference Hall 6,
+  Games Room 6, Cafe 5, Lounge 6, Spa 6, Theatre 5, Standard Room 6 — **41 options**, prices read
+  through the simulation: *Arm Chair £1,000.00*, *Framed Print £250.00*, *Pool Table £2,000.00*.
+  **Those are G-075a's 100,000p / 25,000p / 200,000p, on screen.**
+- **A REFUSAL IS THE SIM'S AND THE UI REPORTS IT RATHER THAN PRE-EMPTING IT**, verbatim from the HUD:
+  `last place Arm Chair at floor 0, column 2, row 2 — refused: not in room (tick 3614)`, with the
+  persistent tally `refused 1 1 not in room` beside it. **That is exit criterion 2 observed in the
+  browser rather than through `actionAt`.**
+- **The export tooltip now reads *"the seed, the CONTENT FINGERPRINT, the command log and the state
+  hash — `pnpm sim:replay` replays it headless."*** **G-076's field and the G-031b correction have
+  both reached the UI**, where a tooltip claimed a consumer that never existed for ten goals.
+- **G-066b's feed shows FOUR DISTINCT LINES**, unprompted, on a five-star hotel:
+  *"Everything was fine. I stood for a while, but I like standing. My wife says I do not."* ·
+  *"I did stand about for a bit. I have decided to enjoy having stood about."* ·
+  *"Nothing much going on, which suited me exactly. Do not change it on my account."* ·
+  *"Nowhere to sit for a spell, which I mention only so that you know I noticed."*
+  **WATCH #34's 3-distinct-in-32 is not what this build does.**
+
+### WHAT THIS INSTRUMENT CANNOT SETTLE, AND WHY THE ATTEMPT WAS ABANDONED
+
+**E-017 is a question about 12x12 item squares at 1:1 on a real display.** The Browser pane renders a
+**1400px-internal canvas scaled into 800px**, so **a readability judgement taken here would be a
+judgement about the downscaling**, not about the palette. *The orchestrator spent several attempts
+pixel-hunting a room cell to furnish and stopped: continuing would have cost turns to produce a WORSE
+artefact than G-075c's builder already committed* — its 3x and 6x rasterisations of the same frame.
+
+> **THE HONEST STATE OF E-017'S EVIDENCE: the numbers are measured, the geometry is measured (every
+> item sits on its own soot plate, so the ratio the test scores is taken across a 4px near-black gap
+> rather than a shared edge), and the picture exists at 3x and 6x. What does NOT exist is a human
+> looking at a furnished room at 1:1.** ADR-0013 reserves that, and **no amount of further agent work
+> substitutes for it.**

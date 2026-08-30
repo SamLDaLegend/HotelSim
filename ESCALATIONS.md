@@ -2613,3 +2613,83 @@ test.
 **Which answer — and, separately, is the room-type cap of seven acceptable for M6?** *The second
 question has nothing to do with items and would have surfaced the first time anybody added an eighth
 room type.*
+
+### E-017 AMENDMENT 1 (2026-08-30) — G-075c PHOTOGRAPHED IT, and the contrast test does not model how items are DRAWN
+
+**The picture the ruling needs now exists**: `apps/game/recording/g075c/`, 26 frames, plus rasterised
+PNGs at 1x, 3x and 6x. **G-075c's builder wrote a throwaway rasteriser to actually LOOK, reported
+what it saw, and explicitly declined to rule on readability** — which is ADR-0013 kept exactly.
+
+**Measured out of `t001440-f0`, seven distinct item kinds standing in one player-drawn Lounge:**
+
+| item | colour | vs the soot plate | vs the room fill |
+|---|---|---|---|
+| `vending_machine` | `#d5e4ff` | 15.45:1 | 2.01:1 |
+| `wall_television` | `#f0f1ff` | 17.68:1 | 2.29:1 |
+| `wall_mirror` | `#e4eaff` | 16.53:1 | 2.15:1 |
+| `potted_plant` | `#00c51b` | 8.50:1 | **1.10:1** |
+| `arm_chair` | `#c90027` | 3.32:1 | 2.32:1 |
+| `book_shelf` | `#d30006` | 3.56:1 | 2.16:1 |
+| `framed_print` | `#8b8800` | 5.30:1 | 1.45:1 |
+
+> **THE STRUCTURAL FACT, AND IT IS THE ONE THAT BEARS ON THE RULING: every item is drawn on its own
+> 16x16 SOOT PLATE (`#080a0d`), 12x12 of ink inside it.** An item therefore **never shares an edge
+> with the room fill**, and two items in the same cell are separated by **4 logical px of near-black**
+> (`ITEM_PLATE_PAD = 2` either side, 16px pitch).
+>
+> **So the item-to-item ratio `palette.contrast.test.ts` measures is a ratio ACROSS A NEAR-BLACK GAP,
+> not across a shared boundary** — and the failure it was derived from was adjacent room FILLS
+> sharing an edge. **The test's model and the renderer's geometry are not the same picture.** Each
+> item's contrast against the surface it actually abuts is **3.32:1 to 17.68:1**, against a floor
+> of 1.3.
+
+**THIS IS EVIDENCE, NOT A RULING.** It does not say the palette is readable at 12x12 on a real
+display; it says **the quantity the test measures is not the quantity the eye is given.** The
+orchestrator will not rule on it (ADR-0013, §9), and the rasterisation is of the builder's own
+drawing code rather than the Pixi renderer — *so the honest next step, if the human wants one, is to
+open the game and look at a furnished room.*
+
+**Unchanged by this**: the room-role cap of seven, which is arithmetic and has nothing to do with how
+items are plated.
+
+### E-017 AMENDMENT 2 (2026-08-30) — THE CEILING IS PHYSICS, NOT THIS PALETTE'S BAND
+
+**A clever fix was looked for and there is none.** The obvious escapes were checked and each fails
+for a stated reason:
+
+- **Colour items by what they PROVIDE** (5 roles instead of 28) — satisfies the floor by violating
+  the sibling test *"gives every id its own colour"*. **Trades one red for another.**
+- **Give items their own luminance band** — a band of 28 still ceilings at 1.0692. **Does nothing
+  alone.**
+- **Widen the band** by measuring items against the soot plate rather than the page (items never
+  touch the page) — helps, and **not nearly enough**, per the arithmetic below.
+
+**WITH LUMINANCE AS THE SOLE DISCRIMINATOR, N ids in one band can do no better than
+`span ** (1/(N-1))`. WCAG contrast maxes at 21:1** — pure white on pure black, the widest band that
+can physically exist. So:
+
+| span | 6.0929 (shipped) | 10 | **21 (the physical maximum)** |
+|---|---|---|---|
+| max ids at a 1.3 floor | **7** | 9 | **12** |
+
+> **EVEN A PERFECT PALETTE USING THE ENTIRE VISIBLE RANGE TOPS OUT AT TWELVE.** Twenty-eight items
+> would need a span of **1.19e+3**, against a physical ceiling of 21. **There is no palette, no band
+> and no re-derivation that satisfies a 1.3 greyscale floor for 28 ids.**
+
+**SO THE FOUR OPTIONS COLLAPSE TO TWO, AND BOTH ARE THE HUMAN'S:**
+
+- **(a) LUMINANCE STOPS BEING THE SOLE DISCRIMINATOR FOR ITEMS** — shape, glyph or icon carries the
+  separation, with its own perceptual criterion and its own WATCH. **This also lifts the room-type
+  cap of seven, which is the same arithmetic and bites M6 independently of items.**
+- **(d) THE FLOOR CHANGES FOR ITEMS, WITH A HUMAN ACTUALLY LOOKING** — defensible on the geometry
+  (amendment 1: an item never shares an edge with the room fill, and two items are separated by 4px
+  of near-black, so the ratio the test scores is not the ratio the eye is given), and **only honest
+  if somebody looks.**
+
+*(c), cutting the catalogue to seven shared items, remains the one to refuse: it buys a green test by
+re-creating the vending-machine-in-a-bedroom defect the human named.*
+
+**NOTHING FURTHER IS AVAILABLE TO AN AGENT.** The numbers are measured, the geometry is measured, the
+pictures exist at 3x and 6x, and the ceiling is now known to be physical rather than incidental.
+**What is missing is a person looking at a furnished room at 1:1**, which ADR-0013 reserves and §9
+forbids the orchestrator from routing around.
