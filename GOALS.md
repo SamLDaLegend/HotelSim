@@ -5434,6 +5434,65 @@ The lose STATE itself — what happens when you go broke, what tells the player,
 **G-067 asks a stranger that**, and ADR-0108 explicitly does not pre-empt it. This goal makes
 recovery *arithmetically possible*; it does not make it *a mechanic*.
 
+## G-069 — The second storey is earned again: `floorConstructionCostPence` re-derived
+Status: **IN-PROGRESS 2026-08-30. E-016's DERIVABLE half, taken WITHOUT a ruling and the reason is stated.** Milestone: M5 · Owner pair: economy-engineer / balance-critic
+
+G-068 raised `openingCapitalPence` to 1,000,000 on the human's ruling (ADR-0108) and **falsified a
+third field's derivation**. `floorConstructionCostPence`'s stated requirement is *a hotel must not be
+able to open its second storey out of the money it opened with* — `floorCost + cheapestRoom >
+openingCapital` — which read `500,000 + 250,000 = 750,000 > 500,000` **TRUE** and now reads
+`750,000 > 1,000,000` **FALSE**.
+
+### WHY THIS IS BUILT WITHOUT WAITING, HAVING BEEN ESCALATED AS IF IT NEEDED A RULING
+
+**E-016 offered two answers as if they were symmetric. They are not, and the orchestrator's own
+escalation was wrong about that.**
+
+- **Re-deriving the field is ORDINARY DISCIPLINE.** The requirement is **stated and unchanged**; one
+  of its inputs moved. §2.1's whole content is that a threshold is derived from a stated
+  requirement — so when the input moves, re-deriving is what the rule ALREADY says to do.
+- **RETIRING the requirement is the design decision**, and that one is still the human's. It remains
+  available as a **one-field revert** and is not foreclosed by this goal.
+- **"Wait" was never neutral.** Leaving the field at 500,000 ships a requirement that **reads TRUE
+  and measures FALSE** — the ADR-0007 class, in the file where this project keeps its derivations.
+
+> **This block exists so that a reader can tell the two apart later**: the arithmetic was taken, the
+> design question was not, and **the human can still reverse the whole thing by deleting one
+> requirement.**
+
+### The derivation is the builder's, and one trap is named in advance
+
+`floorCost > openingCapital − cheapestRoom = 1,000,000 − 250,000 = 750,000`.
+
+**DO NOT ship `3 x cheapestRoom`.** It is the tempting round answer and it is **wrong by exactly the
+margin**: `750,000 + 250,000 = 1,000,000`, which is **not greater than** 1,000,000. The requirement
+is a STRICT inequality and a hotel that can afford the floor and the room with nothing left over has
+still opened its second storey out of its opening money.
+
+**State which reading of "smallest sufficient" you took and why**, because G-068 set a precedent for
+that phrase (`openingCapitalPence` is the smallest sufficient value, and a hotel that spends it all
+closes on zero). **If the honest answer is an ugly integer, ship the ugly integer** — G-068's
+`1,111,111` is the standing precedent and its ugliness was the evidence.
+
+### Exit criteria
+
+1. **The derivation written at the point of use** and re-run against the files on disk by a test, so
+   a retune reddens it — `purse.derivation.test.ts` is the pattern, and it already covers the other
+   two fields.
+2. **The requirement MEASURES true**: an arm that tries to open a second storey out of opening
+   capital is refused. **Anti-vacuity: an arm that CAN afford it must succeed**, or the test is
+   pinning a refusal that has nothing to do with the rule.
+3. `pnpm verify` — fourteen rows, fourteen PASS, exit read from `$?`.
+4. **The prediction, stated before the build**: this field is charged only when a floor is OPENED,
+   so **every arm that never opens a second storey must be BYTE-IDENTICAL, hash included.** An arm
+   without a floor charge whose balance moves has found something else.
+5. **G-060's eleven rungs still zero-dissatisfied**, and the shipped scenario arm unmoved.
+
+### Out of scope
+
+Retiring the requirement (**the human's, still open**); `loanRepaymentPerNightPence`, which has no
+derivation at all and is a separate debt; and anything about the lose state.
+
 ## G-067 — A stranger plays it, and the protocol is written BEFORE they do
 Status: **PLANNED 2026-08-29. Blocked on G-060 and G-046b landing; the PROTOCOL is not blocked and is stated here.** Milestone: M5 · Owner pair: (human-run) / orchestrator-analysed
 
@@ -5486,6 +5545,15 @@ A protocol that asks twenty questions gets twenty shallow answers.
   an invented answer is indistinguishable from a real one in the write-up.
 - **Do not ask leading questions about known defects.** Every one of E-012, E-013 and WATCH #34 is a
   thing we already believe; asking about it converts a test into a confirmation.
+
+### THE ONE SETUP INSTRUCTION, ADDED AT WATCH #38
+
+**They must play in a normally-sized desktop window.** Measured: at **1440x900** the stage is
+**67.2%** of the viewport; at **404x419** the HUD alone needs 368 of 419 pixels and **the stage
+collapses to ZERO** — narrow width makes the HUD wrap, the HUD row grows, and the `1fr` stage row
+gets nothing. **This is not coddling the build**: a 400px window tests E-013's threshold, which is
+already recorded, instead of the five questions above, and burns the one session of ignorance on a
+defect nobody needed a stranger to find.
 
 ### ARTEFACTS THE SESSION MUST PRODUCE
 
