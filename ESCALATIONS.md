@@ -2469,7 +2469,7 @@ lose-state goal waits.**
 
 ---
 
-## E-016 [PARTLY RESOLVED 2026-08-30 — the arithmetic taken, the design question still OPEN] — RAISING THE PURSE FALSIFIED A THIRD FIELD'S DERIVATION
+## E-016 [RESOLVED 2026-08-30 — arithmetic taken at G-069, design ruled at ADR-0109: the storey is repriced to the round 1,000,000] — RAISING THE PURSE FALSIFIED A THIRD FIELD'S DERIVATION
 
 **Resolution of the derivable half (G-069):** `floorConstructionCostPence` **500,000 -> 750,001**,
 the minimum of the admissible set in pence, matching the reading G-068 took on both of its fields.

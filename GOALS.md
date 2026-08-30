@@ -5550,6 +5550,141 @@ closes on zero). **If the honest answer is an ugly integer, ship the ugly intege
 Retiring the requirement (**the human's, still open**); `loanRepaymentPerNightPence`, which has no
 derivation at all and is a separate debt; and anything about the lose state.
 
+## G-070 — The player is told they are losing, and how long they have to fix it
+Status: **IN-PROGRESS 2026-08-30. RULED (ADR-0109, human): the lose state WARNS and changes nothing mechanically.** Milestone: M5 · Owner pair: render-engineer / render-critic
+
+**M5's last buildable item.** There is no bankruptcy state at all today: the balance goes negative
+and nothing happens.
+
+### THE RULING, AND IT MATCHES THE MEASUREMENTS RATHER THAN THE GENRE
+
+**Both of this session's economy goals found the same defect from opposite directions, and neither
+found a missing mechanic:** G-068 measured a hotel that reads **five stars with an empty shortfall**
+while closing **79,026,000p in the red**; G-069 measured a storey taking **~99% of the till in one
+click** with no warning; G-051b's *"and nothing in the game says so"* stood until WATCH #38.
+**Every one is the game failing to TELL the player.** A consequence would have added a second
+unexplained thing on top of the first — and it would fight ADR-0108, which makes bankruptcy
+recoverable.
+
+### THE THREE FACTS — the human's own preview is the specification
+
+```
+cash −£2,340.00  ·  losing £410 a night  ·  4 nights to nothing
+```
+
+**G-062's rating cell shape**, which the human ruled to be the core of that system: *what am I* /
+*why am I that* / *what next*.
+
+1. **CASH** — `balanceOf(ledger)`. Exists, folded, never stored (I4).
+2. **THE BURN — LAST NIGHT'S NET SETTLEMENT, not a rolling average.** A window is a number nobody
+   can source (§2.1); **"a night" is the unit the settlement already runs in**, so last night's net
+   needs no chosen constant. *If you find last night's net is not recoverable without storing it,
+   STOP and report — do not store a field to make a HUD line easier.*
+3. **THE RUNWAY — measured against `balance + liquidationValue`, NOT against cash.**
+
+> **THE PREVIEW'S ARITHMETIC DOES NOT CLOSE AS WRITTEN AND THAT IS THE DESIGN.** It shows NEGATIVE
+> cash with four nights left, which is coherent only if *"nothing"* means something other than cash.
+> **`balance + liquidationValue` is `canDrawLoan`'s OWN gate quantity** — how much hotel is left to
+> sell before you cannot come back — and ADR-0108 makes bankruptcy recoverable, so **the third fact
+> tells the player how long RECOVERY remains possible.**
+>
+> **A NEGATIVE BALANCE IS THEREFORE NOT THE TRIGGER.** A hotel can be deep in debt with plenty left
+> to sell, and in credit one night from the end of its options.
+
+### Constraints
+
+- **NOTHING IS STORED — no save bump.** Both figures derive from the ledger and from liquidation
+  value, the pattern G-051a's star rating and G-066a's ring both used. **If you think you need a
+  `World` field, stop and report.**
+- **It must not fire when it is noise.** A profitable hotel has no runway to show. **The visibility
+  rule is part of this goal and is MEASURED, not asserted** — including the boundary case where the
+  burn is exactly zero.
+- **One selection path.** The HUD renders what the selector returns and computes no economics of its
+  own — G-066b's rule, and the reason `describeFeed` holds no selection.
+- **E-013 is open**: the HUD's height is what collapses the stage at narrow widths (WATCH #38 —
+  1440x900 gives the stage 67.2%; 404x419 gives it ZERO). **State this surface's cost in pixels**
+  and do not silently grow the HUD.
+- ADR-0003: no snake_case content-ID literal in `apps/game`.
+
+### Exit criteria
+
+1. `pnpm verify` — fourteen rows, fourteen PASS, exit read from `$?`. **No save bump.** I2 should
+   NOT move: nothing here is world state.
+2. **The three facts are correct against a run**, checked out of the JSON summary rather than the
+   HUD's own arithmetic — a HUD that agrees with itself proves nothing.
+3. **The visibility rule measured on both sides**: an arm where it fires and an arm where it must
+   not, with the boundary named.
+4. **A hotel deep in debt with runway, and a hotel in credit with none** — the two cases that make
+   the runway a different claim from the sign of the balance. **If the second cannot be produced,
+   say so rather than inventing it** (G-068's precedent: the harness cannot produce bankruptcy, and
+   said so).
+5. **WATCH #40 with a frame reference**: the warning legible on screen.
+
+### Out of scope
+
+Any mechanical consequence of insolvency (**ruled out**), a game-over screen, and **whether the
+warning ARRIVES IN TIME to act on** — that is perceptual, it is G-067's narrowed fifth question, and
+it needs a stranger (ADR-0013).
+
+## G-071 — BUG: the corridor tool previews a rectangle and lays one cell
+Status: **PLANNED 2026-08-30. Reported by the human. Queued behind G-070, which is live in `apps/game`.** Milestone: M5 · Owner pair: render-engineer / render-critic
+
+**The human, playing the shipped build:** *"When placing corridors it's not possible to drag/place —
+The drag works but only places a corridor at the end tile."*
+
+### CONFIRMED, AND THE COMMAND LAYER IS NOT THE DEFECT
+
+`input.ts:187` states it as a **documented decision**: *"THE CORRIDOR AND DEMOLISH TOOLS TAKE THE
+RELEASE CELL AND DO NOT DRAG"* — because `layCorridor` has no rectangle form, and *"a corridor
+rectangle is N idempotent no-ops which `commands.ts` parks explicitly"*. **That decision is not an
+oversight and must not be reported as one.**
+
+**THE DEFECT IS THAT THE PREVIEW DOES NOT KNOW WHICH TOOL IS HELD.** `main.ts:470`:
+
+```ts
+const intent = hovered === null ? null : regionBetween(dragFrom ?? hovered, hovered);
+```
+
+**No reference to `tool`.** So the drag rectangle is drawn for EVERY tool, while `input.ts` builds a
+footprint only for the room tool. `toolLabel(tool, intent?.footprint ?? UNIT_FOOTPRINT)` is handed
+that footprint too, **so the label can describe a region the command will not use.**
+
+> **THE UI PROMISES SOMETHING THE COMMAND DOES NOT DO**, which is the affordance half of the class
+> G-064's block named from the other side: *"the preview shows the drag, not a verdict."* **A preview
+> that shows a drag for a tool that cannot drag is a preview showing a verdict that is false.**
+
+### TWO FIXES, AND THEY ARE NOT EQUIVALENT — this needs deciding at PLAN, not in code
+
+- **(a) MAKE THE PREVIEW TOOL-AWARE.** Corridor and demolish preview ONE cell. Smallest change,
+  makes the UI honest, and **leaves the human's complaint standing** — they want to drag.
+- **(b) MAKE THE CORRIDOR TOOL ACTUALLY DRAG**, sending N `layCorridor` commands over the region.
+  **The parked note's own condition has NOT arrived**: it says the question becomes real *"the day a
+  corridor gains a COST"*, and a corridor is still free and idempotent — so N no-ops is harmless
+  today. **This is what the human asked for.** It must decide what a RECTANGLE means for a corridor
+  (every cell? the perimeter? an L?) — and **that is a design question, not an implementation
+  detail.**
+
+**The orchestrator's reading: (b), because the human reported it as a missing capability rather than
+as a misleading preview**, and (a) alone would make the game correctly refuse to do the thing they
+asked for. **But (b) owes the rectangle's meaning, and demolish still needs (a) regardless** —
+`demolishRoom` takes an ENTITY ID and has no rectangle form at all.
+
+### Exit criteria
+
+1. `pnpm verify` — fourteen rows, fourteen PASS, exit read from `$?`. **No save bump; no sim change
+   is expected** — `layCorridor` already exists and is idempotent.
+2. **The preview and the command agree, measured**: for every tool, what the overlay draws is what
+   the dispatch sends. **Asserted per tool, not once** — the defect is that one tool was never
+   distinguished.
+3. **Demolish is covered too.** It has the same mismatch and was not reported, which is why it must
+   be named rather than fixed by accident.
+4. **WATCH #41 with a frame reference**: a dragged corridor on screen, and the cells it laid.
+
+### Out of scope
+
+Giving a corridor a cost (that is the parked note's own trigger and a content decision), and any
+change to `layCorridor` in `packages/sim`.
+
 ## G-067 — A stranger plays it, and the protocol is written BEFORE they do
 Status: **READY 2026-08-30 — every dependency has landed and this is the ONLY remaining M5 item. It cannot be run by an agent.** Milestone: M5 · Owner pair: (human-run) / orchestrator-analysed
 
