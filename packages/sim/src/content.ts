@@ -598,7 +598,11 @@ export type GuestRulesData = {
    * decided by whether the guest formed a LODGING need at all, asked of the guest's own vector
    * rather than of content (`lodgingNeedStateOf`), so a hotel that serves both is an archetype
    * table away rather than a rewrite. See `visitDurationTicksSchema` in `packages/content` for the
-   * derivation of the shipped 208 and for why a visit cannot be "leave when satisfied".
+   * derivation and for why a visit cannot be "leave when satisfied". *(This line read "the shipped
+   * 208" until G-072. `guest-rules.json` ships 98, and `visitDurationTicksSchema` itself calls 208
+   * "the OLD 208" — so the figure was not merely stale, it contradicted the very file it cited the
+   * reader to. CLAUDE.md: a comment offered as evidence may not carry a figure no test pins, which
+   * is why the number is now named nowhere but the schema that derives it.)*
    *
    * OPTIONAL HERE, REQUIRED ON DISK — the `stayDurationTicks` contract, INCLUDING its refusal.
    * Absence has no safe reading for content a visitor can arrive under: there is no era in which a

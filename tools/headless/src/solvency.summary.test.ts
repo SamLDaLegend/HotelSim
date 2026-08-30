@@ -34,7 +34,16 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { createWorld, demolitionRefundOf, hashState, isLosing, run, solvencyOf } from '@hotelsim/sim';
+import {
+  createWorld,
+  demolitionRefundOf,
+  hashState,
+  isLosing,
+  run,
+  solvencyOf,
+  stayDurationOf,
+  TICKS_PER_DAY,
+} from '@hotelsim/sim';
 import type { Solvency, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import { parseArgs, schedule } from './report.js';
@@ -109,10 +118,16 @@ function assertNoCapitalEvents(summary: RunSummary): void {
 }
 
 describe('THE THREE FACTS AGREE WITH A REAL RUN — the LOSING arm', () => {
-  // A one-bedroom hotel with no amenities. It takes a little money and pays 2,500p of upkeep
-  // every night, and on the night measured here it took nothing at all. Chosen because it loses
-  // STEADILY rather than dramatically, so the runway is a large number and a window one day out
-  // would be obvious rather than plausible.
+  // A one-bedroom hotel with no amenities. It pays 2,500p of upkeep every night and takes
+  // nothing, so it loses STEADILY rather than dramatically: the runway is a large number and a
+  // window one day out would be obvious rather than plausible.
+  //
+  // THIS COMMENT READ *"it takes a little money and … on the night measured here it took nothing
+  // at all"*, WHICH IS FALSE ON THE FIRST CLAUSE AND WAS FOUND BY G-072 (ADR-0007's class, in
+  // the evidence rather than the code). **It takes nothing on EVERY night, not just the one
+  // measured**: through the shipped CLI at `--days 30 --seed 42 --rooms 1 --amenities 0`,
+  // `revenuePennies` is 0, with 480 arrived and 0 `checkedOut`. Corrected rather than softened,
+  // and the reading is now the arm's own summary field.
   const ARM = ['--days', AFTER, '--seed', '42', '--rooms', '1', '--amenities', '0'];
   const ARM_BEFORE = ['--days', BEFORE, '--seed', '42', '--rooms', '1', '--amenities', '0'];
 
@@ -144,6 +159,11 @@ describe('THE THREE FACTS AGREE WITH A REAL RUN — the LOSING arm', () => {
     expect(before.money.balancePennies).toBe(927_500);
     expect(after.money.balancePennies).toBe(925_000);
     expect(delta).toBe(-2_500);
+    // THE CORRECTED CLAIM, PINNED RATHER THAN LEFT IN PROSE (G-072): this arm takes nothing on
+    // every night of the run, not only on the one measured. It is also what makes it the right
+    // anti-vacuity arm — a hotel with no revenue at all is the shape a "did a stay complete"
+    // rule would silence forever.
+    expect(after.money.revenuePennies).toBe(0);
 
     const { solvency } = solvencyFor(ARM);
     expect(solvency.lastNightPence).toBe(delta);
@@ -279,4 +299,129 @@ describe('THE RUNWAY IS A DIFFERENT CLAIM FROM THE SIGN OF THE BALANCE — measu
     const worst = ratios.reduce((least, row) => (row.nights < least ? row.nights : least), Number.MAX_SAFE_INTEGER);
     expect(worst).toBe(43);
   });
+});
+
+describe('THE FIRST NIGHT IS NOT A RATE, AND BOTH INPUTS ARE READ OFF THE FILES (G-072)', () => {
+  // ==========================================================================================
+  // G-070 SHIPPED A TRUE NUMBER AND A FALSE ALARM, and its exit criterion 3 was met AS WRITTEN
+  // — a profitable hotel stays silent — while a THIRD CASE went uncovered by either arm: **a
+  // hotel that is fine and had one structurally bad first night.** Every arm in the blocks
+  // above measures night 29 or night 49, so none of them could see it.
+  //
+  // THE CAUSE IS STRUCTURAL. `payForStay` is the only producer of a `roomRevenue` transaction
+  // and it runs at CHECKOUT, `stayDurationTicks` after arrival. With the stay a whole day long,
+  // NIGHT 0 IS A FULL NIGHT'S UPKEEP AGAINST STRUCTURALLY ZERO REVENUE.
+  //
+  // THIS BLOCK IS THE HALF THAT READS THE REAL FILES. `packages/sim/src/solvency.test.ts`
+  // drives the derivation over hand-written stay lengths, which is what determines the
+  // arithmetic; nothing in `packages/sim` may assert what is IN `guest-rules.json`, so the
+  // shipped inputs are asserted here, where content is loaded off disk.
+  // ==========================================================================================
+
+  it('THE DERIVATION: one excluded night, and neither input is a constant this project chose', () => {
+    const content = loadContent();
+    // `stayDurationTicks` out of `packages/content/data/guest-rules.json`, through the sim's own
+    // accessor rather than by re-reading the file — so this pins the number the SIM sees.
+    expect(stayDurationOf(content)).toBe(1_440);
+    // And the day, out of `packages/sim/src/world.ts`.
+    expect(TICKS_PER_DAY).toBe(1_440);
+    // The earliest arrival is tick 0 and a guest pays at `arrivedTick + stay`, so the earliest
+    // possible room revenue lands on tick 1,440 — the first tick of night 1. **Exactly one night
+    // is excluded, and it falls out of the division.** Retune the stay and this reading moves on
+    // its own; there is no threshold anywhere in it.
+    expect(Math.floor((stayDurationOf(content) ?? 0) / TICKS_PER_DAY)).toBe(1);
+  });
+
+  it('A HOTEL THAT IS FINE IS SILENT ON NIGHT 0, and the night it is silent about really did lose money', () => {
+    // ======================================================================================
+    // THE DEFAULT SEEDED HOTEL — the same arm the profitable block above runs at night 29, here
+    // at its FIRST night. It is the CLI's own reproduction of the recording's finding.
+    //
+    // **THE SILENCE IS A SUPPRESSION AND NOT AN ABSENCE OF LOSS**, and that is asserted from the
+    // summary rather than from the selector: night 0 took 0p and paid 12,000p of upkeep, so its
+    // net was genuinely -12,000p. The selector reports nothing anyway, because a night in which
+    // no stay could have completed is not a measurement of a rate.
+    // ======================================================================================
+    const summary = summaryOf(['--days', '1', '--seed', '42']);
+    assertNoCapitalEvents(summary);
+    expect(summary.money.settlements).toBe(1);
+    // Structurally zero revenue: not "small", ZERO, and it cannot be anything else on night 0.
+    expect(summary.money.revenuePennies).toBe(0);
+    expect(summary.money.upkeepPennies).toBe(-12_000);
+    expect(summary.money.balancePennies).toBe(
+      summary.money.startingCapitalPennies + summary.money.upkeepPennies,
+    );
+
+    const { world, solvency } = solvencyFor(['--days', '1', '--seed', '42']);
+    expect(hashState(world)).toBe(summary.world.stateHash);
+    // The two facts about RIGHT NOW are still reported.
+    expect(solvency.balancePence).toBe(summary.money.balancePennies);
+    expect(solvency.reservesPence).toBe(
+      summary.money.balancePennies + summary.money.liquidationValuePennies,
+    );
+    // The rate is not, and neither is anything derived from it.
+    expect(solvency.lastNightPence).toBeNull();
+    expect(solvency.lastNightDay).toBeNull();
+    expect(solvency.nightsRemaining).toBeNull();
+    expect(isLosing(solvency)).toBe(false);
+  }, 180_000);
+
+  it('and on night 1 the same hotel is silent for the ORIGINAL reason, which is that it traded at a profit', () => {
+    // The pair that says the fix did not simply mute this hotel: one night later it has a rate,
+    // the rate is POSITIVE, and G-070's unchanged rule is what keeps the screen clear.
+    const first = summaryOf(['--days', '1', '--seed', '42']);
+    const second = summaryOf(['--days', '2', '--seed', '42']);
+    assertNoCapitalEvents(first);
+    assertNoCapitalEvents(second);
+    const delta = second.money.balancePennies - first.money.balancePennies;
+    expect(delta).toBe(39_000);
+
+    const { world, solvency } = solvencyFor(['--days', '2', '--seed', '42']);
+    expect(hashState(world)).toBe(second.world.stateHash);
+    expect(solvency.lastNightDay).toBe(1);
+    expect(solvency.lastNightPence).toBe(delta);
+    expect(solvency.nightsRemaining).toBeNull();
+    expect(isLosing(solvency)).toBe(false);
+  }, 180_000);
+
+  it('AND THE GENUINELY FAILING HOTEL STILL WARNS — on night 1, which is the earliest honest one', () => {
+    // ======================================================================================
+    // **THE ANTI-VACUITY HALF, AND THE ONE THAT MATTERS.** A fix that delayed every warning
+    // would have bought silence rather than accuracy. This is G-070's failing arm, and the cost
+    // of the fix on it is measured rather than argued: it warns ONE NIGHT LATER AND NOT MORE.
+    //
+    // NIGHT 1 IS THE EARLIEST HONEST NIGHT because night 0 is the only earlier settled night and
+    // no stay could have closed in it. There is nothing being withheld: on night 1 the warning
+    // is there, with the same burn and the same runway to within one night of it.
+    // ======================================================================================
+    const ARM_1 = ['--days', '1', '--seed', '42', '--rooms', '1', '--amenities', '0'];
+    const ARM_2 = ['--days', '2', '--seed', '42', '--rooms', '1', '--amenities', '0'];
+    const first = summaryOf(ARM_1);
+    const second = summaryOf(ARM_2);
+    assertNoCapitalEvents(first);
+    assertNoCapitalEvents(second);
+
+    // NIGHT 0 WAS A LOSS AND IS NOT REPORTED, stated with the figure so the cost is on the
+    // record: 2,500p, against 1,122,500p of reserves. The player is not told about one night in
+    // five hundred, and what they are spared is a false rate.
+    expect(first.money.revenuePennies).toBe(0);
+    expect(first.money.upkeepPennies).toBe(-2_500);
+    const night0 = solvencyFor(ARM_1).solvency;
+    expect(night0.reservesPence).toBe(1_122_500);
+    expect(night0.lastNightPence).toBeNull();
+    expect(isLosing(night0)).toBe(false);
+
+    // NIGHT 1 WARNS. The burn is the delta of two whole-ledger folds from two spawned processes,
+    // which reads no reason, no tick and no classification — the independence the block above
+    // rests on, applied to the first night that can carry a rate at all.
+    const delta = second.money.balancePennies - first.money.balancePennies;
+    expect(delta).toBe(-2_500);
+    const { world, solvency } = solvencyFor(ARM_2);
+    expect(hashState(world)).toBe(second.world.stateHash);
+    expect(solvency.lastNightDay).toBe(1);
+    expect(solvency.lastNightPence).toBe(delta);
+    expect(isLosing(solvency)).toBe(true);
+    // 1,120,000 / 2,500 = 448, exactly.
+    expect(solvency.nightsRemaining).toBe(448);
+  }, 240_000);
 });

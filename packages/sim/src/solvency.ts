@@ -46,7 +46,16 @@
 // **A NEGATIVE BALANCE IS THEREFORE NOT THE TRIGGER.** A hotel can be deep in debt with plenty
 // left to sell, and in credit one night from the end of its options. See `runwayOf`.
 // ------------------------------------------------------------------------------------------
+//
+// ------------------------------------------------------------------------------------------
+// AND A NIGHT IN WHICH NO STAY COULD HAVE COMPLETED IS NOT A MEASUREMENT OF A RATE (G-072).
+// The fourth thing this file decides, added after G-070 shipped a TRUE NUMBER and a FALSE
+// ALARM on the opening scenario's first day. It is derived, it chooses no constant, and it is
+// **structural rather than historical** — see `firstNightThatCanCloseAStay`, which carries the
+// measurement, the derivation and the two readings it deliberately did not take.
+// ------------------------------------------------------------------------------------------
 
+import { stayDurationOf } from './content.js';
 import type { BoundContent } from './content.js';
 import { balanceOf } from './ledger.js';
 import type { Transaction, TransactionReason } from './ledger.js';
@@ -132,7 +141,17 @@ export type Solvency = {
   readonly reservesPence: number;
   /**
    * The NET of the last SETTLED night's trading, signed — positive is a night that made money.
-   * `null` when no night has settled yet, which on a world ticked from 0 means the first day.
+   *
+   * `null` FOR TWO REASONS, AND THEY ARE BOTH "THERE IS NO RATE TO REPORT" (G-072):
+   *
+   *   1. No night has settled yet, which on a world ticked from 0 means the first day.
+   *   2. Every night that HAS settled falls before `firstNightThatCanCloseAStay` — a regime in
+   *      which room revenue is structurally impossible, so the night measures a startup and
+   *      not a rate. Nights settle in order, so if the LAST one is pre-evidence they all are.
+   *
+   * They are one value rather than two because a host does the same thing with both: there is
+   * nothing to say. **The distinction that matters to the player is on screen either way —
+   * silence.**
    */
   readonly lastNightPence: number | null;
   /** Which day that night was, as `dayOf` counts them. `null` exactly when `lastNightPence` is. */
@@ -145,6 +164,11 @@ export type Solvency = {
    * nothing to warn about — so the warning is exactly `nightsRemaining !== null`. THE BOUNDARY
    * IS AN EXACT ZERO: a night whose net is 0 does NOT warn, because 0 is not losing and because
    * `reserves / 0` is not a number of nights.
+   *
+   * IT IS ALSO `null` WHENEVER `lastNightPence` IS, WHICH SINCE G-072 CARRIES A SECOND CAUSE:
+   * a night in which no stay could have completed is not evidence about a rate, so there is no
+   * rate to divide the reserves by. **That is still not a threshold on nights** — it asks
+   * whether the night is a measurement, never how bad the burn has to be.
    *
    * Floored at 0 rather than allowed to go negative: a hotel whose reserves are already gone has
    * no nights, and a negative count of nights is not a thing to put in front of a player.
@@ -235,6 +259,66 @@ function runwayOf(reservesPence: number, lastNightPence: number): number | null 
 }
 
 /**
+ * THE FIRST NIGHT THAT CAN CONTAIN A CHECKOUT, counted as `dayOf` counts days — and therefore
+ * the first night that is EVIDENCE ABOUT A RATE AT ALL (G-072).
+ *
+ * ==========================================================================================
+ * G-070 SHIPPED A TRUE NUMBER AND A FALSE ALARM, AND ITS OWN BUILDER REPORTED IT. The shipped
+ * opening scenario warned on day 1 and never again, with 76 nights of runway. Measured on the
+ * recording arm `--ticks 14400 --every 720 --seed 7`: the line is present at t001440 and
+ * t002160, absent at t000000, t000720 and at every frame from t002880 to t014400. The
+ * -60,500p it reported was nine rooms of upkeep and nothing else, and it was ARITHMETICALLY
+ * CORRECT — which is exactly why no amount of care in `netOfNight` would have caught it.
+ *
+ * THE CAUSE IS STRUCTURAL RATHER THAN A TUNING MISS. `payForStay` is the only producer of a
+ * `roomRevenue` transaction in this build and it runs at CHECKOUT, on the tick
+ * `arrivedTick + stayDurationTicks`. The earliest tick a guest can arrive into a world is 0,
+ * so the earliest tick any room revenue can exist is `stayDurationTicks` — and while that is
+ * 1,440 against a 1,440-tick day, NIGHT 0 CONTAINS A WHOLE NIGHT'S UPKEEP AGAINST
+ * STRUCTURALLY ZERO REVENUE. **That is not a burn rate, it is a startup artefact** — the same
+ * species as a benchmark's warm-up run, a reading taken in a regime the claim is not about.
+ *
+ * **NO CONSTANT IS CHOSEN HERE, AND THAT IS THE ONLY THING THAT MAKES IT ADMISSIBLE.** Both
+ * inputs are read off the files this build already ships: `stayDurationTicks` out of
+ * `guest-rules.json` through `stayDurationOf`, and `TICKS_PER_DAY` out of `world.ts`. The
+ * night falls out of their division and nothing here is a taste. Retune the stay to 720 and
+ * night 0 becomes evidence again with no edit to this function; retune it to 2,880 and nights
+ * 0 and 1 both stop being evidence. `solvency.test.ts` drives all three.
+ *
+ * **IT IS NOT THE THRESHOLD ADR-0109 AND section 2.1 BOTH REFUSE, AND THE DIFFERENCE IS NOT A
+ * MATTER OF DEGREE.** *"Only warn below N nights"* asks HOW BAD the burn must be, and N is a
+ * number nobody can source. This asks whether the night is a measurement of a rate at all,
+ * and answers it from the mechanism that produces the revenue.
+ *
+ * **STRUCTURAL, NEVER HISTORICAL — this is the anti-vacuity half and it is the reason the
+ * question is "could" and not "did".** G-070's failing arm (`--rooms 1 --amenities 0`) checks
+ * NOBODY out in thirty days: measured through the shipped CLI at `--days 30 --seed 42`,
+ * `revenuePennies` is 0 with 480 arrived and 0 `checkedOut`. A rule keyed on an OBSERVED
+ * checkout would therefore silence the warning forever on the one hotel that most needs it.
+ * A rule keyed on whether a checkout was POSSIBLE silences exactly night 0 and then gets out
+ * of the way.
+ *
+ * IT IS ALSO WHY THE EARLIEST ARRIVAL IS TAKEN AS TICK 0 rather than as the first arrival this
+ * world actually saw. Tick 0 is the earliest arrival any world can have, so it yields the
+ * EARLIEST possible checkout and therefore the FEWEST suppressed nights. Every rounding in
+ * this function is in the direction of warning sooner.
+ *
+ * ABSENT `stayDurationTicks` EXCLUDES NOTHING, which is the safe reading rather than the
+ * literal one. Absence is `stayDurationOf`'s own documented case — content written before
+ * G-027a, including the permanent v1 fixture — and under it no guest ever checks out at all.
+ * Read literally, "no night can contain a checkout" would suppress EVERY night forever and
+ * make the warning unreachable on that content. Such content has no startup regime to
+ * exclude because it has no startup: it earns nothing on night 0 and nothing on night 1,000,
+ * and **that is a true rate rather than an artefact.**
+ * ==========================================================================================
+ */
+function firstNightThatCanCloseAStay(content: BoundContent): number {
+  const stayDurationTicks = stayDurationOf(content);
+  if (stayDurationTicks === undefined) return 0;
+  return Math.floor(stayDurationTicks / TICKS_PER_DAY);
+}
+
+/**
  * THE ONE SELECTION PATH. A host renders what this returns and computes no economics of its own.
  *
  * That is G-066b's rule and it is why `describeFeed` holds no selection either: two places that
@@ -261,16 +345,28 @@ export function solvencyOf(world: World, content: BoundContent): Solvency {
   const balancePence = balanceOf(world.ledger);
   const liquidationValuePence = stockValueOf(world.entities, content);
   const reservesPence = balancePence + liquidationValuePence;
+  // The cash and the scrap value are facts about right now and are reported whatever the clock
+  // says; only the RATE and the runway derived from it can be absent. Built once, returned by
+  // both of the two ways there can be no rate.
+  const noRateToReport: Solvency = {
+    balancePence,
+    liquidationValuePence,
+    reservesPence,
+    lastNightPence: null,
+    lastNightDay: null,
+    nightsRemaining: null,
+  };
   const settlementTick = lastSettlementTickOf(world.ledger);
-  if (settlementTick === null) {
-    return {
-      balancePence,
-      liquidationValuePence,
-      reservesPence,
-      lastNightPence: null,
-      lastNightDay: null,
-      nightsRemaining: null,
-    };
+  // (1) NOBODY HAS SETTLED A NIGHT. Day one, before midnight.
+  if (settlementTick === null) return noRateToReport;
+  // (2) EVERY SETTLED NIGHT IS BEFORE THE FIRST ONE A STAY COULD HAVE CLOSED IN (G-072).
+  //
+  // Nights settle in order and this is the LAST of them, so testing it tests all of them. The
+  // comparison is on the NIGHT and not on the tick because that is the unit the rule is stated
+  // in — `firstNightThatCanCloseAStay` carries the whole derivation and the reason it is not the
+  // threshold ADR-0109 refuses.
+  if (Math.floor(settlementTick / TICKS_PER_DAY) < firstNightThatCanCloseAStay(content)) {
+    return noRateToReport;
   }
   const lastNightPence = netOfNight(world.ledger, settlementTick);
   return {
@@ -290,6 +386,12 @@ export function solvencyOf(world: World, content: BoundContent): Solvency {
  * rule is a decision and a decision has one home. It is deliberately NOT "the balance is
  * negative" and deliberately NOT a threshold on nights — a threshold would be a constant nobody
  * can source (section 2.1), and this is *the hotel lost money last night*, which is a fact.
+ *
+ * SINCE G-072 THE FACT IS NARROWER BY ONE WORD AND THIS EXPRESSION DID NOT MOVE: *the hotel lost
+ * money on the last night THAT COULD MEASURE ANYTHING*. The narrowing is entirely inside
+ * `solvencyOf`, because a night that is not evidence has no rate and therefore no runway — which
+ * is what keeps the visibility rule one expression over one field rather than two conditions a
+ * host could get out of step.
  */
 export function isLosing(solvency: Solvency): boolean {
   return solvency.nightsRemaining !== null;

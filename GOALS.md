@@ -5750,7 +5750,53 @@ Giving a corridor a cost (that is the parked note's own trigger and a content de
 change to `layCorridor` in `packages/sim`.
 
 ## G-072 — The warning stops crying wolf on day one
-Status: **IN-PROGRESS 2026-08-30. Nothing blocks it — it was queued by reflex, not by dependency.** Milestone: M5 · Owner pair: render-engineer / render-critic
+Status: **DONE 2026-08-30. The shipped hotel is silent on day one, and the failing one still warns on night one.** Owner pair: render-engineer / (orchestrator-verified)
+
+> **THE DERIVATION IS ONE LINE AND NOTHING WAS CHOSEN.**
+> `firstNightThatCanCloseAStay = floor(stayDurationTicks / TICKS_PER_DAY)` — 1,440 from
+> `guest-rules.json` through `stayDurationOf` (never by re-reading the file) against `TICKS_PER_DAY`,
+> giving **exactly one excluded night**. **`payForStay` is the mechanism that makes the division mean
+> something**: it is the ONLY producer of a `roomRevenue` transaction — one call site, confirmed by
+> grep — and it runs at checkout, so the earliest possible revenue is tick `stayDurationTicks`.
+
+**THE WHOLE OF THE DIFFERENCE IS CHECKABLE.** Same arm that found the defect, run at HEAD and on the
+fix in one sitting, 82 frames: `losing money` present in exactly **8** frames at HEAD, **ZERO** after.
+**74 frames byte-identical, and in the 8 that differ the only change is the deletion of that one
+caption line** — no coordinate moved, no other line changed. A third recording is byte-identical to
+the second.
+
+**AND CRITERION 2 TURNED ON ONE WORD, WHICH IS WHY IT WAS WRITTEN.** The failing arm
+(`--rooms 1 --amenities 0`) **CHECKS NOBODY OUT AT ALL** — measured through the shipped CLI:
+`revenuePennies` **0**, 480 arrived, **0 `checkedOut`**. **A rule keyed on whether a stay DID complete
+would have silenced that hotel FOREVER**, passing criterion 1 while destroying the surface. Keyed on
+whether one COULD, it silences night 0 and gets out of the way: the failing hotel warns on **night
+1**, and the un-reported night-0 loss is 2,500p against 1,122,500p of reserves. *The difference
+between a fix and a mute button was one word.*
+
+**TWO DIRECTIONS DELIBERATELY NOT TAKEN, BOTH DOCUMENTED AT THE POINT OF USE.** Earliest arrival is
+taken as **tick 0** rather than this world's first actual arrival, because that suppresses the FEWEST
+nights. And **absent `stayDurationTicks` excludes NOTHING** — the literal reading (*"no night can
+contain a checkout"*) would suppress every night forever and make the warning unreachable on
+pre-G-027a content and on the permanent v1 fixture. **Pinned by a case, because the entire existing
+test file rests on it**: `solvency.test.ts`'s `CONTENT` declares no guest rules, so every G-070 case
+kept its night for a reason that had to be stated rather than assumed.
+
+**Mutation probes**: disabling the exclusion kills 3 cases, `floor`->`ceil` kills 1, and making
+absent-stay suppress everything kills **10 — nine of them G-070's own.**
+
+**IT FOUND A FALSE CLAIM IN G-070's OWN EVIDENCE**: a comment reading *"on the night measured here it
+took nothing at all"* when the arm takes nothing on **EVERY** night. **Corrected and PINNED with an
+assertion rather than left as prose** — and it is also the property that makes it the right
+anti-vacuity arm.
+
+**AND A STALE FIGURE IN `packages/sim`, FLAGGED BY THE BUILDER AS OUTSIDE ITS DOMAIN AND FIXED BY THE
+ORCHESTRATOR AT VERIFY.** `content.ts` called **208** *"the shipped"* `visitDurationTicks`;
+`guest-rules.json` ships **98**, and `visitDurationTicksSchema` — the very file the comment cited the
+reader to — calls 208 *"the OLD 208"*. **So the figure did not merely rot, it contradicted its own
+citation.** CLAUDE.md's ADR-0007 fifth amendment; the number is now named nowhere but the schema
+that derives it.
+
+**I2 DID NOT MOVE** — `058a2e86ff88b44a`, the hash already in the digests. No save bump. Milestone: M5 · Owner pair: render-engineer / render-critic
 
 **G-070's own finding 4, reported by its builder rather than smoothed over:** the shipped opening
 scenario **warns on day 1 and never again**, with **76 nights of runway**. Measured, `--ticks 14400

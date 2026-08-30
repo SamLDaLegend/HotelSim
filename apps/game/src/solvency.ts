@@ -33,6 +33,13 @@
 // how much hotel is left to sell before you cannot come back. ADR-0108 makes bankruptcy
 // RECOVERABLE, so the third fact says **how long recovery remains possible**. See
 // `packages/sim/src/solvency.ts` for the derivation; this file must not restate it.
+//
+// AND SINCE G-072 THE SELECTOR ALSO DECIDES WHETHER THE NIGHT IS EVIDENCE AT ALL — a night in
+// which no stay could have completed carries a full night's upkeep against structurally zero
+// revenue, so it is a startup artefact rather than a rate. **THAT RULE IS NOT HERE AND MUST NOT
+// COME HERE.** It arrives through `isLosing` like everything else, because the tick this file
+// would have to consult in order to hold an opinion of its own is exactly the thing that would
+// let the HUD and a recorded frame's caption disagree about whether the hotel is losing.
 
 import { isLosing } from '@hotelsim/sim';
 import type { Solvency } from '@hotelsim/sim';
