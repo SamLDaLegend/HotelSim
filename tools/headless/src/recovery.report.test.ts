@@ -40,7 +40,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { bindContent, createWorld, run, TICKS_PER_DAY } from '@hotelsim/sim';
+import { applyBasisPoints, bindContent, createWorld, firstEconomy, run, TICKS_PER_DAY } from '@hotelsim/sim';
 import type { BoundContent, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import {
@@ -179,6 +179,26 @@ const CRITERION_B = [
  *   B          1,000 built, 1,000 demolished        120 built, 120 demolished
  *              499 loans drawn, 501 not needed      59 loans drawn, 61 not needed
  *              0 funds refusals                     0 funds refusals
+ *
+ * RE-MEASURED AT G-068, WHICH MOVED BOTH PURSE FIELDS (ADR-0108). The SHORT column is re-run
+ * and pinned below; the 1,000-day column is the orchestrator's at VERIFY and is left as the
+ * G-012 reading with this warning attached rather than restated from a run nobody took —
+ * `CLAUDE.md` rule 3 forbids carrying an absolute across a change, and rule 5 says a figure you
+ * cannot re-measure is withdrawn rather than rewritten.
+ *
+ *              1,000 days                          120 days (RE-RUN AT G-068)
+ *   A          NOT RE-TAKEN — see above            19 valid rooms, 1,273 satisfied
+ *                                                  94 funds refusals, 0 loans drawn
+ *   B          NOT RE-TAKEN — see above            120 built, 120 demolished
+ *                                                  **16** loans drawn, 104 not needed
+ *                                                  0 funds refusals
+ *
+ * THE DIRECTION IS THE INTERESTING PART AND IT IS THE OPPOSITE ON THE TWO ARMS. A gets RICHER
+ * and builds fewer rooms that WORK (22 -> 19) because 500,000p more capital lets its blind
+ * cadence run further up the plate into cells that seal each other in; B draws FAR FEWER loans
+ * (59 -> 16) because each one is 3.7x larger, so the same build-and-scrap churn needs a quarter
+ * as many of them to keep going. **B's claim is that the state is not absorbing, and sixteen
+ * draws prove it exactly as well as fifty-nine did.**
  *
  * A shorter horizon is a WEAKER version of the same statement, never a different one: "the
  * player is still building in the last ten days" is the claim either way, and it is the
@@ -385,9 +405,16 @@ describe('CRITERION A: a hotel with nothing returns to a hotel that works', () =
     // is STILL never drawn. The CRITERION is again unaffected — a hotel that started with
     // nothing ends with rooms that work and guests that paid — and the direction is the one the
     // build loop wants: capacity that fills pays for capacity.
-    expect(report.rooms.valid).toBe(10);
-    expect(departuresOf(report, 'checkedOut')).toBe(374);
-    expect(report.build.refused.insufficientFunds).toBe(114);
+    //
+    // RE-MEASURED AGAIN AT G-068. `openingCapitalPence` 500,000 -> 1,000,000 (ADR-0108) lets
+    // this hotel build 26 rooms where it built fewer, and **19 of them work where 10 did** —
+    // 374 -> 1,273 completed stays, 114 -> 94 refusals for money, and the loan is STILL never
+    // drawn, which is the half of the criterion this arm is named for. A hotel that started
+    // with nothing ends with rooms that work and guests that paid, and it did it without
+    // borrowing at all.
+    expect(report.rooms.valid).toBe(19);
+    expect(departuresOf(report, 'checkedOut')).toBe(1_273);
+    expect(report.build.refused.insufficientFunds).toBe(94);
     expect(report.loans.drawn).toBe(0);
   });
 });
@@ -441,10 +468,28 @@ describe('CRITERION B: the dead state is not absorbing, to the end of the run', 
     expect(report.money.loanFeePennies).toBeLessThan(0);
   });
 
-  it('and borrowing was never free: the fee is a tenth of everything drawn', () => {
+  it('and borrowing was never free: the fee is the content rate per draw, at the rounding the sim uses', () => {
     // The price of the third closure, as a ratio rather than an adjective. Winning must not
     // be automatic, so the way out of the dead state costs something every single time.
-    expect(report.money.loanFeePennies * -10).toBe(report.money.loanDrawPennies);
+    //
+    // ======================================================================================
+    // IT READ `loanFeePennies * -10 === loanDrawPennies` UNTIL G-068 AND THAT WAS A CLAIM
+    // ABOUT DIVISIBILITY WEARING A RATIO'S CLOTHES. It held only because the old principal,
+    // 300,000, happened to be a multiple of ten at 1,000 basis points. ADR-0108's derived
+    // principal is **1,111,111** — smallest sufficient, and a repdigit is what the arithmetic
+    // returned — so the fee is `applyBasisPoints(1,111,111, 1000) = 111,111`, which is
+    // 111,111.1 ROUNDED, and sixteen draws are 17,777,776p drawn against 1,777,776p of fees.
+    // Ten times the fees is 17,777,760p. **The old assertion is off by sixteen pence and the
+    // sixteen pence are correct**: rounding is a decision, it is taken once, in
+    // `applyBasisPoints`, and this test now asks that function rather than assuming its answer
+    // (ADR-0021 — the arithmetic is called, never re-spelled).
+    // ======================================================================================
+    const economy = firstEconomy(content);
+    if (economy === undefined) throw new Error('recovery report: the injected content defines no economy');
+    const feePerDraw = applyBasisPoints(economy.loanPrincipalPence, economy.loanFeeBasisPoints);
+    expect(feePerDraw).toBeGreaterThan(0);
+    expect(0 - report.money.loanFeePennies).toBe(report.loans.drawn * feePerDraw);
+    expect(report.money.loanDrawPennies).toBe(report.loans.drawn * economy.loanPrincipalPence);
   });
 
   it('THE DEBT IS UNBOUNDED, AND THAT IS M4\'S TERMINATOR, NOT A DEFECT HERE', () => {
@@ -468,8 +513,11 @@ describe('CRITERION B: the dead state is not absorbing, to the end of the run', 
   it('the bridging table\'s short-horizon column is the number this run produces', () => {
     expect(report.build.built).toBe(120);
     expect(report.build.demolished).toBe(120);
-    expect(report.loans.drawn).toBe(59);
-    expect(report.loans.refused.notEligible).toBe(61);
+    // 59 -> 16 AT G-068: the principal is 3.7x larger, so the same churn needs a quarter as
+    // many draws to keep going. The claim is that the state is NOT ABSORBING, and it is carried
+    // by the case above this one; these are the numbers rather than the claim.
+    expect(report.loans.drawn).toBe(16);
+    expect(report.loans.refused.notEligible).toBe(104);
   });
 });
 

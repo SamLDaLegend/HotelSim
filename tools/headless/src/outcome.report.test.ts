@@ -764,7 +764,13 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // criterion two tests up are both green. Cause: the exit rule costs every journey a second
     // threshold tick, so one of the two guests that used to be standing in a room whose support
     // was demolished is somewhere else on the tick the demolition lands.
-    expect(count('evictedRoomUnusable')).toBe(1);
+    // 1 -> 2 AT G-068, THIN AND STILL FIRING, SO THE ROW IS PINNED AT WHAT IT IS AND THE
+    // SCHEDULE IS NOT RETUNED — the line the block above draws, applied for the third time.
+    // ADR-0108's bigger purse buys this hotel a slightly different set of builds, so a second
+    // guest is standing in a room whose support is demolished on the tick it lands. The reason
+    // is not DEAD, `outcome.test.ts` is green, and the criterion two tests up still reads five
+    // non-zero reasons.
+    expect(count('evictedRoomUnusable')).toBe(2);
     // The two rows that still have headroom, for contrast — and `checkedOut`, which no longer
     // does, pinned exactly rather than under a bound it would have to be given to clear.
     // 16 -> 50 AT G-054, AND THIS ROW GETS ITS HEADROOM BACK. **Three times as many guests
@@ -792,7 +798,12 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // 1,273 -> 1,319 AT G-046b, and it is the other side of `checkedOut` 41 -> 28 plus the guests
     // that used to still be in the building at the horizon. The five reasons still sum to the
     // departures the conservation law counts, which is what the next test asserts.
-    expect(count('leftDissatisfied')).toBe(1_319);
+    // 1,319 -> 1,295 AT G-068, and it is the other side of `evictedRoomUnusable` 1 -> 2 plus a
+    // slightly different set of builds: ADR-0108's bigger purse lets this hotel afford rooms on
+    // different ticks, so twenty-four guests that used to walk out unhappy are accounted for
+    // elsewhere. The five reasons still sum to the departures the conservation law counts,
+    // which is what the next test asserts — and that test did not move.
+    expect(count('leftDissatisfied')).toBe(1_295);
   }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 16,946ms
 
   it('and the numbers close, through a real process rather than in-memory', () => {

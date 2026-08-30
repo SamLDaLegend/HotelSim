@@ -2,7 +2,7 @@
   {
     "id": "house_opening",
     "name": "House Opening",
-    "openingCapitalPence": 500000,
+    "openingCapitalPence": 1000000,
     "seededStock": "supplementsCapital"
   }
 ]

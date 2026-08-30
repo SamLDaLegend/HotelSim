@@ -456,8 +456,27 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // Every other one is FURNISHED and the rest are not (G-009), so `missingItem` and a
   // furnished room both occur in the same pass, and the ones that land on floor 0 are
   // rooms that genuinely work.
+  //
+  // ------------------------------------------------------------------------------------------
+  // THE FIRST SPAWN TICK IS DERIVED FROM THE CHURN SINCE G-068, AND IT WAS THE LITERAL 13 UNTIL
+  // ADR-0108 WALKED INTO IT.
+  //
+  // The churn above is `ceil((openingCapitalPence - cheapest + 1) / roundTripLoss)` cycles of two
+  // ticks each, so its GRANTED draw sits at tick `2N + 1`. Raising the opening capital from
+  // 500,000 to 1,000,000 took N from 3 to 7 and the draw from tick 7 to tick 15 — PAST the
+  // literal 13 — so the first two spawns landed BEFORE the draw, the hotel held rooms when it
+  // asked, and `canDrawLoan` correctly answered `notEligible`. **The whole granted-loan half of
+  // the I2 harness went silently vacuous on a content edit**: `drawn` 0, `notEligible` 25, the
+  // gate still green because a refusal is a recorded outcome rather than a throw.
+  //
+  // `recovery.determinism.test.ts` is what caught it, which is what that file is for. The repair
+  // is to derive the boundary the churn has to clear rather than to move one literal past
+  // today's capital: `max(13, drawTick + 1)` keeps the historical value for any content whose
+  // churn is short enough, and moves with the churn for any that is not.
+  // ------------------------------------------------------------------------------------------
+  const firstSpawnTick = Math.max(13, churnTick + 1);
   let spawnIndex = 0;
-  for (let tick = 13; tick < ticks; tick += 1009) {
+  for (let tick = firstSpawnTick; tick < ticks; tick += 1009) {
     // THE DIAGONAL WALKS ALL THREE AXES SINCE G-036a. The row modulus divides the column
     // modulus (8 divides 80), so two spawns share a cell exactly when they shared one before
     // — the walk is no less injective for having a third coordinate, and `spawnEntity` still
@@ -949,7 +968,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // Some of these target ids that are not live yet, or are already gone. That is
   // deliberate: a despawn of an unknown id must be a deterministic no-op.
   for (let tick = 2_003; tick < ticks; tick += 4_001) {
-    const id = Math.floor((tick - 2_003) / 4_001) * 3 + 1;
+    const id = churnEntities + Math.floor((tick - 2_003) / 4_001) * 3 + 1;
     schedule.push({ tick, command: { kind: 'despawnEntity', id } });
   }
   // ============================================================================
@@ -1070,7 +1089,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // are already gone — the `noSuchRoom` refusal, which must be a recorded outcome rather
   // than the silent no-op `despawnEntity` gives.
   for (let tick = 3_701; tick < ticks; tick += 2_609) {
-    const id = Math.floor((tick - 3_701) / 2_609) * 5 + 2;
+    const id = churnEntities + Math.floor((tick - 3_701) / 2_609) * 5 + 2;
     schedule.push({ tick, command: { kind: 'demolishRoom', id } });
   }
   // A DEMOLITION UNDER THE NOSE OF AN ARRIVING GUEST (G-010), and the reason is the sky

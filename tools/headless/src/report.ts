@@ -403,6 +403,45 @@ export function builtRoomCell(index: number, bounds: GridBounds, startFloor: num
 }
 
 /**
+ * WHERE THE nTH AMENITY THE PLAYER BUYS STANDS (G-068): the player's own plate, front row,
+ * filled from the FAR END back towards the bedrooms.
+ *
+ * IT IS `builtRoomCell` CALLED WITH A DIFFERENT INDEX, NOT A SECOND LAYOUT (ADR-0021). The
+ * walk, the block width, the lane offsets and the row that carries the spine are all that
+ * function's; what this one chooses is WHICH of its cells, and it chooses three properties:
+ *
+ *   THE SAME FLOOR THE PLAYER IS BUILDING ON, which is the ENTRANCE floor on a bare plot
+ *   (`builtRoomStartFloor`). That is not tidiness — `floorChargeFor` never charges for the
+ *   entrance floor, so an amenity bought there costs its `constructionCostPence` and nothing
+ *   else. Put this walk on the basement plate `amenityCell` uses and the first tier would cost
+ *   a floor charge on top of four rooms, and *what a bare plot can afford* would be a reading
+ *   of the HOST'S LAYOUT rather than of the game.
+ *
+ *   THE FRONT ROW OF A BLOCK, i.e. `inBlock < columnsPerBlock`, so the room is against the
+ *   spine `playerSpineCells` lays and therefore has a door. The bedroom walk exists to make the
+ *   two mistakes the validity rules teach; an amenity the star ladder is supposed to COUNT must
+ *   be valid, because `rating.ts` tallies VALID rooms only — an invalid one would be charged
+ *   for and count for nothing, which is the failure `--buy-facility` was added to end.
+ *
+ *   FROM THE LAST BLOCK BACKWARDS, so the two walks approach each other from opposite ends of
+ *   the same floor and a run has to fill most of a plot before they can meet. The caller stops
+ *   this walk if they ever do, rather than emitting a command it can prove will be refused.
+ */
+export function boughtAmenityCell(index: number, bounds: GridBounds, startFloor: number): Cell {
+  return builtRoomCell(boughtAmenityIndex(index, bounds), bounds, startFloor);
+}
+
+/** The flat `builtRoomCell` index the nth bought amenity occupies. Negative once the plate is
+ *  exhausted, which is the caller's stop condition. */
+function boughtAmenityIndex(index: number, bounds: GridBounds): number {
+  const columnsPerBlock = roomColumnsPerBlock(bounds);
+  const perBlock = columnsPerBlock * rowsPerFloor(bounds);
+  const block = blocksPerFloor(bounds) - 1 - Math.floor(index / columnsPerBlock);
+  if (block < 0) return -1;
+  return block * perBlock + (columnsPerBlock - 1 - (index % columnsPerBlock));
+}
+
+/**
  * HOW WIDE A BLOCK OF THE PLAYER'S ROOMS IS, corridor included (G-034b).
  *
  * DERIVED FROM WHAT THE LAYOUT HAS TO PRODUCE, not chosen for looks — §2.1's rule applied to a
@@ -1305,6 +1344,23 @@ export type Options = {
    * `--build` campaign the rating did not move at all.
    */
   readonly buyFacilityEveryTicks: number;
+  /**
+   * Ticks between player attempts to BUY AN AMENITY (G-068). `BUILD_OFF` (0) means never, and
+   * that is the default.
+   *
+   * A THIRD BUILD CADENCE, AND THE SPLIT IS `--buy-facility`'S OWN ARGUMENT ONE ROOM CLASS OVER.
+   * `--build` builds BEDROOMS and `--buy-facility` buys the star ladder's paid facilities;
+   * neither can place a LOUNGE, a GAMES ROOM or a CAFE, and `--amenities N` seeds those free
+   * through the host door. So until this flag there was NO INVOCATION OF THIS RUNNER IN WHICH A
+   * PLAYER PAID FOR AN AMENITY — and since G-060 the FIRST star tier asks for a complete set of
+   * them, which made *a bare plot reaches one star* unmeasurable at any opening capital rather
+   * than merely unmeasured. That is the gap G-051a's block describes for facilities, in the one
+   * place it still applied.
+   *
+   * OFF BY DEFAULT, so every pinned invocation in this project emits exactly the commands it
+   * always did.
+   */
+  readonly buyAmenityEveryTicks: number;
   readonly contentDir: string | undefined;
   /**
    * Where to write a frame recording, or `undefined` for no recording at all (G-017).
@@ -1339,6 +1395,7 @@ export function parseArgs(argv: readonly string[]): Options {
   let demolishEveryTicks = BUILD_OFF;
   let loanEveryTicks = BUILD_OFF;
   let buyFacilityEveryTicks = BUILD_OFF;
+  let buyAmenityEveryTicks = BUILD_OFF;
   let contentDir: string | undefined;
   let record: string | undefined;
   let recordEveryTicks = RECORD_EVERY_DEFAULT;
@@ -1425,6 +1482,12 @@ export function parseArgs(argv: readonly string[]): Options {
         // scenario. Same reading of 0 as `--build`, for the same reason — a schedule loop with a
         // step of 0 would not terminate.
         buyFacilityEveryTicks = requireNumber('--buy-facility', argv[i + 1]);
+        i += 1;
+        break;
+      case '--buy-amenity':
+        // 0 is legal and is the DEFAULT, for `--buy-facility`'s reason exactly: a player who
+        // never builds an amenity is every arm this project ran before G-068.
+        buyAmenityEveryTicks = requireNumber('--buy-amenity', argv[i + 1]);
         i += 1;
         break;
       case '--content': {
@@ -1521,6 +1584,7 @@ export function parseArgs(argv: readonly string[]): Options {
     demolishEveryTicks,
     loanEveryTicks,
     buyFacilityEveryTicks,
+    buyAmenityEveryTicks,
     contentDir,
     record,
     recordEveryTicks,
@@ -1552,6 +1616,7 @@ export function schedule(
   amenities: number = HOTEL_AMENITIES,
   facilities: number = HOTEL_FACILITIES,
   buyFacilityEveryTicks: number = BUILD_OFF,
+  buyAmenityEveryTicks: number = BUILD_OFF,
 ): readonly ScheduledCommand[] {
   // The room guests SLEEP in, chosen by what it provides rather than by its position in
   // the table — see `lodgingRoomTypeOf` for the trap that closes.
@@ -1760,6 +1825,16 @@ export function schedule(
         'different tool, which does not exist yet.',
     );
   }
+  // HOISTED ABOVE THE BEDROOM WALK AT G-068, BECAUSE A SECOND WALK NOW SHARES THEM. The floors
+  // the PLAYER's plate has already had a corridor stub laid on (G-034b). Membership only —
+  // never iterated, never ordered, and it decides no outcome; it exists so the stub is laid ONCE
+  // per floor rather than on every build. (`layCorridor` is idempotent, so a repeat would be
+  // harmless — but a schedule carrying eight hundred no-op commands is a schedule whose command
+  // count no longer says what the player did.) `--build` alone emits exactly what it always did.
+  const stubbed = new Set<number>();
+  const playerStartFloor = builtRoomStartFloor(rooms);
+  /** How far the bedroom walk got, so the amenity walk can stop before the two meet. */
+  let bedroomsEmitted = 0;
   if (buildEveryTicks > BUILD_OFF && entityKind !== undefined) {
     // From zero, on ITS OWN walk (`builtRoomCell`, G-009) rather than continuing the
     // inherited hotel's: the player packs rooms in above, and the two layouts say
@@ -1768,14 +1843,8 @@ export function schedule(
     // The walk's start floor depends on whether this scenario inherited a hotel (G-011):
     // on the ground when it did not, so that a player building from nothing can build
     // something that actually stands up.
-    const startFloor = builtRoomStartFloor(rooms);
+    const startFloor = playerStartFloor;
     let index = 0;
-    // The floors this walk has already put a corridor stub on (G-034b). Membership only —
-    // never iterated, never ordered, and it decides no outcome; it exists so the stub is laid
-    // ONCE per floor rather than on every build. (`layCorridor` is idempotent, so a repeat
-    // would be harmless — but a schedule carrying eight hundred no-op commands is a schedule
-    // whose command count no longer says what the player did.)
-    const stubbed = new Set<number>();
     for (let tick = BUILD_START_TICK; tick < ticks; tick += buildEveryTicks) {
       const at = builtRoomCell(index, bounds, startFloor);
       // The SIM's own bounds predicate, not a copy of it, so the runner and the simulation
@@ -1799,6 +1868,7 @@ export function schedule(
       commands.push({ tick, command: { kind: 'buildRoom', roomType: entityKind, at } });
       index += 1;
     }
+    bedroomsEmitted = index;
   }
   // ==========================================================================================
   // AND THE PLAYER BUYS A FACILITY (G-051a) — the star ladder's only PAID rung.
@@ -1889,6 +1959,102 @@ export function schedule(
       bought += 1;
     }
   }
+  // ==========================================================================================
+  // AND THE PLAYER BUILDS AN AMENITY (G-068) — the first tier's OTHER THREE ROOMS.
+  //
+  // WHY IT EXISTS AT ALL, and it is `--buy-facility`'s own paragraph one room class over: until
+  // this flag there was NO INVOCATION OF THIS RUNNER IN WHICH A PLAYER PAID FOR AN AMENITY.
+  // `--build` builds bedrooms; `--buy-facility` buys spas, conference halls and theatres;
+  // `--amenities N` hands lounges, games rooms and cafes over FREE through the host door at tick
+  // 0. Since G-060 the FIRST star tier asks for one complete SET of amenities, so *a bare plot
+  // reaches one star* was not merely unmeasured — it was UNMEASURABLE, at any opening capital,
+  // by any invocation this runner could express. G-068's exit criterion 2 needs it, and the
+  // criterion's own arm (`--rooms 0 --build 1440 --demand`) would have reported zero stars on a
+  // hotel with four bedrooms and no lounge however much money it had.
+  //
+  // IT IS THE SAME DOOR, `buildRoom`, so the purchase is CHARGED and can be REFUSED for want of
+  // cash — which is the whole point of pointing it at a bare plot.
+  //
+  // ONE EMISSION IS ONE COMPLETE SET, AND THAT IS THE DIFFERENCE FROM `--buy-facility`.
+  // It emits one `buildRoom` per amenity type, in the order `amenityRoomTypesOf` returns
+  // (ascending id after `normaliseTable`), all on the same tick.
+  //
+  // WHY NOT ONE ROOM PER EMISSION, WHICH WAS THE FIRST SHAPE AND IS THE FACILITY WALK'S:
+  // because the ladder counts amenities in SETS and a blind ROTATION cannot produce one. The
+  // cycle has to advance on every emission — the schedule is generated before the run and
+  // cannot see a refusal — so an emission the hotel cannot afford does not retry that type, it
+  // SKIPS it. Measured on the first shape, `--days 365 --seed 42 --rooms 0 --amenities 0
+  // --build 1440 --buy-amenity 1440 --loan 1440 --demand` against a zero-capital scenario: four
+  // amenities bought, of two types, and `sets` still reads 0 — a hotel that spent 1,000,000p on
+  // amenities and climbed no rung. The facility walk does not have this problem because
+  // `distinctTypes 1` is satisfied by whichever type happens to land.
+  //
+  // A PARTIALLY-AFFORDED SET IS A REAL OUTCOME AND IS LEFT AS ONE: the three commands are
+  // independent, so a hotel with 500,000p buys two rooms of the set and records one refusal.
+  // That is `--build`'s rule — a cadence the hotel cannot afford produces refusals rather than a
+  // cleverer plan — applied to a three-command emission.
+  //
+  // ON THE PLAYER'S OWN PLATE AND NOT THE BASEMENT ONE. See `boughtAmenityCell` for the three
+  // properties that choice buys, of which the load-bearing one is that the ENTRANCE FLOOR IS
+  // FREE: an amenity bought here costs a room and not a room plus a floor charge, so what the
+  // arm measures is the game's price for the first tier rather than the host's layout.
+  // ==========================================================================================
+  //
+  // THE GUARD BELOW IS UNREACHABLE UNDER EVERY FIXTURE IN THIS TREE, AND THAT IS SAID RATHER THAN
+  // LEFT TO BE DISCOVERED (ADR-0007). An amenity is *a room type that serves a non-lodging need*
+  // (`amenityRoomTypesOf`), and content with none of those would also have to declare no
+  // engagement need at all — `bindContent` refuses a need no room type can serve. The food-court
+  // fixture, which is this project's one alternative content set, declares three. `--buy-facility`
+  // carries the identical guard with the identical gap one block up, and neither is tested; a
+  // content set that could reach either is a fixture nobody has needed yet. What the guard buys
+  // meanwhile is that the flag cannot be silently ignored, which is the failure it is for.
+  const buyableAmenities = amenityRoomTypesOf(content);
+  if (buyAmenityEveryTicks > BUILD_OFF && buyableAmenities.length === 0) {
+    throw new Error(
+      '--buy-amenity was asked for, but the injected content defines no amenity room type — no room type that ' +
+        'serves a non-lodging need and is not the bedroom. There is nothing for the player to buy. Add one to ' +
+        'room-types.json, or drop the flag.',
+    );
+  }
+  if (buyAmenityEveryTicks > BUILD_OFF) {
+    let bought = 0;
+    for (let tick = BUILD_START_TICK; tick < ticks; tick += buyAmenityEveryTicks) {
+      let exhausted = false;
+      for (const roomType of buyableAmenities) {
+        const flat = boughtAmenityIndex(bought, bounds);
+        // THE PLATE IS EXHAUSTED, or the two walks have met. The bedroom walk fills flat indices
+        // upward from 0 and this one downward from the last block, so `flat < bedroomsEmitted`
+        // is the moment they would collide — stopped here rather than emitted as an `occupied`
+        // refusal, because a schedule that can prove a command will be refused should not send
+        // it (the bounds rule, one line down, and its reason). `bedroomsEmitted` counts
+        // ATTEMPTS and not builds, which is conservative in the safe direction: the bedroom walk
+        // advances its index on a refusal too, so a cell it attempted is a cell it will never
+        // come back to and this walk must not take it either.
+        if (flat < 0 || flat < bedroomsEmitted) {
+          exhausted = true;
+          break;
+        }
+        const at = boughtAmenityCell(bought, bounds, playerStartFloor);
+        // The SIM's own bounds predicate, not a copy of it.
+        if (!isWithinBounds(at, bounds)) {
+          exhausted = true;
+          break;
+        }
+        if (!stubbed.has(at.floor)) {
+          stubbed.add(at.floor);
+          for (const stub of playerCorridorCells(at.floor, bounds)) {
+            commands.push({ tick, command: { kind: 'layCorridor', at: stub } });
+          }
+          for (const cell of playerSpineCells(at.floor, bounds)) {
+            commands.push({ tick, command: { kind: 'layCorridor', at: cell } });
+          }
+        }
+        commands.push({ tick, command: { kind: 'buildRoom', roomType: roomType.id, at } });
+        bought += 1;
+      }
+      if (exhausted) break;
+    }
+  }
   // AND THE PLAYER DEMOLISHES. Oldest first, by id, starting at 1 — so the schedule
   // demolishes the inherited rooms before anything it built, which is what puts a guest
   // in a room that stops existing and makes `evicted` a number a real run can produce.
@@ -1969,6 +2135,11 @@ export type RunSummary = {
     readonly demolishEveryTicks: number;
     readonly loanEveryTicks: number;
     readonly buyFacilityEveryTicks: number;
+    /**
+     * Ticks between player amenity purchases (G-068). ADDITIVE, so `SUMMARY_SCHEMA_VERSION` does
+     * NOT move, and it reads 0 on every invocation pinned before this goal.
+     */
+    readonly buyAmenityEveryTicks: number;
   };
   readonly world: {
     readonly tick: number;
@@ -2619,6 +2790,8 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       // invocation this project has ever pinned — the day a sweep buys a facility, the number
       // moves in a document consumers already read.
       buyFacilityEveryTicks: options.buyFacilityEveryTicks,
+      // ADDITIVE (G-068), on the same argument one room class over.
+      buyAmenityEveryTicks: options.buyAmenityEveryTicks,
     },
     world: {
       tick: world.tick,

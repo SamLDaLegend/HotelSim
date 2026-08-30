@@ -2,7 +2,7 @@
   {
     "id": "house_rules",
     "name": "House Rules",
-    "loanPrincipalPence": 300000,
+    "loanPrincipalPence": 1111111,
     "loanFeeBasisPoints": 1000,
     "loanRepaymentPerNightPence": 10000,
     "liquidationRoomsMax": 4,

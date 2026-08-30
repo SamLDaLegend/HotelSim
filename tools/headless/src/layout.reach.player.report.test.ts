@@ -196,9 +196,18 @@ describe('THE EXIT CRITERION: `unreachable` reaches 0 with a full-height shaft d
     // `noCorridor` 3 -> 2, `valid` unmoved at 66). **What this file asserts is `unreachable`,
     // and more rooms in mid-air do not make any of them unreachable**: the shaft still joins
     // every strip a player can build in.
+    //
+    // ========================================================================================
+    // RE-RECORDED AT G-068, ONE NUMBER, AND IT IS THE CAPITAL RATHER THAN ANY GEOMETRY.
+    // ADR-0108 raised `openingCapitalPence` 500,000 -> 1,000,000, so this hotel affords ONE
+    // MORE of its walk's builds — and every room this walk places stands over a lane or a
+    // demolished room, so an extra build is an extra `unsupported` and nothing else.
+    // **`unsupported` 15 -> 16 and every other row is byte-identical, `valid` included.** That
+    // is the same shape as the two re-records above it, arriving from the money side.
+    // ========================================================================================
     expect(arm(true).invalid).toEqual({
       missingItem: 0,
-      unsupported: 15,
+      unsupported: 16,
       noDoor: 4,
       noCorridor: 2,
       unplaced: 0,

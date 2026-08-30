@@ -2051,8 +2051,51 @@ export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
  *                        ACCEPTED, and it is the SMALLEST multiple that clears the bound, which
  *                        is the conservative direction: the cheapest floor that is still earned.
  *
- * 500,000 also sits comfortably below the measured wall above — the hotel reaches it inside the
- * month at every cadence and closes on 168,500p rather than on 956,000p it cannot spend.
+ * 500,000 also sat comfortably below the measured wall above — the hotel reached it inside the
+ * month at every cadence and closed on 168,500p rather than on 956,000p it could not spend.
+ * ---------------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------------
+ * ##########################################################################################
+ * AND THE INEQUALITY ABOVE IS FALSE AT HEAD SINCE G-068. **THE SHIPPED VALUE IS OWED A HUMAN
+ * RULING, AND THE PARAGRAPH IS KEPT RATHER THAN STRUCK BECAUSE IT IS THE THING THAT BROKE.**
+ *
+ * ADR-0108 gave `openingCapitalPence` a requirement of its own — *a bare plot can build the first
+ * tier* — and that forces 1,000,000. The inequality now reads
+ *
+ *     500,000 + 250,000 = 750,000  >  1,000,000     FALSE
+ *
+ * so a hotel CAN open its second storey out of the money it opened with, which is exactly what
+ * this field exists to prevent. **No capital satisfies both**: the tier forces >= 1,000,000 and
+ * this inequality forces < 750,000. A human ruling outranks a derivation, so G-068 moved the
+ * capital and left this number where it was, with the collision written down on both fields.
+ *
+ * WHAT THE RE-DERIVATION GIVES, so the ruling is one line rather than a campaign. Walking the
+ * whole multiples of the cheapest room against the NEW capital:
+ *
+ *     3x =   750,000  ->    750,000 + 250,000 = 1,000,000  =  the opening capital. Payable on
+ *                           day one. REJECTED, by the same clause that rejected 1x above.
+ *     4x = 1,000,000  ->  1,000,000 + 250,000 = 1,250,000  >  1,000,000. ACCEPTED, and the
+ *                           smallest multiple that clears the bound.
+ *
+ * AND THE UPPER ENDPOINT MOVED WITH THE CAPITAL, RE-MEASURED RATHER THAN ASSUMED TO TRANSFER
+ * (G-068). Same campaign as the table above — `--days 30 --seed 42 --build {1440, 60, 5}` on the
+ * shipped starting hotel, one deterministic run per cell, exact integers, win32/12cpu quiet — at
+ * `openingCapitalPence` 1,000,000:
+ *
+ *         charge         rooms built      floors opened      closing balance
+ *           500,000      6 / 4 / 3        1 / 1 / 2          151,000 – 351,000p
+ *           750,000      4 / 3 / 2        1 / 1 / 2           16,000 – 423,500p
+ *         1,000,000      2 / 1 / 1        1 / 1 / 1          165,500 – 428,000p
+ *         1,250,000      1 / 1 / 1        1 / 1 / 1          203,000 – 208,000p
+ *         1,500,000      **0 / 0 / 0**    **0 / 0 / 0**      **1,728,000p, UNSPENDABLE**
+ *
+ * The wall is therefore between 1,250,000 and 1,500,000 at this capital, where it was between
+ * 625,000 and 750,000 at the old one. **4x = 1,000,000 sits inside the window** — the hotel still
+ * opens a floor inside the month at every cadence and closes on 165,500p rather than on cash it
+ * cannot spend. So the re-derivation and the measurement agree, and what is missing is only the
+ * ruling: G-068's brief names TWO fields, and this is a third.
+ * ##########################################################################################
  * ---------------------------------------------------------------------------
  *
  * OPTIONAL, AND ABSENCE MEANS FREE. That is a TRUE HISTORICAL STATEMENT and not a default: every
@@ -2062,10 +2105,85 @@ export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
  */
 export const floorConstructionCostPenceSchema = penceSchema.min(0).optional();
 
+/**
+ * WHAT ONE DRAW HANDS OVER (G-011), in integer pence. DERIVED SINCE G-068, PICKED BEFORE IT.
+ *
+ * ##########################################################################################
+ * ADR-0108 (human, resolving E-015) ruled **BANKRUPTCY IS RECOVERABLE, NOT TERMINAL**, and that
+ * ruling is this field. It is NOT the same requirement as `openingCapitalPence`'s, which is why
+ * collapsing the two into one edit would have left one of the two rulings unenforced:
+ *
+ *     CAN A NEW HOTEL START?      ->  openingCapitalPence  (a bare plot builds the first tier)
+ *     CAN A BROKE HOTEL COME BACK? ->  THIS FIELD          (a hotel that has LOST its rooms
+ *                                                           borrows its way to the first tier)
+ * ##########################################################################################
+ *
+ * ---------------------------------------------------------------------------
+ * WHY IT IS A DIFFERENT SUM: THE LENDER'S WINDOW SHUTS AS THE HOTEL REBUILDS, SO THE BORROWING
+ * CANNOT BE DONE IN INSTALMENTS.
+ *
+ * `canDrawLoan` in `packages/sim/src/loan.ts` grants only while
+ *
+ *     balance + liquidationValue  <  cheapest constructionCostPence
+ *
+ * and `liquidationValue` is `demolitionRefundBasisPoints` of each standing room's construction
+ * cost — 125,000p a room on the shipped tables. So the window closes AS THE HOTEL SPENDS:
+ *
+ *     rooms standing   liquidation   the gate opens below   the next room costs
+ *          0                   0             250,000               250,000
+ *          1             125,000             125,000               250,000
+ *          2             250,000                   0               250,000
+ *          3             375,000            -125,000               250,000
+ *
+ * From two rooms up, a solvent hotel is INELIGIBLE and an eligible one cannot afford the next
+ * room out of the balance the gate allows. **AND SCRAPPING DOES NOT RE-OPEN IT**: a demolition
+ * adds exactly what it removes from liquidation, so `balance + liquidationValue` is unchanged by
+ * it. That is E-015's 997 refusals seen from the arithmetic rather than from a run.
+ *
+ * THE REQUIREMENT THEREFORE FORCES A SINGLE-DRAW SUM: one draw must fund the WHOLE first tier.
+ *
+ *     net(P)  =  P - applyBasisPoints(P, loanFeeBasisPoints)
+ *
+ * because the fee is charged as its own `loanFee` transaction at the draw, so it is never
+ * spendable. Smallest P with `net(P) >= tier-1 cost`, at 1,000 basis points against the
+ * 1,000,000p the first tier costs:
+ *
+ *     P = 1,111,111   fee 111,111   net **exactly 1,000,000**
+ *
+ * A REPDIGIT IS WHAT THE ARITHMETIC RETURNED AND NOT WHAT ANYBODY WANTED. 1,111,110 nets 999,999
+ * and the hotel is stuck ONE PENNY short of its fourth room, with three rooms standing, 249,999p
+ * in hand and a gate that does not open above -125,000p — E-015's loop, at a penny. Rounding this
+ * up to a comfortable 1,250,000 would be a cushion nobody derived (§2.1).
+ * ---------------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------------
+ * THE POSITION IT IS DERIVED AGAINST, STATED, BECAUSE NO PRINCIPAL COVERS EVERY POSITION.
+ *
+ * The derivation is taken at **NO ROOMS AND NO CASH** — `loan.ts`'s own opening sentence and the
+ * case ADR-0011 says the loan exists for. It is not universal, and that is a property of the GATE
+ * rather than of this number: between `cheapest cost - rooms x refund` and `cheapest cost` the
+ * hotel is simultaneously too rich to borrow and too poor to build, a dead band that widens by a
+ * refund per room, and a draw of ANY size can land inside it. A hotel that reaches it can still
+ * spend its way out — a build-and-scrap pair burns a refund of reserves and re-opens the gate —
+ * but that is a play a player has to find, not a guarantee this integer buys. Parked with its
+ * falsification test rather than claimed here.
+ *
+ * NOTHING IN THIS FIELD ASKS ABOUT OUTSTANDING DEBT, deliberately, and `repayLoan` never drives
+ * the balance below zero, so a hotel that borrows this much and never repays carries it and keeps
+ * ticking. See `loan.ts`.
+ * ---------------------------------------------------------------------------
+ *
+ * IT WAS 300,000 FROM G-011 TO G-068 AND NOTHING DERIVED IT. G-060 made the first tier four rooms
+ * and 500,000 + 300,000 was permanently short of the 1,000,000 they cost, which is E-015.
+ * `purse.derivation.test.ts` in `tools/headless` re-runs the arithmetic above against
+ * `star-tiers.json`, `room-types.json` and this file, so a retune of any of them reddens.
+ */
+export const loanPrincipalPenceSchema = penceSchema.min(0);
+
 export const economySchema = z.strictObject({
   id: contentIdSchema,
   name: z.string().min(1),
-  loanPrincipalPence: penceSchema.min(0),
+  loanPrincipalPence: loanPrincipalPenceSchema,
   loanFeeBasisPoints: basisPointsSchema,
   loanRepaymentPerNightPence: penceSchema.min(0),
   liquidationRoomsMax: z.int().min(1),
@@ -2351,17 +2469,53 @@ export const openingStaffSchema = z.array(staffPostingSchema).min(1).optional();
  *                        before G-052a had.
  *
  * ---------------------------------------------------------------------------
- * SHIPPED: 500,000 — UNMOVED FROM WHERE IT WAS, AND THE DERIVATION MOVES WITH IT.
+ * SHIPPED: 1,000,000 — AND THE QUESTION IT ANSWERS CHANGED AT G-068, WHICH IS WHY THE NUMBER DID.
  *
- * The requirement is `floorConstructionCostPence` above: *a hotel must not be able to open its
- * second storey out of the money it opened with*, i.e.
+ * ADR-0108 (human, resolving E-015) gives this field a requirement OF ITS OWN for the first time.
+ * It reads, in one sentence:
+ *
+ *     CAN A NEW HOTEL START?  ->  A BARE PLOT CAN BUILD THE FIRST TIER.
+ *
+ * The first tier is `star-tiers.json`'s one-star row and the price of its rooms is
+ * `room-types.json`'s `constructionCostPence`. NEITHER IS QUOTED HERE — `purse.derivation.test.ts`
+ * in `tools/headless` reads both files and recomputes this number, so a retune of either reddens
+ * rather than rots. On the shipped tables the arithmetic runs:
+ *
+ *     star_one asks for  1 x standard_room                             ("rooms",  minimum 1)
+ *                  and   1 SET of {games_room, hotel_cafe, hotel_lounge} ("sets", minimum 1)
+ *     a SET is one room of EACH id in the clause                       -> 3 rooms
+ *     4 rooms x 250,000 constructionCostPence                          -> 1,000,000
+ *
+ * SMALLEST SUFFICIENT, NOT COMFORTABLE. A hotel that spends all of it closes the day on ZERO and
+ * meets its first night's upkeep out of trade; that is the position ADR-0108 asked for and one
+ * penny more would be a cushion nobody derived (§2.1).
+ *
+ * NO FLOOR CHARGE ENTERS THIS BILL, and that is a property of the game rather than an omission:
+ * `floorChargeFor` in `packages/sim/src/build.ts` never charges for the ENTRANCE floor, and all
+ * four rooms fit on it. The cheapest way to build the first tier is therefore four room prices
+ * and nothing else.
+ *
+ * ---------------------------------------------------------------------------
+ * AND IT COLLIDES WITH `floorConstructionCostPenceSchema`, WHICH IS RECORDED HERE RATHER THAN
+ * RESOLVED HERE. **OWED — a human call, raised by G-068.**
+ *
+ * That field derives ITSELF from this one, through *a hotel must not be able to open its second
+ * storey out of the money it opened with*:
  *
  *     floorConstructionCostPence + cheapest constructionCostPence  >  openingCapitalPence
  *
- * At the shipped numbers 500,000 + 250,000 = 750,000 > 500,000, so the hotel must trade first.
- * That derivation is written out in full on `floorConstructionCostPenceSchema`; it is cited rather
- * than copied here, because a figure with two derivations has none. G-057 MOVED THIS NUMBER
- * BETWEEN TABLES AND DID NOT RE-SIZE IT — re-sizing is a balance decision and belongs to M4.
+ * It read 500,000 + 250,000 = 750,000 > 500,000 and HOLDS NO LONGER: 750,000 > 1,000,000 is
+ * false, so the shipped economy now lets a hotel open its second storey on day one. There is no
+ * capital that satisfies both requirements — the first forces >= 1,000,000 and the second forces
+ * < 750,000 — so one of the two must yield, and ADR-0108 is a human ruling that outranks a
+ * derivation. G-068 therefore moved THIS number and left that one, with the conflict written on
+ * both fields instead of a false inequality left standing on either. See
+ * `floorConstructionCostPenceSchema` for the re-derivation and for G-068's re-measurement of its
+ * window at this capital.
+ * ---------------------------------------------------------------------------
+ *
+ * (G-057 MOVED THIS NUMBER BETWEEN TABLES AND DID NOT RE-SIZE IT — re-sizing was a balance
+ * decision, and this is the goal that made it.)
  * ---------------------------------------------------------------------------
  */
 export const scenarioSchema = z.strictObject({

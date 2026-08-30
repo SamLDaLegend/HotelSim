@@ -700,6 +700,7 @@ const distinct: RunSummary = {
     demolishEveryTicks: 124,
     loanEveryTicks: 138,
     buyFacilityEveryTicks: 166,
+    buyAmenityEveryTicks: 167,
   },
   world: { tick: 105, days: 106, roomTypes: 107, needTypes: 108, entities: 109, stateHash: 'cafe0000feed1111' },
   guests: {
@@ -1253,6 +1254,7 @@ describe('emitReport (print THEN fail — the contract\'s second clause)', () =>
     demolishEveryTicks: 0,
     loanEveryTicks: 0,
     buyFacilityEveryTicks: 0,
+    buyAmenityEveryTicks: 0,
     contentDir: undefined,
     // Recording is off (G-017). `emitReport` cannot see either field — they are consumed
     // in cli.ts and never reach the summary — so this is here to satisfy `Options`, and

@@ -284,7 +284,13 @@ describe('THE CLOSURE: build -> rating -> arrivals -> revenue, three arms one ch
     //   rating     3 stars -> 4 stars
     //   arrivals   240 -> 480 guests over 30 days      (6 -> 12 parties a day)
     //   revenue    1,972,000p -> 3,944,000p
-    //   balance    1,302,000p -> 3,079,000p            (+1,777,000p, net of the -195,000p cost)
+    //   balance    1,802,000p -> 3,579,000p            (+1,777,000p, net of the -195,000p cost)
+    //
+    // BOTH BALANCES ROSE BY EXACTLY 500,000p AT G-068 AND THE DIFFERENCE DID NOT MOVE A PENNY,
+    // which is the whole shape of that change: `openingCapitalPence` is an OPENING POSITION and
+    // not a rate, so it shifts every balance by the delta and leaves revenue, arrivals and the
+    // rating byte-identical. The claim this case makes is about the DIFFERENCE, and it read
+    // +1,777,000p before the purse was raised and reads +1,777,000p after.
     expect(withoutFacility.rating.stars).toBe(3);
     expect(withFacility.rating.stars).toBe(4);
     expect(withoutFacility.rating.partiesPerDay).toBe(6);
@@ -293,8 +299,10 @@ describe('THE CLOSURE: build -> rating -> arrivals -> revenue, three arms one ch
     expect(withFacility.guests.arrived).toBe(480);
     expect(withoutFacility.money.revenuePennies).toBe(1_972_000);
     expect(withFacility.money.revenuePennies).toBe(3_944_000);
-    expect(withoutFacility.money.balancePennies).toBe(1_302_000);
-    expect(withFacility.money.balancePennies).toBe(3_079_000);
+    expect(withoutFacility.money.balancePennies).toBe(1_802_000);
+    expect(withFacility.money.balancePennies).toBe(3_579_000);
+    // The DIFFERENCE, asserted as itself rather than left to be read off two literals.
+    expect(withFacility.money.balancePennies - withoutFacility.money.balancePennies).toBe(1_777_000);
   });
 
   it('and nobody is turned away at either rating, so the extra arrivals are extra TRADE', () => {
@@ -581,11 +589,16 @@ describe('the ladder responds at every rung, and an UNRATED hotel receives nobod
     // rather than "this failed an inspection", and under the shipped ladder it also means there
     // is no valid bedroom for a guest to sleep in — so an arrival could only be turned away
     // unpaid. The balance is the opening capital, untouched: no guests, no rooms, no upkeep.
+    //
+    // READ OFF THE SCENARIO RATHER THAN SPELLED, SINCE G-068. The claim is *the balance IS the
+    // opening capital* — a literal made it a claim about the number 500,000, which the purse
+    // ruling then moved for reasons that have nothing to do with this case.
     const bare = inProcess(['--days', '30', '--seed', '42', '--rooms', '0', '--amenities', '0', '--demand']);
     expect(bare.rating.stars).toBe(0);
     expect(bare.rating.partiesPerDay).toBe(0);
     expect(bare.guests.arrived).toBe(0);
-    expect(bare.money.balancePennies).toBe(500_000);
+    expect(bare.money.balancePennies).toBe(bare.money.startingCapitalPennies);
+    expect(bare.money.balancePennies).toBe(1_000_000);
   });
 });
 
@@ -637,7 +650,7 @@ describe('THE SEED STILL HAS NO ECONOMIC EFFECT, and that is measured rather tha
     for (const arm of arms) {
       expect(arm.guests.arrived).toBe(480);
       expect(arm.money.revenuePennies).toBe(3_944_000);
-      expect(arm.money.balancePennies).toBe(3_079_000);
+      expect(arm.money.balancePennies).toBe(3_579_000);
       expect(arm.rating.stars).toBe(4);
     }
     // And the hashes DO differ, or the arms above would be three copies of one run and would

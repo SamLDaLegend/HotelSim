@@ -570,7 +570,14 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   most starved workload in the project — that second tick turns three more completed stays
     //   into walk-outs. The outcome test below carries the split, and it is the same trade in
     //   the same direction the door made at G-046.
-    expect(hashState(plain)).toBe('fe487876ca239a92');
+    // - `fe487876ca239a92` -> `3966fdfed81b8dea` AT G-068, AND IT IS THE CONTENT AND THE LEDGER
+    //   AND NOTHING ELSE. ADR-0108 raised `openingCapitalPence` 500,000 -> 1,000,000, so
+    //   `World.contentHash` moves AND the opening `startingCapital` transaction is 500,000p
+    //   larger. No `World` field, no save bump, no migration. **THE OUTCOME TEST BELOW DID NOT
+    //   MOVE, WHICH IS THE CONTROL** and it is the strongest form of it this hash has carried:
+    //   this arm builds NOTHING and demolishes NOTHING, so a purse it never spends cannot reach
+    //   a single guest. Same 100 arrived, same split, same everything but the money.
+    expect(hashState(plain)).toBe('3966fdfed81b8dea');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -1031,7 +1038,12 @@ describe('the same workload with the player churning the building', () => {
     //   exists to produce is UNMOVED at 24**, which is the control — the player still knocks the
     //   same rooms down under the same guests, and what moved is how long they took to walk
     //   there. 16 + 48 + 24 + 12 = 100 and the conservation still closes.
-    expect(hashState(churn)).toBe('fff8c100622117ac');
+    // `fff8c100622117ac` -> `c72a686c74a425b8` AT G-068: `World.contentHash` plus a 500,000p
+    //   larger opening `startingCapital` line (ADR-0108). No `World` field, no save bump, no
+    //   migration. **The eviction count this arm exists to produce is UNMOVED at 24**, which is
+    //   the control: this arm's player demolishes on a cadence and builds nothing, so a bigger
+    //   purse changes which numbers are in the ledger and not which rooms come down.
+    expect(hashState(churn)).toBe('c72a686c74a425b8');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

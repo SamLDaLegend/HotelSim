@@ -2466,3 +2466,49 @@ largest blast radius; (c) is the largest edit and the smallest.**
 is not rhetorical: it is the lose-state goal's requirement, and G-067's fifth question asks a
 stranger the same thing. **If the answer is "ask the stranger", this entry says so and the
 lose-state goal waits.**
+
+---
+
+## E-016 — RAISING THE PURSE FALSIFIED A THIRD FIELD'S DERIVATION, AND NO CAPITAL SATISFIES BOTH
+
+**Raised 2026-08-30 at G-068's VERIFY. Found by the builder, which DECLINED TO FIX IT because the
+brief and ADR-0108 name two fields and this is a third. Confirmed by the orchestrator from
+`economy.json` and `scenarios.json`.**
+
+### The collision, in one line of arithmetic
+
+`floorConstructionCostPence`'s stated requirement is **a hotel must not be able to open its second
+storey out of the money it opened with**, i.e. `floorCost + cheapestRoom > openingCapital`.
+
+| | before | after |
+|---|---|---|
+| the inequality | `500,000 + 250,000 = 750,000 > 500,000` **TRUE** | `750,000 > 1,000,000` **FALSE** |
+
+**NO VALUE OF `openingCapitalPence` SATISFIES BOTH REQUIREMENTS**: tier 1 forces **>= 1,000,000**
+and this one forces **< 750,000**. One of the two must yield, and **ADR-0108 is a human ruling, so
+the capital stands** — which leaves this field's derivation unsatisfied and the field itself
+unchanged at 500,000.
+
+**The builder corrected the PROSE on both fields rather than ship a false inequality**, so the tree
+is honest and every gate is green. **Nothing is blocked.** This is an open design question, not a
+stop.
+
+### The two answers
+
+- **(a) RAISE `floorConstructionCostPence` ABOVE 750,000**, which is what the requirement as written
+  now demands. **It is a >50% rise in the price of vertical expansion**, and that is a real change to
+  how the game plays rather than a bookkeeping fix.
+- **(b) RETIRE THE REQUIREMENT.** With a purse that can build a whole first tier, *"you may not open
+  a second storey on day one"* may simply no longer be a rule worth having — it was written when the
+  opening purse bought two rooms.
+
+**No recommendation is offered between them**, because the question is which of the two sentences
+the project actually wants and that is not derivable. **What is NOT acceptable is leaving the field
+at 500,000 with a requirement that reads TRUE and measures FALSE** — that is the ADR-0007 class, and
+the prose is currently correct only because the builder marked the inequality broken.
+
+### Related, and NOT part of this entry
+
+`loanRepaymentPerNightPence` (10,000p) has never had a derivation and was not in the ruling. **A loan
+now takes 112 nights to repay where it took 30** — measured on the I2 harness log, 48 full
+instalments and 631,111p still outstanding at 100,000 ticks. **Reported, not tuned.**

@@ -228,7 +228,7 @@ describe('the I2 harness reaches the loan', () => {
     // slightly different stays again and the till stands at a different figure on every night a
     // settlement falls. **The property is unchanged and is the one this arm demonstrates below**:
     // the payments are spread all run long rather than clustered, and none is capped.
-    expect(repayments).toHaveLength(30);
+    expect(repayments).toHaveLength(48);
     // 51,839 -> 44,639 AT G-054. The hotel trades slightly differently — guests reach for
     // different things first (`needTieBreakRank`, ADR-0078) — so the thirtieth repayment falls
     // five simulated days earlier. **The claim is the one on the line above and it is unmoved:
@@ -246,7 +246,34 @@ describe('the I2 harness reaches the loan', () => {
     // fuller on the nights that matter, so thirty full instalments clear the debt where
     // thirty-one part-instalments were needed. 43,199 is still deep inside the 100,000-tick
     // horizon rather than at its start, which is the claim.
-    expect(lastRepaymentTick).toBe(43_199);
+    //
+    // ==================================================================================
+    // AND 43,199 -> 99,359 AT G-068, WHICH IS THE LAST SETTLEMENT IN THE RUN. THE DEBT IS NO
+    // LONGER CLEARED INSIDE THE HORIZON, AND THAT IS ARITHMETIC RATHER THAN A REGRESSION.
+    //
+    // ADR-0108 took `loanPrincipalPence` from 300,000 to 1,111,111 — DERIVED, so that one draw
+    // funds the whole first tier — and left `loanRepaymentPerNightPence` at 10,000, which has no
+    // derivation and was not in the ruling. So a draw that took THIRTY nights to repay now takes
+    // ONE HUNDRED AND TWELVE, and 100,000 ticks is 69 nights. Measured on this log: 48 payments,
+    // every one the full instalment, first at tick 1,439 and last at 74,879, with 631,111p still
+    // outstanding at the horizon. (The hotel stops paying at 74,879 because its till is empty on
+    // every later night, not because the debt is done — the cash cap in `Math.min(debt, rate,
+    // cash)` returning ZERO, which is a different branch from the PARTIAL payment assertion 4
+    // pins at zero below and does not book a transaction at all.)
+    //
+    // **THE CLAIM THIS ARM CARRIES IS UNCHANGED**: the repayments are spread ALL RUN LONG rather
+    // than clustered at the start, and the last one is at 75% of the horizon where it was at
+    // 43%. What is lost is the incidental fact that
+    // the debt reached zero, which was never the property under test — `outstandingDebtOf` is
+    // asserted non-negative two assertions up, and the fold-closes-against-content law one up
+    // holds whether or not the balance reaches zero.
+    //
+    // **REPORTED, NOT TUNED**: whether a loan that takes a hundred and twelve nights to clear is
+    // the right shape is a `loanRepaymentPerNightPence` question, that field has no derivation
+    // to re-run, and choosing it by which reading this test prefers is the §2.1 order backwards.
+    // ==================================================================================
+    expect(lastRepaymentTick).toBe(74_879);
+    expect(outstanding).toBe(631_111);
     // 3 — THE FINAL HASH CARRIES THEM. Not "a repayment happened" and not "one happened late":
     // the gate's own hash function, over the gate's own final world, moves when the repayment
     // entries are taken out of it. That is the claim the old bar was a proxy for.
@@ -278,10 +305,10 @@ describe('the I2 harness reaches the loan', () => {
     expect(partial).toHaveLength(0);
     expect(repayments.every((entry) => 0 - entry.amount > 0)).toBe(true);
     expect(repayments.every((entry) => 0 - entry.amount <= economy.loanRepaymentPerNightPence)).toBe(true);
-    // AND ALL THIRTY ARE THE FULL INSTALMENT, which is the same sentence as the zero above it
+    // AND ALL FORTY-EIGHT ARE THE FULL INSTALMENT, which is the same sentence as the zero above it
     // read from the other side — and it is the assertion that says the zero is a measurement of
     // the payments rather than of an empty array.
-    expect(repayments.filter((entry) => 0 - entry.amount === economy.loanRepaymentPerNightPence)).toHaveLength(30);
+    expect(repayments.filter((entry) => 0 - entry.amount === economy.loanRepaymentPerNightPence)).toHaveLength(48);
   });
 
   it('records one outcome per drawLoan command, which is the per-tick law over a whole run', () => {

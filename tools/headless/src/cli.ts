@@ -9,6 +9,8 @@
 //   pnpm sim:run --days 30 --build 2880 --demolish 5760     (and knocks rooms down again)
 //   pnpm sim:run --days 1 --content ./my-content            (alternative content directory)
 //   pnpm sim:run --days 1000 --rooms 0 --build 1440 --loan 1440   (from nothing, G-011)
+//   pnpm sim:run --days 365 --rooms 0 --amenities 0 --build 1440 --buy-amenity 1440 --demand
+//                                                           (a bare plot climbs to one star, G-068)
 //   pnpm sim:run --days 30 --seed 7 --rooms 6 --record run.ndjson --record-every 10
 //                                                           (a run a human can watch, G-017)
 //
@@ -86,6 +88,7 @@ function main(): void {
     options.amenities,
     options.facilities,
     options.buyFacilityEveryTicks,
+    options.buyAmenityEveryTicks,
   );
   // RECORDING IS OFF BY DEFAULT AND THIS BRANCH IS THE WHOLE MECHANISM (G-017). With no
   // `--record`, this is the same `run` call, with the same arguments, that shipped before

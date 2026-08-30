@@ -325,14 +325,28 @@ describe('a COMPULSORY payroll makes G-011 dead state absorbing, which is why it
     expect(nobody.build.built).toBeGreaterThan(100);
   });
 
-  it('employing ONE porter, it builds an order of magnitude less and strands rooms it cannot scrap', () => {
+  it('employing ONE porter, it builds several times less and strands rooms it cannot scrap', () => {
     const employed = summaryOf([...CRITERION_B, '--content', contentEmploying([{ roleId: ROLE.id, count: 1 }])]);
     const nobody = summaryOf([...CRITERION_B]);
     expect(employed.money.headcount).toBe(1);
     // THE RATIO IS THE FINDING. Bounded rather than pinned to the penny, because the exact
     // count is a property of a blind build cadence meeting a wallet and will move whenever
-    // anything upstream of either does; an order of magnitude will not.
-    expect(employed.build.built * 5).toBeLessThan(nobody.build.built);
+    // anything upstream of either does.
+    //
+    // ======================================================================================
+    // THE BOUND WAS 5x AND IS 3x SINCE G-068, AND THE MOVEMENT IS THE MEASUREMENT RATHER THAN
+    // AN INCONVENIENCE. ADR-0108 raised `openingCapitalPence` 500,000 -> 1,000,000, and a
+    // compulsory payroll is a RATE while capital is an OPENING POSITION — so a bigger purse
+    // buys more nights before the wage bill catches up. Measured on this pair, one
+    // deterministic run each, exact integers, win32/12cpu quiet: **employed 34 builds against
+    // nobody's 120, a ratio of 3.5x where it used to clear 5x.**
+    //
+    // "AN ORDER OF MAGNITUDE" WAS ALWAYS PROSE AND THE BOUND WAS ALWAYS 5x; what this records
+    // is that the COLLAPSE IS SOFTER AT A BIGGER PURSE, which is exactly what an opening
+    // position should do to a rate and is a reason to re-take this pair whenever either moves.
+    // The claim the case is named for is the two assertions below, and neither has weakened.
+    // ======================================================================================
+    expect(employed.build.built * 3).toBeLessThan(nobody.build.built);
     // AND THE TWO CLAIMS THE CRITERION MAKES ARE FALSE UNDER IT.
     expect(employed.build.built).not.toBe(employed.build.demolished);
     expect(employed.world.entities).toBeGreaterThan(0);

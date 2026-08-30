@@ -214,13 +214,15 @@ describe('D — recording is off by default, and turning it on changes nothing b
     expect(out).not.toContain(dir);
     expect(out).not.toContain('"record');
     expect(Object.keys(JSON.parse(out).input).sort()).toEqual(
-      // `facilities` joined at G-051a — a seeding flag like `rooms` and `amenities`, and like
-      // them it belongs in the document. The claim under test is unchanged and is about the
-      // RECORDING flags: neither `record` nor `recordEveryTicks` may appear here.
+      // `facilities` joined at G-051a and `buyAmenityEveryTicks` at G-068 — cadence and seeding
+      // flags like `rooms` and `amenities`, and like them they belong in the document. The claim
+      // under test is unchanged and is about the RECORDING flags: neither `record` nor
+      // `recordEveryTicks` may appear here.
       [
         'amenities',
         'arrivalEveryTicks',
         'buildEveryTicks',
+        'buyAmenityEveryTicks',
         'buyFacilityEveryTicks',
         'demolishEveryTicks',
         'facilities',

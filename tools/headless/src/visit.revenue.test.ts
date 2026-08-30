@@ -53,6 +53,7 @@ const options = (rooms: number, amenities: number): Options => ({
   demolishEveryTicks: 0,
   loanEveryTicks: 0,
   buyFacilityEveryTicks: 0,
+  buyAmenityEveryTicks: 0,
   contentDir: undefined,
   record: undefined,
   recordEveryTicks: 1,

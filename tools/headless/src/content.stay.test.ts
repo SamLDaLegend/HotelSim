@@ -367,6 +367,17 @@ describe('the money files are BYTE-IDENTICAL — this goal moved the margin and 
     // again. M4's, and §9's stop condition until then.
     // ------------------------------------------------------------------------
     //
+    // ------------------------------------------------------------------------
+    // AND G-068 MADE THAT MOVE, ON A HUMAN RULING RATHER THAN FOR COMFORT (ADR-0108, E-015).
+    // TWO of the numbers below changed and the paragraph above is kept because it PREDICTED the
+    // move and named its price. `loanPrincipalPence` 300,000 -> 1,111,111 and
+    // `openingCapitalPence` 500,000 -> 1,000,000; both are now DERIVED, from two different
+    // sentences, and `purse.derivation.test.ts` re-runs both derivations against the ladder and
+    // the price list. This test's job is unchanged and is the complementary one: it asserts the
+    // BYTES, so a retune that does not also move the derivation is red in one place and a
+    // derivation that drifts from the bytes is red in the other.
+    // ------------------------------------------------------------------------
+    //
     // G-057 MOVED ONE OF THE FIVE AND CHANGED NONE OF THEM. `startingCapitalPence` was the
     // hotel's opening balance and it now lives on the SCENARIO table as `openingCapitalPence`,
     // because the house rules are the game and an opening balance is the situation — see
@@ -377,7 +388,7 @@ describe('the money files are BYTE-IDENTICAL — this goal moved the margin and 
     const economy = JSON.parse(bytesOf(ECONOMY_PATH)) as Record<string, number>[];
     expect(economy).toHaveLength(1);
     expect(economy[0]).toMatchObject({
-      loanPrincipalPence: 300_000,
+      loanPrincipalPence: 1_111_111,
       loanFeeBasisPoints: 1_000,
       loanRepaymentPerNightPence: 10_000,
       liquidationRoomsMax: 4,
@@ -386,7 +397,7 @@ describe('the money files are BYTE-IDENTICAL — this goal moved the margin and 
     const scenarios = JSON.parse(bytesOf(SCENARIOS_PATH)) as Record<string, unknown>[];
     expect(scenarios).toHaveLength(1);
     expect(scenarios[0]).toMatchObject({
-      openingCapitalPence: 500_000,
+      openingCapitalPence: 1_000_000,
       seededStock: 'supplementsCapital',
     });
   });

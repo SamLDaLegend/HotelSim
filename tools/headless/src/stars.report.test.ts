@@ -50,7 +50,14 @@ import { describe, expect, it } from 'vitest';
 import { ROOM_TYPES_PATH, STAR_TIERS_PATH, loadContent } from './content-loader.js';
 import { amenityRoomTypesOf, facilityRoomTypesOf, lodgingRoomTypeOf } from './report.js';
 import type { RunSummary } from './report.js';
-import { demolitionRefundOf, minConstructionCostOf, starTiersInOrder } from '@hotelsim/sim';
+import {
+  applyBasisPoints,
+  demolitionRefundOf,
+  firstEconomy,
+  firstScenario,
+  minConstructionCostOf,
+  starTiersInOrder,
+} from '@hotelsim/sim';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const CLI = join(ROOT, 'tools/headless/src/cli.ts');
@@ -236,7 +243,7 @@ describe('the shortfall is the price tag, and it names what to build', () => {
     ]);
   });
 
-  it('AND THE FIRST RUNG COSTS FOUR ROOMS WHILE A BARE PLOT CAN AFFORD THREE — the wall, named', () => {
+  it('AND THE FIRST RUNG COSTS FOUR ROOMS, WHICH IS EXACTLY WHAT A BARE PLOT OPENS WITH', () => {
     // ======================================================================================
     // THE SHARPEST CONSEQUENCE OF ADR-0107, FOUND BY G-060 AND NOT PREDICTED BY IT. It is
     // pinned here rather than written in a report, because a wall nothing measures is a wall
@@ -266,6 +273,27 @@ describe('the shortfall is the price tag, and it names what to build', () => {
     // and that is a `scenarios.json` / `economy.json` number and a human's call — outside
     // ADR-0107, which ruled on the amenity clause and nothing else.
     // ======================================================================================
+    //
+    // ######################################################################################
+    //  AND THE HUMAN MADE THAT CALL: ADR-0108, E-015, BUILT AT G-068. **THE WALL IS GONE AND
+    //  THIS CASE IS REWRITTEN RATHER THAN DELETED**, which is the rule G-060 followed when it
+    //  turned `demand.report.test.ts` red by design: a case that exists to pin a defect gets
+    //  rewritten to pin the repair, so the ladder arithmetic that FOUND the wall goes on
+    //  running against the numbers that closed it.
+    //
+    //  BOTH NUMBERS MOVED AND THEY ANSWER DIFFERENT QUESTIONS. `openingCapitalPence`
+    //  500,000 -> 1,000,000 answers *can a new hotel start?*; `loanPrincipalPence`
+    //  300,000 -> 1,111,111 answers *can a broke hotel come back?* Their DERIVATIONS live in
+    //  `purse.derivation.test.ts` and the RUNS that show both work live in
+    //  `purse.report.test.ts`. What stays here is the ladder-side arithmetic this case has
+    //  always owned — what the first rung costs — now asserted against a purse that clears it.
+    //
+    //  MEASURED, and it is the same arm as the wall reading above with the one verb it was
+    //  missing (`--buy-amenity`, G-068): `--days 365 --seed 42 --rooms 0 --amenities 0
+    //  --build 1440 --buy-amenity 1440 --demand` reaches **one star on the first build tick**,
+    //  four rooms for 1,000,000p, no floor charge, where the old purse reached three rooms and
+    //  zero stars at 365 AND at 1,000 days.
+    // ######################################################################################
     const firstTier = starTiersInOrder(content).find((tier) => tier.stars === 1);
     const roomsInFirstTier = (firstTier?.requires ?? []).reduce(
       (total, clause) =>
@@ -281,20 +309,39 @@ describe('the shortfall is the price tag, and it names what to build', () => {
     expect(new Set(priced).size).toBe(1);
     const each = priced[0] ?? 0;
     expect(each).toBeGreaterThan(0);
-    expect(roomsInFirstTier * each).toBeGreaterThan(500_000 + 300_000);
+    const bill = roomsInFirstTier * each;
 
+    // THE PURSE CLEARS THE BILL, BY BOTH DOORS AND WITH NOTHING TO SPARE ON EITHER. The capital
+    // arrives whole; the loan arrives less its fee, which is why the two integers differ and why
+    // collapsing the two rulings into one edit would have left one of them unenforced.
+    const capital = firstScenario(content)?.openingCapitalPence ?? 0;
+    const economy = firstEconomy(content);
+    const principal = economy?.loanPrincipalPence ?? 0;
+    const net = principal - applyBasisPoints(principal, economy?.loanFeeBasisPoints ?? 0);
+    expect(capital).toBe(bill);
+    expect(net).toBe(bill);
+
+    // AND THE BARE PLOT ARRIVES, ON THE ARM THAT USED TO STALL AT THREE ROOMS. `--buy-amenity`
+    // is the verb this arm lacked: the shortfall on the old reading named the `sets` clause and
+    // nothing else, so no opening capital could have moved it.
     const affordable = (days: string): RunSummary =>
       summaryOf([
         '--days', days, '--seed', '42', '--rooms', '0', '--amenities', '0',
-        '--build', '1440', '--loan', '1440', '--demand',
+        '--build', '1440', '--buy-amenity', '1440', '--demand',
       ]);
-    const year = affordable('365');
-    const forever = affordable('1000');
-    expect(year.build.built).toBe(3);
-    expect(forever.build.built).toBe(3);
-    expect(forever.build.built).toBeLessThan(roomsInFirstTier);
-    expect(forever.build.refused.insufficientFunds).toBeGreaterThan(900);
-    expect(forever.rating.stars).toBe(0);
+    const day = affordable('1');
+    expect(day.build.built).toBe(roomsInFirstTier);
+    expect(day.money.constructionPennies).toBe(0 - bill);
+    expect(day.rating.stars).toBeGreaterThanOrEqual(1);
+    // THE OLD ARM IS KEPT AS THE CONTROL AND ITS VERDICT IS INVERTED RATHER THAN DELETED:
+    // without a verb that buys an amenity, the same plot with the same money is still unrated
+    // however long it trades, because bedrooms alone cannot satisfy tier 1.
+    const bedroomsOnly = summaryOf([
+      '--days', '365', '--seed', '42', '--rooms', '0', '--amenities', '0',
+      '--build', '1440', '--loan', '1440', '--demand',
+    ]);
+    expect(bedroomsOnly.rating.stars).toBe(0);
+    expect(bedroomsOnly.rating.shortfall.map((clause) => clause.counting)).toEqual(['sets']);
   });
 });
 
@@ -545,9 +592,13 @@ describe('THE CURRENCY CAN BE BOUGHT INTO — a paid facility moves the rating',
     expect(climbed.rating.stars).toBe(5);
     expect(climbed.rating.nextStars).toBeNull();
     expect(climbed.rating.shortfall).toEqual([]);
-    expect(climbed.build.built).toBe(17);
-    expect(climbed.money.constructionPennies).toBe(-5_850_000);
-    expect(climbed.money.balancePennies).toBe(597_000);
+    // G-068 MOVED ALL THREE OF THESE AND THE VERDICT ABOVE IS UNMOVED, which is the shape the
+    // capital change was PREDICTED to have: 500,000p more in the purse buys one more facility
+    // (18 rooms for 6,300,000p, closing on 287,000p, against 17 for 5,850,000p closing on
+    // 597,000p). Stars, shortfall and validity are byte-identical across it.
+    expect(climbed.build.built).toBe(18);
+    expect(climbed.money.constructionPennies).toBe(-6_300_000);
+    expect(climbed.money.balancePennies).toBe(287_000);
     // Bought, not inherited, and every room of it counts — the rating reads VALID rooms only.
     const invalid = Object.values(climbed.rooms.invalid).reduce((total, count) => total + count, 0);
     expect(invalid).toBe(0);
@@ -612,11 +663,26 @@ describe('THE CURRENCY CAN BE BOUGHT INTO — a paid facility moves the rating',
     ]);
     expect(inherited.rating.stars).toBe(4);
     expect(inherited.rating.nextStars).toBe(5);
-    // In THIS family the wall is scale — 12 valid bedrooms of the 24 tier 5 wants after a
+    // In THIS family the wall is scale — 17 valid bedrooms of the 24 tier 5 wants after a
     // simulated year — and the rooms that would clear it are stranded. The `sets` clause is
-    // beside it and is a SECOND wall this runner cannot climb at all: there is no flag that
-    // buys an amenity, which is the hole the case above names.
-    expect(inherited.rating.shortfall.map((clause) => clause.counting)).toEqual(['rooms', 'sets']);
+    // beside it and is a SECOND wall THIS INVOCATION cannot climb: it carries no
+    // `--buy-amenity`, which G-068 added and which the case above used to say did not exist.
+    //
+    // AND SINCE G-068 THERE ARE THREE CLAUSES OUTSTANDING RATHER THAN TWO, WHICH IS THE
+    // CAPITAL RAISE MOVING A CLAUSE THE WRONG WAY AND IS RECORDED AS SUCH. It read
+    // `['rooms', 'sets']` at 500,000p of opening capital: the hotel had bought its SECOND
+    // facility type. At 1,000,000p it has bought ONE and the clause is outstanding — because
+    // `--build`'s blind daily cadence gets the money first and spends it on bedrooms (36 rooms
+    // built for 9,000,000p, against 17 before), so the facility walk's sparse 20,000-tick
+    // attempts meet an emptier wallet. **More opening capital, fewer facilities, on this arm.**
+    // That is a property of a schedule that cannot see a rung — `--build`'s own documented rule
+    // — rather than of the economy, and the verdict this case is named for (four stars, scale
+    // outstanding, rooms stranded) is unmoved.
+    expect(inherited.rating.shortfall.map((clause) => clause.counting)).toEqual([
+      'rooms',
+      'sets',
+      'distinctTypes',
+    ]);
     expect(inherited.rooms.invalid.unsupported).toBeGreaterThan(0);
   }, 90_000);
 
@@ -644,23 +710,48 @@ describe('THE CURRENCY CAN BE BOUGHT INTO — a paid facility moves the rating',
     // amendment 2 §3 made sharper: it is not that scale and facilities cannot both be met, it is
     // that a hotel with NO INCOME cannot buy the second facility at any horizon. The case below
     // is what turns that into a statement about income.
+    //
+    // ######################################################################################
+    //  AND G-068 FALSIFIED IT. **THE WALL IS GONE, AND THE THING THAT REMOVED IT WAS THE
+    //  OPENING PURSE RATHER THAN ANY INCOME.** The title of this case is kept, struck, and
+    //  answered, because a wall that quietly stopped being one is exactly what ADR-0007
+    //  catalogues.
+    //
+    //  ~~"one facility, ever"~~ **STRUCK.** ADR-0108 raised `openingCapitalPence` from 500,000
+    //  to 1,000,000, and the facility walk buys in ascending id order — conference hall
+    //  450,000p, then spa 250,000p. 500,000p bought the first and could not reach the second;
+    //  1,000,000p buys BOTH, for 700,000p, on tick 1 and tick 2,001, out of the purse alone.
+    //  Same invocation, same seed, one content field apart, one deterministic run each, exact
+    //  integers, win32/12cpu quiet:
+    //
+    //      capital 500,000    4 stars · 1 built · 450,000p spent · shortfall distinctTypes 1/2
+    //      capital 1,000,000  **5 stars** · 2 built · 700,000p spent · **shortfall EMPTY**
+    //
+    //  SO ADR-0102 AMENDMENT 2 §3 NARROWS A SECOND TIME AND THE DIRECTION IS THE INTERESTING
+    //  PART. G-060 narrowed *"the scale clause and the facility clause cannot both be
+    //  satisfied"* to a claim about INCOME. This narrows it again to a claim about the
+    //  OPENING POSITION: on the shipped tables a hotel that is seeded at tier 5's scale and
+    //  service can buy tier 5's facilities out of the money it opens with, having earned
+    //  nothing — the balance closes 79,026,000p in the RED on a thousand days of upkeep with
+    //  no arrivals, and it is five stars the whole way down. **A rating that can be bought
+    //  outright at tick 0 by a hotel that then goes bankrupt is a finding for the goal that
+    //  builds the lose state, not a defect of this one**, and it is reported rather than
+    //  tuned here: §2.1 forbids choosing a capital by which wall it leaves standing.
+    // ######################################################################################
     const long = summaryOf([
       '--days', '1000', '--seed', '42', '--rooms', '24', '--amenities', '3', '--buy-facility', '2000',
       '--arrivals', '100000',
     ]);
-    expect(long.rating.stars).toBe(4);
-    expect(long.build.built).toBe(1);
-    expect(long.rating.shortfall).toEqual([
-      {
-        roomTypeIds: facilityRoomTypesOf(content).map((room) => room.id),
-        counting: 'distinctTypes',
-        minimum: 2,
-        have: 1,
-      },
-    ]);
-    // AND IT IS THE PRICE THAT STOPS IT, not the cadence of attempts: the hotel goes on asking
-    // and goes on being refused.
+    expect(long.rating.stars).toBe(5);
+    expect(long.build.built).toBe(2);
+    expect(long.money.constructionPennies).toBe(-700_000);
+    expect(long.rating.shortfall).toEqual([]);
+    // AND THE PRICE IS STILL WHAT STOPS IT — at the THIRD facility now rather than the second.
+    // The theatre costs 900,000p and this hotel never has it: the walk goes on asking and goes
+    // on being refused, which is what makes two a ceiling rather than a stopping point.
     expect(long.build.refused.insufficientFunds).toBeGreaterThan(100);
+    expect(facilityRoomTypesOf(content)).toHaveLength(3);
+    expect(long.money.balancePennies).toBeLessThan(0);
   });
 
   // BUDGET DECLARED (G-055): 3x this case's own worst measured in-suite reading, 24,775ms. It

@@ -124,8 +124,45 @@ describe('the I2 harness reaches rooms that do not work', () => {
     // Four of these six rows moved for a reason that had nothing to do with the hotel. Sizing
     // at `serviceFloorRefill` — the slowest service the content permits, which is what that
     // pass already argued for in prose — restores them. See `determinism-log.ts`'s `copiesFor`.
+    //
+    // ==================================================================================
+    // AND FOUR OF THESE SIX MOVED AT G-068, FROM A CONTENT EDIT THAT TOUCHED NO GEOMETRY —
+    // WHICH IS THE THIRD TIME THIS CENSUS HAS BEEN MOVED BY AN ENTITY-ID SHIFT AND THE FIRST
+    // TIME THE CAUSE HAS BEEN REPAIRED AT ITS SOURCE.
+    //
+    // ADR-0108 raised `openingCapitalPence` 500,000 -> 1,000,000. This log's churn pass burns
+    // that capital at `roundTripLoss` a cycle, so the cycle count is
+    // `ceil((capital - cheapest + 1) / 125,000)` and went from THREE to SEVEN — eight more
+    // entity ids allocated before the first spawn, and the granted draw pushed from tick 7 to
+    // tick 15, past the spawn pass that used to start at the literal 13.
+    //
+    // TWO THINGS BROKE AND BOTH WERE SILENT-GREEN FAILURES OF THE KIND THIS FILE EXISTS FOR:
+    //
+    //   1. THE GRANTED LOAN WENT VACUOUS. Two spawns landed before the draw, the hotel held
+    //      rooms when it asked, `canDrawLoan` answered `notEligible` — correctly — and the I2
+    //      gate stayed green because a refusal is a recorded outcome. `recovery.determinism`
+    //      caught it. The spawn pass's start tick is now DERIVED from the churn's draw tick.
+    //
+    //   2. THE ID-WALKING PASSES SLID. `despawnEntity` at `3k + 1` and `demolishRoom` at
+    //      `5k + 2` walk ABSOLUTE ids, so eight more churn ids meant three more of their early
+    //      steps landed on entities that were demolished before tick 15 — documented no-ops
+    //      that cost coverage. `noCorridor` fell to ZERO here and `missingItem` rose to 2, the
+    //      exact pair of symptoms the paragraph above records from the amenity-copies change.
+    //      **Both walks are now offset by `churnEntities`**, which is the derivation `underfoot`
+    //      has carried since G-011 for this precise reason and which these two never got. It is
+    //      not a re-aim at a census: nothing in that offset mentions a row of this table.
+    //
+    // WHAT IS LEFT AFTER THE REPAIR, and it is two rows rather than four. `noCorridor`,
+    // `noDoor`, `unplaced` and `unreachable` come back byte-identical at BOTH horizons.
+    //   `missingItem` 1 -> 2: the walks now step over the churn, so a different unfurnished
+    //       spawn keeps its bed and a second grounded one loses it. The knife edge below is
+    //       still a knife edge — it is simply two-wide now instead of one.
+    //   `unsupported` 42 -> 40: two fewer player builds land in mid-air, because the hotel
+    //       spends its bigger purse on the churn instead. `built` is the same fact from the
+    //       other side, and this is the row that has moved on nearly every economic goal.
+    // ==================================================================================
     expect(tally).toEqual({
-      missingItem: 1,
+      missingItem: 2,
       noCorridor: 1,
       noDoor: 3,
       unplaced: 0,
@@ -142,21 +179,29 @@ describe('the I2 harness reaches rooms that do not work', () => {
       // 43 -> 42 AT G-046b. The exit rule moves how long a journey takes, so the hotel affords a
       // slightly different set of builds and one fewer of them lands in mid-air. Every reason is
       // still non-zero except the two this file pins at zero deliberately, which is the claim.
-      unsupported: 42,
+      // 42 -> 40 AT G-068, for the reason the banner above this call gives.
+      unsupported: 40,
     });
   });
 
   it('contains rooms with nothing beneath them', () => {
     // 43 -> 42 AT G-046b, for the build-cadence reason the tally above states.
-    expect(tally.unsupported).toBe(42);
+    // 42 -> 40 AT G-068. See the banner on the tally above: two fewer builds land in mid-air.
+    expect(tally.unsupported).toBe(40);
   });
 
-  it('contains rooms with no bed in them — AND THE COUNT IS ONE, which is a knife edge', () => {
-    // ONE. The spawn walk furnishes every other room, and all but one of the unfurnished ones
-    // is ALSO unsupported — `missingItem` is checked after support, so it is reported only for
-    // the single unfurnished room that happens to be standing on something. A schedule change
-    // that moves which spawn indices land on the earth silences this row entirely.
-    expect(tally.missingItem).toBe(1);
+  it('contains rooms with no bed in them — AND THE COUNT IS TWO, which is still a knife edge', () => {
+    // The spawn walk furnishes every other room, and all but a couple of the unfurnished ones
+    // are ALSO unsupported — `missingItem` is checked after support, so it is reported only for
+    // the unfurnished rooms that happen to be standing on something. A schedule change that
+    // moves which spawn indices land on the earth silences this row entirely.
+    //
+    // ONE UNTIL G-068 AND TWO SINCE, WHICH IS THE KNIFE EDGE MOVING RATHER THAN GOING AWAY.
+    // The id-walking despawn pass steps over the churn now (see the tally banner), so it takes
+    // a bed from a different room and the one it used to take from keeps it. Two is a WIDER
+    // margin than one and the case is unchanged: this row is a measurement of which spawn
+    // indices land on the earth, and the day it reads 0 this test is what says so.
+    expect(tally.missingItem).toBe(2);
   });
 
   it('contains rooms sealed in ON ALL FOUR SIDES', () => {
@@ -376,7 +421,10 @@ describe('the replay is the thing the gate runs', () => {
     // joining it to that spine, so every room that is supported, doored, furnished and on the
     // plan is also walkable-to. Declaring the shaft WITHOUT the spine gives 13.
     expect(tally.unreachable).toBe(0);
-    expect(tally.missingItem).toBe(4);
+    // 4 -> 3 AT G-068 — the horizon's half of the 1 -> 2 move at 40,000 ticks, and in the other
+    // direction. See the banner on the 40,000-tick tally: the id-walking passes step over the
+    // churn now, so which rooms lose their beds moved, and the two horizons moved by one each.
+    expect(tally.missingItem).toBe(3);
     // G-038c: 76 -> 75. The log's player builds land on floors 5..19 and the first one on each
     // floor now pays `floorConstructionCostPence` as well (ADR-0047 B8), so one fewer is
     // affordable over the run — and the rooms this walk builds are the ones standing on nothing.
