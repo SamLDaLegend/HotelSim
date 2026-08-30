@@ -20,6 +20,7 @@ import {
   describeCell,
   GUEST_DEPARTURE_REASONS,
   guestCount,
+  itemPurchaseCostOf,
   needTypesInOrder,
   needOutcomeOf,
   TICKS_PER_DAY,
@@ -27,6 +28,7 @@ import {
 } from '@hotelsim/sim';
 import type { BoundContent, Guest, RoomTypeData, StarRating, World } from '@hotelsim/sim';
 import type { SpeedRung } from '@hotelsim/content';
+import type { ItemGroup } from './catalogue.js';
 import { moneyOf } from './money.js';
 import { describeRating } from './rating.js';
 import type { FeedLine } from './remarks.js';
@@ -568,11 +570,35 @@ export type ToolHandlers = {
  * NO TOOL IS SELECTED AT START. A game whose first stray click spends a quarter of the
  * opening capital is a game that punishes looking around.
  * ---------------------------------------------------------------------------------------
+ *
+ * AND SINCE G-075c IT CARRIES THE FURNISH CONTROL, WHICH IS A `select` AND NOT FORTY BUTTONS.
+ *
+ * ---------------------------------------------------------------------------------------
+ * THE COUNT IS THE WHOLE ARGUMENT. G-075b ships twenty-eight item types and the `suits`
+ * vocabulary files them under seven headings, which is FORTY entries — an item that suits
+ * three rooms appears three times. Rendered as buttons in this row that is forty controls in
+ * the chrome, and **E-013 is an OPEN human complaint that the chrome already crowds the
+ * picture out**: WATCH #38 measured the HUD at 368 of 419 pixels on a 404px viewport with the
+ * stage collapsing to ZERO, by exactly this mechanism — the row wraps, the `auto` grid row
+ * grows, the `1fr` stage row gives up its height. A `select` is ONE control at any catalogue
+ * size, and it is why this landed without making a measured, open complaint worse.
+ *
+ * `optgroup` IS THE GROUPING, AND THE GROUPING IS CONTENT'S (I3). The headings are room-type
+ * NAMES and the memberships are `suits`, inverted once in `catalogue.ts`. Nothing in this file
+ * knows which item belongs in which room, and nothing here may learn.
+ *
+ * ONE ITEM UNDER THREE HEADINGS IS SELECTED UNDER THE FIRST OF THEM, and that is stated rather
+ * than hidden: the option's value is the item's own id, so `select.value = id` lands on the
+ * first occurrence. It is the right answer because the heading is a question the player was
+ * asking ("what goes in a lounge") and not a property of the chair — picking the same chair
+ * from the games-room heading holds the same tool and sends the same command.
+ * ---------------------------------------------------------------------------------------
  */
 export function renderTools(
   host: HTMLElement,
   content: BoundContent,
   roomTypes: readonly RoomTypeData[],
+  itemGroups: readonly ItemGroup[],
   tool: Tool,
   handlers: ToolHandlers,
 ): void {
@@ -614,6 +640,62 @@ export function renderTools(
   corridor.classList.toggle('on', tool?.kind === 'corridor');
   corridor.addEventListener('click', () => handlers.onPick({ kind: 'corridor' }));
   host.append(corridor);
+
+  // THE FURNISH CONTROL (G-075c). It sits AFTER the corridor and BEFORE demolish, which is the
+  // order the player uses it in: draw where people walk, hang rooms off it, PUT SOMETHING IN
+  // THE ROOM, and only then take something down. `HOTELSIM.md` §1 is three clauses in that
+  // order and this is the second one.
+  const furnishLabel = document.createElement('span');
+  furnishLabel.className = 'k';
+  furnishLabel.textContent = 'furnish';
+  host.append(furnishLabel);
+
+  const furnish = document.createElement('select');
+  furnish.title =
+    'pick an item, then click a cell inside a room to put it there; ' +
+    'the headings are which rooms content says each item reads well in, not a restriction — ' +
+    'the simulation accepts or refuses the placement, not this control';
+  // THE PLACEHOLDER IS AN OPTION AND NOT A BLANK. A `select` always shows something; without a
+  // first row that says what the control is FOR, a player who has not touched it reads the
+  // first item in the catalogue as the current tool, which it is not.
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'pick an item…';
+  furnish.append(placeholder);
+
+  for (const group of itemGroups) {
+    const optgroup = document.createElement('optgroup');
+    // THE HEADING IS `roomType.name`, read from content, for the reason the build buttons'
+    // labels are: rename a room in JSON and this heading renames itself (ADR-0003).
+    optgroup.label = group.roomType.name;
+    for (const item of group.items) {
+      const option = document.createElement('option');
+      // THE VALUE IS THE CONTENT'S OWN ID, which came out of the JSON and is not a literal in
+      // this layer — the same route `roomType.id` takes into `drawRoom`.
+      option.value = item.id;
+      // AND THE PRICE, for the build buttons' reason word for word: `itemPurchaseCostOf` is
+      // the SIMULATION's reading of it — the number `applyPlaceItem` will actually charge,
+      // including the 0 it charges for content that declares none — rather than a second copy
+      // of the JSON field. A control that hid the price would make `insufficientFunds` look
+      // like a bug.
+      option.textContent = `${item.name}  ${moneyOf(itemPurchaseCostOf(content, item.id))}`;
+      optgroup.append(option);
+    }
+    furnish.append(optgroup);
+  }
+
+  // WHICH ITEM IS HELD, or the placeholder when the tool is anything else. Assigned rather than
+  // remembered: this control is rebuilt on every pick and holds no state of its own, which is
+  // the rule every other control in this file keeps.
+  furnish.value = tool?.kind === 'item' ? tool.itemType.id : '';
+  furnish.classList.toggle('on', tool?.kind === 'item');
+  furnish.addEventListener('change', () => {
+    // THE PLACEHOLDER PUTS THE TOOL DOWN. Re-selecting "pick an item…" is the player saying
+    // they are done furnishing, and it is the same answer the `none` button gives.
+    const picked = itemGroups.flatMap((group) => group.items).find((item) => item.id === furnish.value);
+    handlers.onPick(picked === undefined ? null : { kind: 'item', itemType: picked });
+  });
+  host.append(furnish);
 
   const demolish = document.createElement('button');
   demolish.textContent = 'demolish';

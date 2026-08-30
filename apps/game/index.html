@@ -147,6 +147,26 @@
         border-color: #3f6fb5;
         color: #ffffff;
       }
+      /* THE FURNISH PALETTE (G-075c) — the same skin as the buttons beside it, because it is
+         a tool picker sitting in a row of tool pickers and a control that looks foreign reads
+         as belonging to something else. It is a `select` rather than forty buttons for E-013's
+         reason, which `renderTools` states in full: forty controls in this row is the exact
+         mechanism WATCH #38 measured collapsing the stage to zero pixels. */
+      select {
+        font: inherit;
+        color: #c8cfda;
+        background: #1b212b;
+        border: 1px solid #2c3542;
+        border-radius: 3px;
+        padding: 3px 6px;
+        cursor: pointer;
+        max-width: 22em;
+      }
+      select.on {
+        background: #2f4a7a;
+        border-color: #3f6fb5;
+        color: #ffffff;
+      }
       button .u {
         color: #8f9db0;
       }

@@ -856,13 +856,19 @@ export const roomTypesSchema = z.array(roomTypeSchema).min(1);
  * TWO THINGS `bindContent` REFUSES THAT NO SCHEMA HERE CAN SEE, both cross-references:
  *
  *   - A NEED WHOSE ONLY PROVIDER IS AN ITEM NO ROOM TYPE REQUIRES. `buildRoom` furnishes
- *     the room it places, and there is no `placeItem` command until M6, so nothing a
- *     player can do would ever put that item in the world. The need would be formed by
- *     every guest and met by none — guaranteed unhappiness with every gate green, which is
- *     what the check exists to catch. **The shipped table depends on this being enforced:
- *     `guest_comfort` is provided only by `arm_chair`, which is reachable only because
- *     `hotel_lounge` requires it. Delete that requirement and the game stops loading, by
- *     design.**
+ *     the room it places, so a room type's `requires` is the one route this check counts.
+ *     The need would otherwise be formed by every guest and met by none — guaranteed
+ *     unhappiness with every gate green, which is what the check exists to catch.
+ *     **The shipped table still depends on this being enforced, and G-075b narrowed the
+ *     example rather than removing it: `guest_comfort` is provided by SIX items and by NO
+ *     ROOM TYPE, and the only one of the six that any room `requires` is `arm_chair`, in
+ *     `hotel_lounge`. Delete that one requirement and the game stops loading, by design —
+ *     the other five are optional furniture and the check does not count them.**
+ *     ~~"there is no `placeItem` command until M6"~~ STRUCK 2026-08-30 (G-075b): `placeItem`
+ *     exists (`commands.ts`) and charges since G-075a, so the check is now CONSERVATIVE
+ *     rather than exact — a player with the G-075c tool could reach an unrequired item. It
+ *     is kept as it is: refusing content whose only route to a need is a purchase the
+ *     player may decline is the same guaranteed-unhappiness argument, one step weaker.
  *   - AN ITEM THAT PROVIDES THE LODGING NEED. A guest lodges in a ROOM — it holds it for
  *     the whole stay and `payForStay` charges for the room type — so nothing can sleep in
  *     a vending machine. Such an item is a declared provider that could never deliver.
@@ -884,19 +890,50 @@ export const roomTypesSchema = z.array(roomTypeSchema).min(1);
  * costume of one that can.
  *
  * THE REFERENCE POINT, WHICH IS THE HONEST THING A CHOSEN NUMBER CAN OFFER: **a room costs
- * 250,000** (`room-types.json`, six of the seven types). An item and a facility room compete
- * for the same job — being the thing that serves a guest's need — so a room's price is the
- * scale an item's price is chosen on, and the shipped three sit at:
+ * 250,000** (`room-types.json`, FIVE of the seven types — `conference_hall` is 450,000 and
+ * `hotel_theatre` 900,000). *This line read "six of the seven types" from G-075a until
+ * G-075b counted them; the five 250,000 rows are `standard_room`, `hotel_lounge`,
+ * `games_room`, `hotel_cafe` and `hotel_spa`, and `room-types.json` is the check.* An item
+ * and a facility room compete for the same job — being the thing that serves a guest's need
+ * — so a room's price is the scale an item's price is chosen on.
  *
- *     single_bed        25,000    a tenth of a room. It PROVIDES NOTHING (`provides: []`).
- *     arm_chair        100,000    two fifths of a room. One engagement need.
- *     vending_machine  100,000    two fifths of a room. One engagement need.
+ * ------------------------------------------------------------------------------------------
+ * **FOUR BANDS, AND THE BAND IS THE WHOLE DESIGN STATEMENT (G-075b).** A price in this table
+ * is not chosen per item; an item is placed in a band, and the band is a fraction of what a
+ * room costs. There are twenty-eight items and four numbers, which is the point: a
+ * twenty-eight-row price list is twenty-eight unexamined decisions.
  *
- * **THE TWO PROVIDERS ARE PRICED THE SAME, AND THAT IS THE CHOICE RATHER THAN AN OVERSIGHT.**
- * They are structurally identical — one engagement need each, the same `fitBasisPoints`, the
- * same `refillPerTick + 1` concurrent guests — so a price gap between them would be a number
- * with nothing behind it. What separates them is WHICH need they serve, and a need is not
- * ranked against another need.
+ *     25,000   A TENTH OF A ROOM — it serves no need. `single_bed` (required equipment) and
+ *              every `decorative: true` item.
+ *    100,000   TWO FIFTHS — a CONVENIENCE provider. It will do; it is not why you came.
+ *              `fitBasisPoints` 2500.
+ *    150,000   THREE FIFTHS — a PROPER provision, put there for the job. Fit 4000.
+ *    200,000   FOUR FIFTHS — a FIXED INSTALLATION whose whole purpose is that need. Fit 6000.
+ *
+ * **PRICE RISES WITH FIT, AND IT HAS TO.** An item that ranked higher AND cost less would be
+ * strictly better than the one below it, and a strictly dominant option deletes the choice —
+ * the shape `roomTypeSchema` closed for room prices at G-008 and for `requires` at G-009.
+ *
+ * **NO ITEM REACHES 250,000, AND THE CEILING IS THE ARGUMENT BELOW ABOUT WHAT AN ITEM IS
+ * NOT.** A room raises the star rating and scrap-values; an item does neither. So the
+ * dearest installation stops one fifth short of the cheapest room, and a player who wants
+ * DEMAND still has to buy the room.
+ *
+ * **EVERY DECORATIVE ITEM COSTS THE SAME, AND THAT IS A CHOICE RATHER THAN LAZINESS.** They
+ * are INERT — nothing in the simulation reads `decorative`, and nothing will until G-037a
+ * scores a room on its contents. Two inert things differ in no way a price could track, so a
+ * gap between a poster and a water feature would be a number with nothing behind it. When
+ * G-037a gives decor an effect, that is the day this band splits, and it splits on the
+ * quantity that goal introduces.
+ * ------------------------------------------------------------------------------------------
+ *
+ * **ITEMS IN THE SAME BAND ARE PRICED THE SAME, AND THAT IS THE CHOICE RATHER THAN AN
+ * OVERSIGHT.** `arm_chair` and `vending_machine` are structurally identical — one engagement
+ * need each, the same `fitBasisPoints`, the same `refillPerTick + 1` concurrent guests — so a
+ * price gap between them would be a number with nothing behind it. What separates them is
+ * WHICH need they serve and WHICH ROOM THEY READ CORRECTLY IN (`suits`), and neither of those
+ * is a quantity: a need is not ranked against another need, and a lounge is not ranked
+ * against a bedroom.
  *
  * **AN ITEM IS THE CHEAPER ROUTE TO PROVISION AND THAT IS DELIBERATE, because it is not the
  * same purchase.** A `hotel_cafe` costs 250,000 AND 1,500 a night AND raises the star rating;
@@ -926,23 +963,131 @@ export const roomTypesSchema = z.array(roomTypeSchema).min(1);
  */
 export const purchaseCostPenceSchema = penceSchema.min(0);
 
-export const itemTypeSchema = z.strictObject({
-  id: contentIdSchema,
-  name: z.string().min(1),
-  provides: z.array(contentIdSchema),
-  // FOUR FIELDS SINCE G-014a. A guest engages an item exactly as it engages a room, so an
-  // item ranks on the same scale — see `fitBasisPointsSchema`, which also states why
-  // `single_bed` may not carry one (it provides nothing, so nothing could ever read it).
-  fitBasisPoints: fitBasisPointsSchema,
-  // AND A PRICE SINCE G-075a (ADR-0111) — see `purchaseCostPenceSchema` above, which carries
-  // the whole of it: every value is a DESIGN STATEMENT, the reference point is what a room
-  // costs, and only `placeItem` ever charges it.
-  purchaseCostPence: purchaseCostPenceSchema,
-  // AND AN OPTIONAL PICTURE SINCE G-035 — see `spriteRefSchema`. An item is drawn by the
-  // same prefer-sprite-else-fallback rule a room is, so the field is on both tables or the
-  // seam only half exists.
-  sprite: spriteRefSchema.optional(),
-});
+/**
+ * WHICH ROOM TYPES THIS ITEM READS CORRECTLY IN (G-075b) — a VOCABULARY, NOT A RESTRICTION.
+ *
+ * ==========================================================================================
+ * **NOTHING ENFORCES IT AND NOTHING IS MEANT TO.** `applyPlaceItem` refuses a placement for
+ * three reasons — off the plot, no room covering the cell, and (G-075a) `insufficientFunds` —
+ * and this field adds no fourth. **Whether an unsuitable placement should be REFUSED is open
+ * on the human; ADR-0111 recommends suggest-not-enforce**, and a schema is the wrong place to
+ * take a ruling nobody has made.
+ *
+ * SO WHAT IS IT FOR. The palette a player picks an item out of has to be GROUPED, or it is a
+ * flat list of twenty-eight things with no hint which of them belongs in the room being
+ * furnished. **The grouping is content (I3), not UI**: the alternative is a table of room-to-
+ * item associations living in `apps/game`, which is a content definition in code and is
+ * exactly what I3's gate exists to catch.
+ *
+ * **THE HUMAN'S SENTENCE IS THE SPECIFICATION, AND IT IS ABOUT PERCEPTION RATHER THAN
+ * FUNCTION** (2026-08-30): *"A vending machine in a room is perceptually weird, but a minibar
+ * isn't. One would think having a vending machine in your room would actually be bad, whilst
+ * providing nourishment it would create noise and light."* Both serve `guest_nourishment` and
+ * the simulation cannot tell them apart. **`suits` is where the difference is written down.**
+ * The shipped table takes it literally: `minibar` suits `standard_room` and nothing else,
+ * `vending_machine` suits `hotel_lounge` and `games_room` and NOT `standard_room`.
+ *
+ * **THE SAME NEED SERVED BY DIFFERENT ITEMS IN DIFFERENT ROOMS IS A REQUIREMENT, not a
+ * nicety.** `guest_nourishment` has seven providers in the shipped table and each names a
+ * different room: a minibar in a bedroom, a vending machine in a public room, a coffee
+ * machine in the café, a tea station in the spa, a trolley in the conference hall, a popcorn
+ * stand in the theatre. An item that is right functionally and wrong perceptually is a defect
+ * a player sees before any number moves.
+ *
+ * AN ARRAY BECAUSE AN ITEM MAY BELONG IN SEVERAL ROOMS. `framed_print` suits four of them.
+ * That is why the shipped catalogue is twenty-eight rows and not thirty-five.
+ *
+ * REQUIRED ON DISK AND `.min(1)`, the `provides`/`requires`/prices contract: an item that
+ * names no room appears in no palette, which is a designer's oversight and not a statement.
+ * OPTIONAL IN THE SIM (`ItemTypeData` does not declare it at all), because nothing the
+ * simulation decides reads it — it reaches `bindContent` through `cloneItemType`'s rest
+ * spread, so it is inside `World.contentHash` and a save taken under one grouping will not
+ * silently load under another.
+ *
+ * **THE IDS ARE ROOM TYPES AND NO SCHEMA HERE CAN CHECK THAT** — it is a cross-reference into
+ * `room-types.json`, the same class as `requires` and `provides`. It is checked on disk, over
+ * both files, by `item.catalogue.test.ts` in `tools/headless`, which is also where the
+ * five-per-room-type floor lives.
+ * ==========================================================================================
+ */
+export const suitsSchema = z.array(contentIdSchema).min(1);
+
+/**
+ * THIS ITEM IS THERE TO BE LOOKED AT, AND IT IS **INERT** (G-075b).
+ *
+ * ==========================================================================================
+ * **EVERY ITEM MUST STATE WHAT IT IS FOR**, and there are exactly three answers a shipped item
+ * can give. The trichotomy is asserted on disk by `item.catalogue.test.ts`, so a fourth,
+ * silent state cannot appear:
+ *
+ *   PROVIDER    `provides` is non-empty. It is what it is for.
+ *   EQUIPMENT   `provides` is `[]` and some room type `requires` it. `single_bed` is the
+ *               only one: a bedroom does not work without it, and `missingItem` says so.
+ *   DECOR       `provides` is `[]`, nothing requires it, and **this key says so out loud.**
+ *
+ * **`true` IS THE ONLY VALUE, AND ABSENCE IS THE OTHER STATE.** `decorative: false` is
+ * refused. A boolean would invite twenty-two rows carrying `false` to say nothing, and a
+ * key present on every row stops being a mark.
+ *
+ * **IT IS LABELLED INERT BECAUSE IT IS INERT, AND THE LABEL IS THE HONEST HALF.** No line of
+ * `packages/sim` reads this key; a decorative item in a room changes no guest's decision, no
+ * need, no review and no penny. It does nothing measurable until G-037a scores a room on what
+ * it contains — `HOTELSIM.md`'s third clause, marked **OWED**. Shipping decor UNLABELLED
+ * would be content pretending to a purpose that does not exist yet, which is ADR-0007's
+ * class; shipping it labelled is a catalogue that says what it can and cannot do.
+ *
+ * WHY SHIP IT AT ALL BEFORE THE SCORE. Because the player's verb is *furnish a room*, and a
+ * room in which the only purchasable things are appliances is not a room anybody decorates.
+ * The price is real and the money leaves the ledger (G-075a), so decor is a genuine sink
+ * today and a genuine input to a score tomorrow.
+ *
+ * **REFUSED WITH `provides`.** A row cannot be decorative AND serve a need — that is a
+ * designer saying two incompatible things, and the refinement on `itemTypeSchema` below
+ * refuses it by name.
+ * ==========================================================================================
+ */
+export const decorativeSchema = z.literal(true).optional();
+
+export const itemTypeSchema = z
+  .strictObject({
+    id: contentIdSchema,
+    name: z.string().min(1),
+    provides: z.array(contentIdSchema),
+    // AND A ROOM VOCABULARY SINCE G-075b — see `suitsSchema` above. It restricts NOTHING; it
+    // is how the palette groups twenty-eight items so a player furnishing a spa is not shown
+    // an arcade cabinet.
+    suits: suitsSchema,
+    // AND, SINCE G-075b, THE ONE MARK AN ITEM THAT SERVES NO NEED CAN CARRY — see
+    // `decorativeSchema` above. Absent on every provider and on `single_bed`.
+    decorative: decorativeSchema,
+    // FOUR FIELDS SINCE G-014a. A guest engages an item exactly as it engages a room, so an
+    // item ranks on the same scale — see `fitBasisPointsSchema`, which also states why
+    // `single_bed` may not carry one (it provides nothing, so nothing could ever read it).
+    fitBasisPoints: fitBasisPointsSchema,
+    // AND A PRICE SINCE G-075a (ADR-0111) — see `purchaseCostPenceSchema` above, which carries
+    // the whole of it: every value is a DESIGN STATEMENT, the reference point is what a room
+    // costs, and only `placeItem` ever charges it.
+    purchaseCostPence: purchaseCostPenceSchema,
+    // AND AN OPTIONAL PICTURE SINCE G-035 — see `spriteRefSchema`. An item is drawn by the
+    // same prefer-sprite-else-fallback rule a room is, so the field is on both tables or the
+    // seam only half exists.
+    sprite: spriteRefSchema.optional(),
+  })
+  .superRefine((item, ctx) => {
+    // DECOR AND PROVISION ARE THE SAME FIELD SAID TWICE, so saying both is refused rather
+    // than resolved. See `decorativeSchema`: a decorative item is one whose whole answer to
+    // "what is this for" is "to be looked at", and a row that also serves a need has a
+    // different answer available to it.
+    if (item.decorative === true && item.provides.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['decorative'],
+        message:
+          `item type "${item.id}" is marked decorative and also provides ${item.provides.join(', ')}. ` +
+          'An item states what it is for exactly once: a need it serves, or decoration. Drop one (G-075b).',
+      });
+    }
+  });
 
 /** The whole `need-types.json` document. A top-level array, for the same reason. */
 export const needTypesSchema = z.array(needTypeSchema).min(1);

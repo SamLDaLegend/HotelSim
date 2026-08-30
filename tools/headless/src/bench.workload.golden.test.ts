@@ -603,7 +603,17 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   BYTE-IDENTICAL. No `World` field, no save bump, no migration. **THE OUTCOME TEST BELOW
     //   DID NOT MOVE, WHICH IS THE CONTROL**: same 100 arrived, 27 checked out, 59 dissatisfied,
     //   14 still in the hotel.
-    expect(hashState(plain)).toBe('4d6050fd9a1ad339');
+    // - `4d6050fd9a1ad339` -> `814c3916f96625e2` AT G-075b, AND IT IS `World.contentHash` AND
+    //   NOTHING ELSE FOR THE FOURTH GOAL RUNNING. The catalogue took `item-types.json` from
+    //   three rows to twenty-eight and added two fields to every row (`suits`, and `decorative`
+    //   on the seven that serve no need), and the fingerprint hashes the injected content
+    //   whether or not this workload ever reads any of it. **NO NEW ITEM TYPE CAN BE IN THIS
+    //   WORLD**: the twenty-five added rows are required by no room type, so `drawRoom`'s
+    //   furnishing pass never seeds one, and `placeItem` is issued by no scenario, no harness
+    //   workload and no player. The LEDGER IS BYTE-IDENTICAL. No `World` field, no save bump, no
+    //   migration. **THE OUTCOME TEST BELOW DID NOT MOVE, WHICH IS THE CONTROL**: same 100
+    //   arrived, 27 checked out, 59 dissatisfied, 14 still in the hotel.
+    expect(hashState(plain)).toBe('814c3916f96625e2');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -1086,7 +1096,13 @@ describe('the same workload with the player churning the building', () => {
     //   field, no save bump, no migration, and no ledger line - this arm's player demolishes on a
     //   cadence and PLACES NO ITEM, so it never pays the new charge. **The eviction count this
     //   arm exists to produce is UNMOVED at 24**, which is the control.
-    expect(hashState(churn)).toBe('2c6b89636bc9890f');
+    // `2c6b89636bc9890f` -> `193d9fac69021748` AT G-075b: `World.contentHash` and NOTHING else,
+    //   because the catalogue took `item-types.json` from three rows to twenty-eight and gave
+    //   every row a `suits` list. No `World` field, no save bump, no migration, and no ledger
+    //   line - this arm's player demolishes on a cadence, places no item, and no added row is
+    //   required by any room type, so not one of them can stand in this world. **The eviction
+    //   count this arm exists to produce is UNMOVED at 24**, which is the control.
+    expect(hashState(churn)).toBe('193d9fac69021748');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

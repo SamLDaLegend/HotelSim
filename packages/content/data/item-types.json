@@ -3,20 +3,223 @@
     "id": "single_bed",
     "name": "Single Bed",
     "provides": [],
-    "purchaseCostPence": 25000
+    "purchaseCostPence": 25000,
+    "suits": ["standard_room"]
   },
   {
     "id": "arm_chair",
     "name": "Arm Chair",
     "provides": ["guest_comfort"],
     "fitBasisPoints": 2500,
-    "purchaseCostPence": 100000
+    "purchaseCostPence": 100000,
+    "suits": ["standard_room", "hotel_lounge", "games_room"]
   },
   {
     "id": "vending_machine",
     "name": "Vending Machine",
     "provides": ["guest_nourishment"],
     "fitBasisPoints": 2500,
-    "purchaseCostPence": 100000
+    "purchaseCostPence": 100000,
+    "suits": ["hotel_lounge", "games_room"]
+  },
+  {
+    "id": "mini_bar",
+    "name": "Minibar",
+    "provides": ["guest_nourishment"],
+    "fitBasisPoints": 2500,
+    "purchaseCostPence": 100000,
+    "suits": ["standard_room"]
+  },
+  {
+    "id": "wall_television",
+    "name": "Wall Television",
+    "provides": ["guest_entertainment"],
+    "fitBasisPoints": 2500,
+    "purchaseCostPence": 100000,
+    "suits": ["standard_room", "hotel_lounge", "games_room"]
+  },
+  {
+    "id": "framed_print",
+    "name": "Framed Print",
+    "provides": [],
+    "decorative": true,
+    "purchaseCostPence": 25000,
+    "suits": ["standard_room", "hotel_lounge", "hotel_cafe", "conference_hall"]
+  },
+  {
+    "id": "wall_mirror",
+    "name": "Wall Mirror",
+    "provides": [],
+    "decorative": true,
+    "purchaseCostPence": 25000,
+    "suits": ["standard_room", "hotel_spa"]
+  },
+  {
+    "id": "potted_plant",
+    "name": "Potted Plant",
+    "provides": [],
+    "decorative": true,
+    "purchaseCostPence": 25000,
+    "suits": ["hotel_lounge", "hotel_cafe", "hotel_spa", "conference_hall"]
+  },
+  {
+    "id": "book_shelf",
+    "name": "Bookshelf",
+    "provides": ["guest_entertainment"],
+    "fitBasisPoints": 2500,
+    "purchaseCostPence": 100000,
+    "suits": ["hotel_lounge"]
+  },
+  {
+    "id": "pool_table",
+    "name": "Pool Table",
+    "provides": ["guest_entertainment"],
+    "fitBasisPoints": 6000,
+    "purchaseCostPence": 200000,
+    "suits": ["games_room"]
+  },
+  {
+    "id": "arcade_cabinet",
+    "name": "Arcade Cabinet",
+    "provides": ["guest_entertainment"],
+    "fitBasisPoints": 6000,
+    "purchaseCostPence": 200000,
+    "suits": ["games_room"]
+  },
+  {
+    "id": "dart_board",
+    "name": "Dart Board",
+    "provides": ["guest_entertainment"],
+    "fitBasisPoints": 2500,
+    "purchaseCostPence": 100000,
+    "suits": ["games_room"]
+  },
+  {
+    "id": "coffee_machine",
+    "name": "Coffee Machine",
+    "provides": ["guest_nourishment"],
+    "fitBasisPoints": 6000,
+    "purchaseCostPence": 200000,
+    "suits": ["hotel_cafe"]
+  },
+  {
+    "id": "pastry_counter",
+    "name": "Pastry Counter",
+    "provides": ["guest_nourishment"],
+    "fitBasisPoints": 4000,
+    "purchaseCostPence": 150000,
+    "suits": ["hotel_cafe"]
+  },
+  {
+    "id": "cafe_seating",
+    "name": "Cafe Seating",
+    "provides": ["guest_comfort"],
+    "fitBasisPoints": 4000,
+    "purchaseCostPence": 150000,
+    "suits": ["hotel_cafe"]
+  },
+  {
+    "id": "massage_table",
+    "name": "Massage Table",
+    "provides": ["guest_comfort"],
+    "fitBasisPoints": 6000,
+    "purchaseCostPence": 200000,
+    "suits": ["hotel_spa"]
+  },
+  {
+    "id": "sauna_cabin",
+    "name": "Sauna Cabin",
+    "provides": ["guest_comfort"],
+    "fitBasisPoints": 6000,
+    "purchaseCostPence": 200000,
+    "suits": ["hotel_spa"]
+  },
+  {
+    "id": "herbal_tea_station",
+    "name": "Herbal Tea Station",
+    "provides": ["guest_nourishment"],
+    "fitBasisPoints": 2500,
+    "purchaseCostPence": 100000,
+    "suits": ["hotel_spa"]
+  },
+  {
+    "id": "water_feature",
+    "name": "Water Feature",
+    "provides": [],
+    "decorative": true,
+    "purchaseCostPence": 25000,
+    "suits": ["hotel_spa"]
+  },
+  {
+    "id": "conference_seating",
+    "name": "Conference Seating",
+    "provides": ["guest_comfort"],
+    "fitBasisPoints": 4000,
+    "purchaseCostPence": 150000,
+    "suits": ["conference_hall"]
+  },
+  {
+    "id": "refreshment_trolley",
+    "name": "Refreshment Trolley",
+    "provides": ["guest_nourishment"],
+    "fitBasisPoints": 2500,
+    "purchaseCostPence": 100000,
+    "suits": ["conference_hall"]
+  },
+  {
+    "id": "projector_screen",
+    "name": "Projector Screen",
+    "provides": ["guest_entertainment"],
+    "fitBasisPoints": 4000,
+    "purchaseCostPence": 150000,
+    "suits": ["conference_hall"]
+  },
+  {
+    "id": "speaker_lectern",
+    "name": "Lectern",
+    "provides": [],
+    "decorative": true,
+    "purchaseCostPence": 25000,
+    "suits": ["conference_hall"]
+  },
+  {
+    "id": "theatre_seating",
+    "name": "Theatre Seating",
+    "provides": ["guest_comfort"],
+    "fitBasisPoints": 4000,
+    "purchaseCostPence": 150000,
+    "suits": ["hotel_theatre"]
+  },
+  {
+    "id": "cinema_screen",
+    "name": "Cinema Screen",
+    "provides": ["guest_entertainment"],
+    "fitBasisPoints": 6000,
+    "purchaseCostPence": 200000,
+    "suits": ["hotel_theatre"]
+  },
+  {
+    "id": "popcorn_stand",
+    "name": "Popcorn Stand",
+    "provides": ["guest_nourishment"],
+    "fitBasisPoints": 4000,
+    "purchaseCostPence": 150000,
+    "suits": ["hotel_theatre"]
+  },
+  {
+    "id": "stage_curtain",
+    "name": "Stage Curtain",
+    "provides": [],
+    "decorative": true,
+    "purchaseCostPence": 25000,
+    "suits": ["hotel_theatre"]
+  },
+  {
+    "id": "theatre_poster",
+    "name": "Theatre Poster",
+    "provides": [],
+    "decorative": true,
+    "purchaseCostPence": 25000,
+    "suits": ["hotel_theatre"]
   }
 ]

@@ -748,8 +748,11 @@ export type GuestRulesData = {
  * Structurally identical to `ItemType` in `@hotelsim/content` and deliberately not
  * imported from it (ADR-0001), exactly as `RoomTypeData` and `NeedTypeData` are.
  *
- * What an item costs, how it decays and how a player places one are still M6, and each is
- * a field added here later rather than a shape changed.
+ * WHAT AN ITEM COSTS IS `purchaseCostPence`, HERE, SINCE G-075a. How it decays and how a player
+ * places one were the other two clauses of this sentence; the placing landed at G-075c. This line
+ * read "what an item costs, how it decays and how a player places one are still M6" — a DEFERRAL
+ * NAMING A MILESTONE, which ADR-0103's twelve-instance sweep ruled is not an event an artefact can
+ * observe. Decay is still unbuilt and is now stated as unbuilt rather than as scheduled.
  */
 export type ItemTypeData = {
   readonly id: ContentId;

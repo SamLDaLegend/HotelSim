@@ -138,13 +138,26 @@ export const FOOD_COURT_ROOM_TYPES = [
  * only in what it was always meant to differ in — no food court in this file places an item.
  */
 export const FOOD_COURT_ITEM_TYPES = [
-  { id: 'arm_chair', name: 'Arm Chair', provides: ['guest_comfort'], fitBasisPoints: 2500, purchaseCostPence: 100000 },
+  {
+    id: 'arm_chair',
+    name: 'Arm Chair',
+    provides: ['guest_comfort'],
+    fitBasisPoints: 2500,
+    purchaseCostPence: 100000,
+    // `suits` IS REQUIRED ON DISK SINCE G-075b, for the third time in this file and the same
+    // reason as the prices above: this fixture is WRITTEN OUT and read back through
+    // `itemTypeSchema`. THE SHIPPED LISTS MINUS THE ROOMS THIS FIXTURE DOES NOT HAVE — the
+    // food court has no bedrooms, so `standard_room` comes out of the chair's list. It
+    // groups a palette and restricts nothing, so no verdict in this arm depends on it.
+    suits: ['hotel_lounge', 'games_room'],
+  },
   {
     id: 'vending_machine',
     name: 'Vending Machine',
     provides: ['guest_nourishment'],
     fitBasisPoints: 2500,
     purchaseCostPence: 100000,
+    suits: ['hotel_lounge', 'games_room'],
   },
 ] as const;
 

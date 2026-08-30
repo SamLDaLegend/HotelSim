@@ -70,7 +70,30 @@ export type PlayerAction = {
  * player's — and it says so instead of picking the likely one. A UI that guesses is a UI
  * that reports a refusal reason the simulation never recorded.
  */
-export type ActionOutcome = 'built' | 'demolished' | 'unattributed' | (string & {});
+export type ActionOutcome = 'built' | 'demolished' | 'placed' | 'unattributed' | (string & {});
+
+/**
+ * THE BUILD FAMILY'S SUCCESS WORDS — the counters on `BuildOutcomes` that mean "it happened".
+ *
+ * =========================================================================================
+ * IT IS A LIST BECAUSE `attribute` RETURNS A COUNTER'S NAME AND THE FAMILY HAS MORE THAN ONE
+ * SUCCESS. It read `outcome !== 'built' && outcome !== 'demolished'`, inline, at the one call
+ * site — and G-063 already recorded what that shape costs: *"a third verb with a third success
+ * makes that predicate silently wrong"*. `placeItem` is that third verb. It moves
+ * `BuildOutcomes.placed`, which is neither of the two words, so before this goal a perfectly
+ * successful placement would have been painted `refused` in the HUD line and in the cell flash
+ * — the corridor defect exactly, in the layer that recorded it.
+ *
+ * IT IS NOT THE WHOLE OF `BuildOutcomes` AND MUST NOT BE PADDED OUT TO LOOK LIKE IT.
+ * `displaced`, `moved` and `resized` are absent because NO TOOL SENDS `moveItem` OR
+ * `resizeRoom` (G-036c's editing verbs are unbuilt in this layer, and G-075c's block puts them
+ * out of scope), and `displaced` is a side effect of somebody else's command rather than an
+ * outcome of the player's. Listing a word this UI can never produce would make the list stop
+ * being a statement about what the player can do. The day a tool sends one of those verbs is
+ * the day its word joins this list, in that goal.
+ * =========================================================================================
+ */
+const BUILD_SUCCESSES: readonly ActionOutcome[] = ['built', 'demolished', 'placed'];
 
 /**
  * What one resolved command amounted to: the word, and whether it was a refusal.
@@ -207,6 +230,11 @@ export function attribute(before: BuildOutcomes, after: BuildOutcomes): ActionOu
   const moved: ActionOutcome[] = [];
   if (after.built !== before.built) moved.push('built');
   if (after.demolished !== before.demolished) moved.push('demolished');
+  // AND `placed`, SINCE G-075c GAVE THE PLAYER A VERB THAT MOVES IT. It is read here rather
+  // than inferred from the command's kind for the reason the other two are: this function's
+  // whole contract is "which single counter moved", and a counter the player can move that
+  // this loop does not look at is a successful move reported as `unattributed`.
+  if (after.placed !== before.placed) moved.push('placed');
   for (const reason of BUILD_REFUSAL_REASONS) {
     if (after.refused[reason] !== before.refused[reason]) moved.push(reason);
   }
@@ -281,7 +309,7 @@ export function observeTick(session: Session, before: World, after: World): void
       ? attributeCorridor(before, after, command.at)
       : ((): Attribution => {
           const outcome = attribute(before.buildOutcomes, after.buildOutcomes);
-          return { outcome, refused: outcome !== 'built' && outcome !== 'demolished' };
+          return { outcome, refused: !BUILD_SUCCESSES.includes(outcome) };
         })();
   const resolved: ResolvedAction = {
     action: pending.action,

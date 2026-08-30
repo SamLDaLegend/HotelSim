@@ -156,14 +156,21 @@ describe('THE GLASS ALPHA IS INSIDE A COMPUTED BOUND, not chosen and then defend
     const bound = firstIllegibleAlphaPercent();
     expect(TRANSPARENT_WALL_ALPHA_HUNDREDTHS).toBeLessThan(bound);
     // TODAY'S SPECIFICS, which document what happens to be true of the shipped content rather
-    // than being the property under test: the bound is 36 and the shipped alpha is 30.
+    // than being the property under test: the bound is 35 and the shipped alpha is 30.
     //
     // IT WAS 37 UNTIL G-051a, AND THE MOVE IS THE MECHANISM THIS LINE EXISTS TO SHOW. Three
     // facility room types were added, so `createPalette` spreads SEVEN room colours across the
     // same luminance band instead of four; the worst pair is closer, so less glass is
     // affordable. The STRUCTURAL assertion above did not move and did not need to — which is
     // the whole reason it is written the way it is (ADR-0050), and this line is the receipt.
-    expect({ bound, shipped: TRANSPARENT_WALL_ALPHA_HUNDREDTHS }).toEqual({ bound: 36, shipped: 30 });
+    //
+    // AND 36 -> 35 AT G-075b, THE SAME MECHANISM ON THE OTHER LADDER. The item catalogue went
+    // from three rows to twenty-eight, so `createPalette` spreads TWENTY-EIGHT item colours
+    // across the same band; the ladder reaches further down it, some item now sits closer to
+    // `INK.soot`, and one percent less glass is affordable. The pair this function measures is
+    // an item against the ink drawn ON it, which is why an item-only content change moves it.
+    // The structural assertion above did not move, again.
+    expect({ bound, shipped: TRANSPARENT_WALL_ALPHA_HUNDREDTHS }).toEqual({ bound: 35, shipped: 30 });
   });
 
   it('and the bound BITES — one percent over it, the worst pair is illegible', () => {
