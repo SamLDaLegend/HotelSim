@@ -2543,3 +2543,73 @@ the prose is currently correct only because the builder marked the inequality br
 `loanRepaymentPerNightPence` (10,000p) has never had a derivation and was not in the ruling. **A loan
 now takes 112 nights to repay where it took 30** — measured on the I2 harness log, 48 full
 instalments and 631,111p still outstanding at 100,000 ticks. **Reported, not tuned.**
+
+---
+
+## E-017 — THE PALETTE CAPS EVERY CONTENT ROLE AT SEVEN, AND ROOM TYPES ARE AT SEVEN TODAY
+
+**Raised 2026-08-30 at G-075b's VERIFY. Found by its builder, which left the test RED rather than
+move a threshold (§9), and confirmed by the orchestrator.**
+
+### The arithmetic, and it is a ceiling rather than a tuning
+
+`bestAchievableContrast(N) = span ** (1 / (N - 1))` (`apps/game/src/view/palette.ts`), with
+`span = 6.0929` fixed by `MIN_CONTRAST_VS_BACKGROUND = 3`. **The floor is 1.3.**
+
+| N | 6 | **7** | **8** | 12 | 28 |
+|---|---|---|---|---|---|
+| best possible | 1.4354 | **1.3515** | **1.2945** | 1.1785 | 1.0692 |
+
+> **THE CEILING FALLS BELOW THE FLOOR AT N = 8. EIGHT OF ANYTHING IS IMPOSSIBLE** in one luminance
+> band. G-075b's 28 items achieve 1.060 against a ceiling of 1.0692 — **within 0.3% of optimal**, and
+> the "spread is OPTIMAL for its length" assertion still PASSES. **The ladder is not badly built;
+> the arithmetic has run out.**
+
+**AND `room` IS AT EXACTLY SEVEN TODAY.** An eighth room type reddens the same test on the room role,
+with **4.0% of margin left**. **M6 is a content-BREADTH milestone**, so this is not only about items.
+*Nobody had noticed, because nobody had added an eighth of anything.*
+
+### WHY THIS IS A HUMAN CALL AND NOT A BUILDER'S
+
+**The test's own header states its scope, and it is narrower than its application:**
+
+> *"It cannot tell anybody the picture is GOOD — that stays the human's WATCH and no agent may
+> discharge it. It can tell anybody, mechanically and before a human is asked to look again, that
+> **the specific failure which was measured on the build they could not read** HAS NOT COME BACK."*
+
+**The failure it was measured against was ROOM FILLS** — adjacent bars, hue-varying and
+luminance-constant, 32 of 66 pairs under 1.3:1, from the human's *"lots of washout of bars"*.
+
+> **SO THE FLOOR IS A THRESHOLD DERIVED FOR ONE SUBJECT AND APPLIED TO ANOTHER**, which is the class
+> this project has now catalogued three times — ADR-0013 (a perceptual criterion needs a perceptual
+> check), ADR-0086 (a gate's name claims one clause), ADR-0106 (a parked falsification test is not an
+> exit criterion) — under one sentence: **a claim's warrant does not travel with its words.** Whether
+> 1.3:1 is the right floor for **small markers standing INSIDE a room** is a **perceptual** question,
+> and ADR-0013 rules those get WATCHED, not argued.
+
+**The orchestrator will not weaken this gate to make a build pass** — that is §9's stop condition —
+and will not rule on a perceptual question ADR-0013 reserves to the human.
+
+### The four answers
+
+- **(a) THE FLOOR KEEPS ITS SUBJECT: rooms.** Items get a DIFFERENT discriminator — shape, icon,
+  glyph — with **its own perceptual criterion and its own WATCH.** *The honest reading of the test's
+  own stated scope, and it unblocks room types too.* Cost: render work, and a new criterion someone
+  has to look at.
+- **(b) ITEMS GET THEIR OWN LUMINANCE BAND**, separate from rooms. Keeps colour as the discriminator;
+  **does not solve it** — a band of 28 still ceilings at 1.0692 — so it only helps if paired with (a).
+- **(c) CUT THE CATALOGUE TO SEVEN SHARED ITEMS.** Satisfies every test today and **re-creates the
+  defect the human named**: seven items shared across seven room types IS the vending-machine-in-a-
+  bedroom shape.
+- **(d) LOWER THE FLOOR FOR ITEMS, WITH A HUMAN WATCH.** Cheapest, and **only honest if a human
+  actually looks** — otherwise it is exactly the vacuous criterion this test was written to replace.
+
+**No recommendation between (a) and (d)**; both are defensible and both need a human to look at a
+picture. **(c) is the one to refuse**, because it trades the human's stated requirement for a green
+test.
+
+### What is being asked
+
+**Which answer — and, separately, is the room-type cap of seven acceptable for M6?** *The second
+question has nothing to do with items and would have surfaced the first time anybody added an eighth
+room type.*

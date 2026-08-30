@@ -6246,10 +6246,26 @@ The catalogue (**G-075b**), the tool (**G-075c**), refunds for removing an item,
 what `placeItem` already refuses.
 
 ## G-075b — Every room type has something worth putting in it
-Status: **PLANNED 2026-08-30. Follows G-075a. Human-specified: *"at least 5 items per room type, suitable to the room type, serving a purpose functionally or decoratively."*** Milestone: M5 · Owner pair: economy-engineer / balance-critic
+Status: **BUILT BUT BLOCKED 2026-08-30 — E-017. The catalogue is written, measured and UNCOMMITTED; one render test is red and the fix is a human call.** *(Was PLANNED.)* Human-specified: *"at least 5 items per room type, suitable to the room type, serving a purpose functionally or decoratively."*** Milestone: M5 · Owner pair: economy-engineer / balance-critic
 
 **Three items against seven room types.** `single_bed` (provides nothing), `arm_chair`
 (`guest_comfort`), `vending_machine` (`guest_nourishment`).
+
+> **BLOCKED ON E-017, AND THE BLOCKER IS ARCHITECTURAL RATHER THAN THIS GOAL'S.** The catalogue is
+> **28 items, 5-6 per room type, every economic column byte-identical across 14 arms** — and
+> `palette.contrast.test.ts` is RED because **the palette gives every content role ONE luminance
+> band**, so the best possible pairwise separation is `span ** (1/(N-1))`: **N=7 -> 1.3515, N=8 ->
+> 1.2945, against a floor of 1.3.** The 28 items reach 1.060 against a ceiling of 1.0692 — **within
+> 0.3% of optimal**, and the "spread is OPTIMAL for its length" assertion still passes. **The ladder
+> is not badly built; the arithmetic has run out.**
+>
+> **THERE IS NO HONEST GREEN PATH IN CONTENT.** Two tests form a vice: *"gives every id its own
+> colour"* forbids sharing, and the floor forbids crowding — so colouring items by what they PROVIDE
+> would satisfy one by violating the other. **Checked before escalating, rather than assumed.**
+>
+> **AND `room` IS AT SEVEN WITH 4.0% OF MARGIN**, so an eighth room type is impossible independent of
+> items. **M6 is a content-breadth milestone.** *The work is held uncommitted; the gate was NOT
+> touched (§9).*
 
 ### THE FINDING THAT MAKES THIS MORE THAN A CONTENT CHORE
 
