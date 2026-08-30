@@ -49,6 +49,11 @@ export {
   guestRulesTableSchema,
   itemTypeSchema,
   itemTypesSchema,
+  // G-075b: the catalogue's two new fields. `suits` is a VOCABULARY the palette groups by and
+  // NOTHING enforces; `decorative` is the mark an item that serves no need carries, and it is
+  // INERT until G-037a scores a room on its contents.
+  suitsSchema,
+  decorativeSchema,
   needRoleSchema,
   needTypeSchema,
   needTypesSchema,

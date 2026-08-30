@@ -423,7 +423,17 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // this run does have was seeded with `spawnEntity`, and `spawnEntity` charges nothing.
     // `SAVE_SCHEMA_VERSION` stays 25 and `SUMMARY_SCHEMA_VERSION` stays 4 - no `World` field
     // moved, and a price is content.
-    stateHash: '66ff7eb4c0d02340',
+    //
+    // G-075b: `66ff7eb4c0d02340` -> `c06fa1b3ba90f7df`. **PURELY A CONTENT NUMBER FOR THE FOURTH
+    // GOAL RUNNING, AND AGAIN NOT ONE OTHER FIELD OF THIS DOCUMENT MOVES.** The catalogue took
+    // `item-types.json` from three rows to twenty-eight and gave every row a `suits` list. **NOT
+    // ONE ADDED ROW CAN BE IN THIS WORLD**: no room type `requires` any of them, so `drawRoom`'s
+    // furnishing pass cannot seed one, and nothing issues `placeItem`. Verified by diffing the
+    // whole report against the run one table apart: **exactly one line differs and it is
+    // `state hash`.** `roomTypes` in this block is a count of ROOM types and does not move;
+    // this document reports no item-type count. `SAVE_SCHEMA_VERSION` stays 25 and
+    // `SUMMARY_SCHEMA_VERSION` stays 4.
+    stateHash: 'c06fa1b3ba90f7df',
   },
   guests: {
     arrived: 32,
@@ -1142,7 +1152,11 @@ const GOLDEN_2_DAYS_SEED_42 =
     // `purchaseCostPence` on every row of `item-types.json`, the default run places no item at
     // all, and the whole report was diffed against the same run one table apart: THIS LINE AND
     // NOTHING ELSE.
-    'state hash  66ff7eb4c0d02340',
+    // G-075b: `66ff7eb4c0d02340` -> `c06fa1b3ba90f7df`, purely a CONTENT number - the catalogue
+    // took `item-types.json` from three rows to twenty-eight, no room type requires any of the
+    // twenty-five added ones and the default run places no item, and the whole report was
+    // diffed against the run one table apart: THIS LINE AND NOTHING ELSE.
+    'state hash  c06fa1b3ba90f7df',
   ].join('\n') + '\n';
 
 /**

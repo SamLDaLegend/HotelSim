@@ -748,11 +748,13 @@ export type GuestRulesData = {
  * Structurally identical to `ItemType` in `@hotelsim/content` and deliberately not
  * imported from it (ADR-0001), exactly as `RoomTypeData` and `NeedTypeData` are.
  *
- * WHAT AN ITEM COSTS IS `purchaseCostPence`, HERE, SINCE G-075a. This line read "what an item
- * costs, how it decays and how a player places one are still M6" — a DEFERRAL NAMING A MILESTONE,
- * which ADR-0103's twelve-instance sweep ruled is not an event an artefact can observe. Decay is
- * still unbuilt and is now stated as unbuilt rather than as scheduled; the PLACING is built in the
- * simulation (`placeItem`) and the player's button for it is held on a branch behind E-017.
+ * WHAT AN ITEM COSTS IS `purchaseCostPence`, HERE, SINCE G-075a, and HOW A PLAYER PLACES ONE is
+ * `placeItem`, which the simulation has had all along. This line read "what an item costs, how it
+ * decays and how a player places one are still M6" — a DEFERRAL NAMING A MILESTONE, which
+ * ADR-0103's twelve-instance sweep ruled is not an event an artefact can observe. DECAY IS STILL
+ * UNBUILT and is now stated as unbuilt rather than as scheduled. *(Reconciled at the G-077 merge:
+ * main and this branch each corrected the same sentence in different words, which is what a
+ * sentence being wrong in two places at once looks like when both get fixed.)*
  */
 export type ItemTypeData = {
   readonly id: ContentId;

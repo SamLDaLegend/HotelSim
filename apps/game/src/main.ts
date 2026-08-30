@@ -31,6 +31,13 @@
 // carries a rectangle. `buildRoom` still exists and is still what the headless harness issues;
 // what changed is which door this layer knocks on.)
 //
+// AND `placeItem` (G-036b) JOINS AT G-075c, WHICH IS THE FOURTH AND THE ONE THE CHARTER NAMED.
+// ADR-0046 §4.2 promoted it out of M6 and called it "the primary player verb" alongside the
+// drawing one, and `HOTELSIM.md` §1's sentence is "the player draws a room's footprint, PLACES
+// ITEMS INSIDE IT, and the room is scored on what it contains". Clause 1 became playable at
+// G-064; this is clause 2. Nothing in `packages/sim` moved to land it — the verb, its price
+// (G-075a) and all three of its refusals were already there, waiting for a button.
+//
 // THE SPEED CONTROL, PAUSE AND THE FLOOR SWITCHER ARE PLAYER ACTIONS AND ARE NOT COMMANDS.
 // They change HOW MANY ticks are run and WHAT IS DRAWN, never WHAT a tick does — and the
 // proof is mechanical rather than asserted: none of them appears in `session.log`, because
@@ -40,7 +47,8 @@
 import { createWorld, entranceCell, solvencyOf, UNIT_FOOTPRINT } from '@hotelsim/sim';
 import type { Cell, RemarkRecord } from '@hotelsim/sim';
 import { Application } from 'pixi.js';
-import { loadContent, loadRemarkBook, loadSpeedLadder, loadSpriteRefs } from './content.js';
+import { groupItemsByRoomType } from './catalogue.js';
+import { loadContent, loadItemCatalogue, loadRemarkBook, loadSpeedLadder, loadSpriteRefs } from './content.js';
 import { advance, createDriver, restIdle } from './driver.js';
 import {
   renderFloors,
@@ -125,6 +133,17 @@ const rungs = loadSpeedLadder();
  * than letting a guest reach the feed with nothing to say.
  */
 const remarkBook = loadRemarkBook(content);
+
+/**
+ * THE FURNISH PALETTE (G-075c) — twenty-eight item types filed under the room types content
+ * says each suits, computed ONCE at startup because neither table moves while the game runs.
+ *
+ * IT IS THE FOURTH READ OF THE CONTENT DIRECTORY AND THE REASON IS `loadSpriteRefs`': the
+ * `suits` vocabulary is not on `packages/sim`'s `ItemTypeData` — nothing the simulation decides
+ * reads it — so the HOST reads it from the JSON through the same parser, exactly where it
+ * already reads `sprite`. `catalogue.ts` inverts it and holds no association of its own (I3).
+ */
+const itemGroups = groupItemsByRoomType(content.content.roomTypes, loadItemCatalogue());
 
 const world = createWorld(SEED, content);
 const scenarioAt = createScenario(content, world.grid);
@@ -253,7 +272,7 @@ floors();
 // simulation judges it on the next tick and the answer comes back through `observeTick`.
 
 function tools(): void {
-  renderTools(toolsHost, content, content.content.roomTypes, tool, {
+  renderTools(toolsHost, content, content.content.roomTypes, itemGroups, tool, {
     onPick: (picked) => {
       tool = picked;
       // The cursor says whether a click will do anything at all, which the ghost cannot: the
@@ -467,8 +486,22 @@ app.ticker.add(() => {
   // geometry; nothing between here and `overlay.build` asks the world, the content or the
   // balance a question, and `INK.intent` is one colour for every rectangle. §6.1.
   const hovered = pointer === null ? null : cellAt(view, pointer.x, pointer.y);
+  // THE ITEM TOOL PREVIEWS ONE CELL AND NOTHING ELSE (G-075c). An item is one cell by
+  // construction — `applyPlaceItem` spawns at `UNIT_FOOTPRINT` and ADR-0047 A3 forbids a
+  // multi-tile one — so a marquee stretching back to a press corner would be drawing a
+  // rectangle the command cannot carry and the simulation will never be asked for. Dropping
+  // the anchor is the whole of it: `regionBetween(hovered, hovered)` is 1x1, which is the
+  // same shape the outline had before any drag existed.
+  //
+  // THE ROOM TOOL IS UNTOUCHED, AND SO ARE THE OTHER TWO. This line read
+  // `regionBetween(dragFrom ?? hovered, hovered)` with NO reference to `tool` — G-071's
+  // finding, that the corridor and demolish tools draw a drag rectangle for a command that
+  // takes one cell. **That finding is still open and is deliberately not fixed here**: it was
+  // binned with the corridor tool, this goal owns the item tool, and quietly repairing a
+  // neighbouring defect inside an unrelated goal is how a diff stops being reviewable.
+  const anchor = tool?.kind === 'item' ? null : dragFrom;
   const intent =
-    hovered === null ? null : regionBetween(dragFrom ?? hovered, hovered);
+    hovered === null ? null : regionBetween(anchor ?? hovered, hovered);
   const marks = overlay.build(view, {
     intent,
     toolLabel: toolLabel(tool, intent?.footprint ?? UNIT_FOOTPRINT),

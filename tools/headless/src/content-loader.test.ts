@@ -118,19 +118,49 @@ describe('the shipped content file', () => {
     }
   });
 
-  it('and every need an ITEM provides is reachable: some room type requires that item', () => {
+  it('and every NEED an item provides is reachable: some room type requires SUCH an item', () => {
     // The shipped half of criterion 3. `bindContent` enforces it for any content, and this
     // asserts the SHIPPED table depends on it — delete `hotel_lounge`'s `requires` and the
     // game stops loading. A rule the shipped content does not exercise is a rule nobody
     // would notice breaking.
+    //
+    // ======================================================================================
+    // THIS CASE ASSERTED THE WRONG QUANTIFIER UNTIL G-075b, AND THE CATALOGUE FALSIFIED IT.
+    //
+    // It read *"every ITEM that provides is required by some room"*, which was true of a
+    // three-row table and was never the rule. `assertNeedsAreSatisfiable` quantifies over
+    // NEEDS: a need must have one reachable provider, and an item type no room requires is
+    // explicitly NOT an error — `itemTypeSchema` has said so since G-009 (*"furniture nothing
+    // needs yet, which is what M6's table will be full of on its first day"*). G-075b is that
+    // day: twenty-five of the twenty-eight rows are optional furniture and NONE of them is
+    // required by anything.
+    //
+    // SO THE QUANTIFIER MOVES TO THE NEED AND THE BITE IS ASSERTED SEPARATELY. Reachable is
+    // `bindContent`'s reachable: a ROOM that provides the need, or an ITEM some room REQUIRES.
+    // ======================================================================================
     const content = loadContent();
     const items = content.content.itemTypes ?? [];
+    const needs = content.content.needTypes ?? [];
+    const required = (itemId: string): boolean =>
+      content.content.roomTypes.some((room) => (room.requires ?? []).includes(itemId));
+    const reachableProvidersOf = (needId: string): number =>
+      content.content.roomTypes.filter((room) => (room.provides ?? []).includes(needId)).length +
+      items.filter((item) => (item.provides ?? []).includes(needId) && required(item.id)).length;
+    expect(needs.length).toBeGreaterThan(0);
+    for (const need of needs) expect(reachableProvidersOf(need.id), need.id).toBeGreaterThan(0);
+    // THE BITE, which is what the old spelling was reaching for: at least one need is served
+    // by NO room type at all, so its only reachable provider is a required item and deleting
+    // that `requires` stops the game loading. On the shipped table that need is the comfort
+    // one and that item is the lounge's chair.
+    const itemOnly = needs.filter(
+      (need) => !content.content.roomTypes.some((room) => (room.provides ?? []).includes(need.id)),
+    );
+    expect(itemOnly.length, 'no need depends on a required item, so the rule has no shipped bite').toBeGreaterThan(0);
+    // AND THE CATALOGUE'S OWN SHAPE, PINNED SO THE NARROWING ABOVE IS VISIBLE RATHER THAN
+    // SILENT: most providing items are NOT required by anything, which is exactly the state
+    // the old spelling would have refused.
     const providing = items.filter((item) => (item.provides ?? []).length > 0);
-    expect(providing.length).toBeGreaterThan(0);
-    for (const item of providing) {
-      const hosts = content.content.roomTypes.filter((room) => (room.requires ?? []).includes(item.id));
-      expect(hosts.length, item.id).toBeGreaterThan(0);
-    }
+    expect(providing.filter((item) => !required(item.id)).length).toBeGreaterThan(0);
   });
 
   it('refuses to bind a room type that provides a need the content does not define', () => {

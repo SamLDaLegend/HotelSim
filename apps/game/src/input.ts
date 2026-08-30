@@ -34,9 +34,13 @@
 // command carries `roomType.id` — a value that came from the JSON, never a literal typed
 // into this layer. The label is `roomType.name` for the same reason the speed buttons use
 // `rung.name`: rename it in content and the button renames itself.
+//
+// SINCE G-075c THE ITEM TOOL CARRIES AN `ItemTypeData` UNDER THE SAME RULE, and the room the
+// palette filed it under is content's too — `suits`, inverted by `catalogue.ts`. There is no
+// association table in this layer and no id spelled in it.
 
 import { describeFootprint, isUnitFootprint, isWithinBounds } from '@hotelsim/sim';
-import type { BoundContent, Cell, Footprint, RoomTypeData, World } from '@hotelsim/sim';
+import type { BoundContent, Cell, Footprint, ItemTypeData, RoomTypeData, World } from '@hotelsim/sim';
 import { roomEntityAt } from './pick.js';
 import type { PlayerAction } from './session.js';
 
@@ -59,6 +63,29 @@ export type Tool =
    * `commands.ts`). So there is no room type to hold and no catalogue to pick from.
    */
   | { readonly kind: 'corridor' }
+  /**
+   * THE PLAYER PUTS SOMETHING IN THE ROOM (G-075c) — `HOTELSIM.md` §1's SECOND CLAUSE.
+   *
+   * =======================================================================================
+   * IT IS A RULED VERB THAT HAD NO BUTTON. `placeItem` has existed since G-036b and
+   * `commands.ts` records that ADR-0046 §4.2 *"promoted it out of M6"* and made it **"the
+   * primary player verb" alongside the drawing one** — and until this tool the union above
+   * was room, corridor, demolish. **The simulation has been waiting for a message the player
+   * had no way to send.** That is why this is not a feature request: nothing in
+   * `packages/sim` changed to land it.
+   *
+   * IT CARRIES AN `ItemTypeData` FOR THE REASON THE BUILD TOOL CARRIES A `RoomTypeData`: the
+   * player picked it out of the injected content, the command carries `itemType.id` — a value
+   * that came from the JSON — and the label is `itemType.name`, so a rename in content
+   * renames the button (ADR-0003).
+   *
+   * ONE CELL, NOT A RECTANGLE. `placeItem` takes a `Cell` and `applyPlaceItem` spawns at
+   * `UNIT_FOOTPRINT`; ADR-0047 A3 forbids a multi-tile item at all, and `assertSingleTile` in
+   * `view/depth.ts` still throws on one. So there is no drag to express and `main.ts` draws
+   * the hovered cell alone while this tool is held.
+   * =======================================================================================
+   */
+  | { readonly kind: 'item'; readonly itemType: ItemTypeData }
   | { readonly kind: 'demolish' }
   | null;
 
@@ -137,6 +164,7 @@ export function toolLabel(tool: Tool, footprint: Footprint): string | null {
   if (tool === null) return null;
   if (tool.kind === 'build') return buildLabel(tool.roomType, footprint);
   if (tool.kind === 'corridor') return 'lay corridor';
+  if (tool.kind === 'item') return itemLabel(tool.itemType);
   return 'demolish';
 }
 
@@ -144,6 +172,22 @@ export function toolLabel(tool: Tool, footprint: Footprint): string | null {
  *  HUD cannot describe the same rectangle two ways. */
 function buildLabel(roomType: RoomTypeData, footprint: Footprint): string {
   return `build ${roomType.name}${isUnitFootprint(footprint) ? '' : ` ${describeFootprint(footprint)}`}`;
+}
+
+/**
+ * The words for a placement (G-075c), in ONE place, for `buildLabel`'s reason.
+ *
+ * IT TAKES NO FOOTPRINT AND WILL NOT GROW ONE. An item is one cell by construction — the
+ * simulation spawns it at `UNIT_FOOTPRINT` and ADR-0047 A3 forbids anything else — so
+ * `describeFootprint` has nothing to say here that "one cell" does not already say.
+ *
+ * IT SAYS NOTHING ABOUT SUITABILITY, AND THAT IS THE `catalogue.ts` RULE ARRIVING AT THE
+ * GHOST. "place Sauna Cabin" over a bedroom is exactly what the player is about to ask for;
+ * `applyPlaceItem` does not refuse it, so a label that hedged would be this layer predicting
+ * an outcome the simulation is not going to produce.
+ */
+function itemLabel(itemType: ItemTypeData): string {
+  return `place ${itemType.name}`;
 }
 
 /**
@@ -185,8 +229,10 @@ function buildLabel(roomType: RoomTypeData, footprint: Footprint): string {
  * every golden in the project — so the coverage that matters is not this layer's to give.
  * =========================================================================================
  *
- * THE CORRIDOR AND DEMOLISH TOOLS TAKE THE RELEASE CELL AND DO NOT DRAG. Neither command has a
- * rectangle form: `demolishRoom` takes an ENTITY ID, and a corridor rectangle is N idempotent
+ * THE CORRIDOR, ITEM AND DEMOLISH TOOLS TAKE THE RELEASE CELL AND DO NOT DRAG. None of the
+ * three commands has a rectangle form: `demolishRoom` takes an ENTITY ID, `placeItem` takes a
+ * CELL and spawns at `UNIT_FOOTPRINT` (ADR-0047 A3 forbids a multi-tile item), and a corridor
+ * rectangle is N idempotent
  * no-ops which `commands.ts` parks explicitly ("it becomes a real question the day a corridor
  * gains a COST"). `to` rather than `from` because that is what a press-and-release at one point
  * already meant, and because a control that acts where the finger LIFTS is what every button on
@@ -267,6 +313,30 @@ export function actionAt(
     };
   }
   const cell = to;
+  // =======================================================================================
+  // THE ITEM TOOL SENDS THE CELL AS IT IS, INCLUDING ONE OFF THE PLOT (G-075c).
+  //
+  // IT IS THE `buildRoom` BRANCH'S RULE AND NOT THE `layCorridor` BRANCH'S, AND THE
+  // DIFFERENCE IS WHICH DOOR THE COMMAND KNOCKS ON. `applyPlaceItem` refuses — RECORDED,
+  // never thrown — with `outOfBounds` when the cell is off the plot and `notInRoom` when no
+  // room covers it, and since G-075a with `insufficientFunds` when the purse will not cover
+  // the price. All three are the simulation's to say. `layCorridor` one branch down is the
+  // opposite case: it THROWS off the plot, which is why that branch asks `isWithinBounds`
+  // first, and copying that guard here would make `outOfBounds` unreachable from the UI.
+  //
+  // SO THERE IS NO GUARD HERE AT ALL, DELIBERATELY. No `isWithinBounds`, no `roomEntityAt`,
+  // no balance test. Each of the three would be this layer re-deciding a rule `packages/sim`
+  // owns (G-031a, G-063), and each would delete one of the three refusals from the game — the
+  // exact way three outcome marks went unwatched at G-030. The player clicks, the simulation
+  // answers, and `observeTick` draws the word it answered with on the cell.
+  // =======================================================================================
+  if (tool.kind === 'item') {
+    return {
+      command: { kind: 'placeItem', itemType: tool.itemType.id, at: cell },
+      at: cell,
+      label: itemLabel(tool.itemType),
+    };
+  }
   if (tool.kind === 'corridor') {
     if (!isWithinBounds(cell, world.grid)) return null;
     return { command: { kind: 'layCorridor', at: cell }, at: cell, label: 'lay corridor' };

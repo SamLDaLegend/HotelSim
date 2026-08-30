@@ -89,7 +89,8 @@ import {
   farSidesOf,
   ITEM_ANCHOR_RISE,
   ITEM_PLATE_PAD,
-  ITEM_SIZE,
+  itemMarkOffsetX,
+  itemMarkSpan,
   neighbourAcross,
   tileCentre,
   toView,
@@ -99,6 +100,7 @@ import {
   FLOOR_SHADE_HUNDREDTHS,
 } from './iso.js';
 import type { ScreenPoint, Side } from './iso.js';
+import { outlineOf } from './form.js';
 import { createPalette, INK, UNKNOWN } from './palette.js';
 import type { Palette } from './palette.js';
 import { shade } from './primitives.js';
@@ -412,7 +414,7 @@ export function createScene(content: BoundContent, sprites: ReadonlyMap<string, 
         const room = rooms.get(key);
         const corridor = isCorridorCell(world, cell);
 
-        drawTile(collector, view, cell, room, corridor, content, appearances, depth);
+        drawTile(collector, view, cell, room, corridor, content, appearances, palette, depth);
 
         // The door. Always drawn, even when something is built on top of it —
         // `entranceCell` is where a guest with no room stands, and "waiting at the door" must
@@ -469,7 +471,7 @@ export function createScene(content: BoundContent, sprites: ReadonlyMap<string, 
         }
 
         const inside = items.get(key);
-        if (inside !== undefined) drawItems(collector, view, appearances, inside, cell, depth);
+        if (inside !== undefined) drawItems(collector, view, appearances, palette, inside, cell, depth);
 
         const here = standing.get(key);
         if (here !== undefined) {
@@ -549,6 +551,7 @@ function drawTile(
   corridor: boolean,
   content: BoundContent,
   appearances: Appearances,
+  palette: Palette,
   depth: number,
 ): void {
   const points = tilePoly(view, cell.column, cell.row);
@@ -556,7 +559,37 @@ function drawTile(
   if (room !== undefined) {
     const fill = shade(colourOf(appearances.room(room.kind)), FLOOR_SHADE);
     void content;
-    collector.add(depth, LAYER.floor, { kind: 'poly', points, fill });
+    // ==================================================================================
+    // A ROOM'S FLOOR IS A GRID OF CELLS AND NOT A SLAB (G-077, ADR-0112 §3).
+    //
+    // THE MISSING HALF OF "WHERE IN THE ROOM". Since G-036b a room is drawn as per-tile
+    // floor diamonds with walls only where the room ENDS — which is right, and which also
+    // means a 3x2 room was six diamonds of one colour with nothing between them. The
+    // simulation knows exactly which cell an item stands on and `drawItems` draws it there;
+    // the picture then threw that away, because a mark on a featureless slab has no cell to
+    // be in. Everything a player is asked to place is placed BY CELL, so the cell has to be
+    // a thing you can see.
+    //
+    // THE SEAM IS `inkOn`'s CHOICE AND THAT IS THE WHOLE DERIVATION. It picks paper or soot
+    // by contrast against the fill it is drawn on, so a dark room gets a light seam and a
+    // light room a dark one — and the worst case is ARITHMETIC rather than content: paper
+    // and soot cross over part way up the scale, and the better of the two is never worse
+    // than that crossover for ANY fill in the 24-bit cube. `palette.contrast.test.ts` pins
+    // the figure by sweeping the cube, and asserts the same property for the badge, which is
+    // the other mark that must read on every room type.
+    //
+    // ON EVERY EDGE, INCLUDING THE ROOM'S OWN OUTLINE. Suppressing the outer edges would
+    // make the seam a statement about the room's SHAPE, and there is already one of those:
+    // the walls, which `drawRoom` puts exactly where the room ends. This one is about the
+    // GRID, and a grid with its border missing is a grid whose edge cells are a different
+    // size.
+    // ==================================================================================
+    collector.add(depth, LAYER.floor, {
+      kind: 'poly',
+      points,
+      fill,
+      stroke: { width: 1, colour: palette.inkOn(fill) },
+    });
     return;
   }
   if (corridor) {
@@ -888,21 +921,50 @@ function drawRoom(
   // THE BADGE SITS ON ITS OWN PLATE, on the tile's NEAR lip. A label whose contrast depends on
   // the fill beneath it is a label that disappears on one room type out of four; and the near
   // lip is the one part of a tile that nothing standing on it can cover.
+  //
+  // ==========================================================================================
+  // AND SINCE G-077 IT CARRIES THE ROOM TYPE'S FORM AS WELL AS ITS INITIALS (ADR-0112 §2).
+  //
+  // WHY A ROOM NEEDS ONE AT ALL, WHEN SEVEN ROOM TYPES STILL FIT ON THE LADDER. Because the
+  // human ruled the seven-type cap TEMPORARY, and `palette.ts` lifts it for every role by
+  // letting a role spill onto a second form. That exemption is only honest if the form is
+  // DRAWN: an eighth room type would otherwise pass the contrast gate on a difference nothing
+  // puts on screen, which is the vacuous-criterion class this whole palette exists because of.
+  // So the glyph is here at seven types — where it is the same shape on every badge and says
+  // nothing — precisely so that it says something at eight without anybody having to remember.
+  //
+  // ON THE BADGE RATHER THAN ON THE FLOOR. The floor is where the furniture, the guests, the
+  // pips and the invalidity hatch already are, and a room-sized stencil under all of them is a
+  // second thing competing with the marks that carry per-cell information. The badge is
+  // per-ROOM, which is exactly what the form is.
+  //
+  // IT IS DRAWN IN `base` ON THE `ink` PLATE — the same pair as the text beside it, so it
+  // inherits the same contrast guarantee and cannot be the one mark that vanishes.
+  // ==========================================================================================
   const badge = `${initialsOf(nameOf(content, room.kind))}${room.id}`;
   const badgeY = centre.y + 20 * view.scale;
+  const glyph = 10;
+  const wordWidth = badge.length * 6 + 8;
+  const plateWidth = wordWidth + glyph + 2;
+  const plateX = centre.x - plateWidth / 2;
   labels.push({
     kind: 'rect',
-    x: centre.x - (badge.length * 6) / 2 - 4,
+    x: plateX,
     y: badgeY - 8,
-    w: badge.length * 6 + 8,
+    w: plateWidth,
     h: 16,
     fill: ink,
     alpha: 0.9,
   });
   labels.push({
+    kind: 'poly',
+    points: outlineOf(palette.roomForm(room.kind), plateX + 2 + glyph / 2, badgeY, glyph),
+    fill: base,
+  });
+  labels.push({
     kind: 'text',
     text: badge,
-    x: centre.x,
+    x: plateX + glyph + 2 + wordWidth / 2,
     y: badgeY,
     size: 11,
     colour: base,
@@ -925,7 +987,8 @@ function drawRoom(
 }
 
 /**
- * Items stand in a row across the back of their tile, each on a dark plate.
+ * Items stand in a row across the back of their tile, each on a dark plate, each drawn as ITS
+ * OWN SHAPE (G-077).
  *
  * THE PLATE IS WHAT MAKES AN ITEM VISIBLE ON ANY ROOM. An item's colour comes from its own
  * ladder and a room's from its own, so nothing stops a bed and the bedroom it stands in
@@ -934,23 +997,53 @@ function drawRoom(
  *
  * AT THE BACK, because the front of the tile is where the guests stand and where the badge is.
  * A bed drawn under a guest's feet is a bed nobody sees.
+ *
+ * ==========================================================================================
+ * THE SQUARE BECAME A SHAPE, AND THAT IS THE HALF OF G-077 THAT LIFTS THE CAP (ADR-0112 §1).
+ *
+ * Every item used to be the same square in a different colour, so telling two of them apart
+ * was entirely a question about luminance — and `palette.ts`'s opening arithmetic says how
+ * many things luminance can separate: seven, on this band, ever. Twenty-eight item types made
+ * that a hard stop (E-017) and the human's ruling was that luminance stops being the SOLE
+ * discriminator. `palette.itemForm` is the other one, `outlineOf` is the geometry, and this is
+ * the single call site that makes the exemption in `palette.contrast.test.ts` real rather than
+ * arithmetic: an item IS its form here, not a badge with a form beside it.
+ *
+ * THE ROW IS CENTRED AND SIZED BY `iso.ts` NOW, WHICH IS THE OTHER HALF (ADR-0112 §3). It used
+ * to march rightward from a fixed start and walk off the tile at the third item, drawing
+ * furniture on a cell that does not hold it. `itemMarkSpan` and `itemMarkOffsetX` solve the
+ * containment condition instead, so every plate is inside its own cell's diamond at every
+ * count — which is what makes "which cell holds what" a question the picture can answer.
+ * ==========================================================================================
  */
 function drawItems(
   collector: ReturnType<typeof createCollector<Primitive>>,
   view: View,
   appearances: Appearances,
+  palette: Palette,
   items: readonly Entity[],
   cell: Cell,
   depth: number,
 ): void {
   const centre = centreOf(view, cell.column, cell.row);
-  // THE THREE NUMBERS COME FROM `iso.ts` SINCE G-036b, and they are there rather than here
-  // because they are HALF of the wall-height question: a wall covers the near
+  // THE NUMBERS COME FROM `iso.ts` SINCE G-036b, and they are there rather than here because
+  // they are HALF of the wall-height question: a wall covers the near
   // `WALL_HEIGHT / TILE_HEIGHT` of the tile behind it, so whether this band is visible depends
-  // on both constants and on neither alone. Keeping them apart is how 64 shipped.
-  const size = Math.max(6, Math.round(ITEM_SIZE * view.scale));
-  items.forEach((item, i) => {
-    if (!isPlaced(item)) return;
+  // on both constants and on neither alone. Keeping them apart is how 64 shipped. `itemMarkSpan`
+  // joined them at G-077 for the same reason one step on: whether a mark is on its own tile is
+  // a fact about the projection, and the projection is what `iso.ts` owns.
+  //
+  // THE SIX-PIXEL FLOOR CAME OUT, AND IT IS A TRADE RATHER THAN A TIDY-UP. `size` used to be
+  // `Math.max(6, round(ITEM_SIZE * view.scale))`, so at the camera's minimum scale an item was
+  // drawn three times the size its tile was drawn at — and a mark bigger than its share of the
+  // tile is a mark on the neighbour's floor, which is the defect this goal exists to remove.
+  // Everything here now scales with the view, so the containment property holds at EVERY zoom
+  // rather than at 1.0; the cost is that a hotel framed at `MIN_SCALE` draws its furniture as
+  // specks, which is what a building drawn at a fifth of its size should look like.
+  const drawn = items.filter((item) => isPlaced(item));
+  const span = itemMarkSpan(drawn.length) * view.scale;
+  const pad = Math.min(ITEM_PLATE_PAD * view.scale, span / 4);
+  drawn.forEach((item, i) => {
     // MULTI-TILE ITEMS ARE STILL FORBIDDEN, AND THE CHECK MOVED HERE RATHER THAN BEING DELETED
     // (ADR-0047 A3, G-036b). Its old call site was the ROOM, where its docblock said "when
     // G-036 gives rooms player-drawn footprints THIS THROWS, LOUDLY, AT THE FIRST FRAME — which
@@ -961,23 +1054,19 @@ function drawItems(
     // cannot create one, so what reaches here is a hand-built save, which is precisely the
     // input a check earns its keep on.
     assertSingleTile(roomCellsOf(item), `item ${item.id} (${item.kind})`);
-    const pad = ITEM_PLATE_PAD;
-    const x = centre.x - size + i * (size + 2 * pad);
-    const y = centre.y - Math.round(ITEM_ANCHOR_RISE * view.scale);
+    const x = centre.x + itemMarkOffsetX(i, drawn.length) * view.scale;
+    const y = centre.y - ITEM_ANCHOR_RISE * view.scale;
     collector.add(depth, LAYER.item, {
       kind: 'rect',
-      x: x - pad,
-      y: y - pad,
-      w: size + 2 * pad,
-      h: size + 2 * pad,
+      x: x - span / 2,
+      y: y - span / 2,
+      w: span,
+      h: span,
       fill: INK.soot,
     });
     collector.add(depth, LAYER.item, {
-      kind: 'rect',
-      x,
-      y,
-      w: size,
-      h: size,
+      kind: 'poly',
+      points: outlineOf(palette.itemForm(item.kind), x, y, span - 2 * pad),
       fill: colourOf(appearances.item(item.kind)),
     });
   });

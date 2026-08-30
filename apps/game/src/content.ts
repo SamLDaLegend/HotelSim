@@ -30,7 +30,7 @@ import {
   parseGuestRemarks,
   parseStarTiers,
 } from '@hotelsim/content';
-import type { GuestRemark, SpeedRung } from '@hotelsim/content';
+import type { GuestRemark, ItemType, SpeedRung } from '@hotelsim/content';
 import { bindContent, bindGuestRemarks } from '@hotelsim/sim';
 import type { BoundContent, GuestRemarkData, RemarkBook, SimContent } from '@hotelsim/sim';
 
@@ -137,6 +137,33 @@ export function loadSpriteRefs(): ReadonlyMap<string, string> {
     if (itemType.sprite !== undefined) refs.set(itemType.id, itemType.sprite);
   }
   return refs;
+}
+
+/**
+ * THE ITEM CATALOGUE WITH ITS `suits` VOCABULARY INTACT (G-075c) — the palette's input.
+ *
+ * ---------------------------------------------------------------------------------------
+ * IT IS A FOURTH LOADER FOR `loadSpriteRefs`' REASON, WORD FOR WORD ONE FIELD OVER.
+ * `packages/sim` declares `ItemTypeData` structurally and it does NOT declare `suits`, because
+ * nothing the simulation decides reads it — `suitsSchema` says so: *"OPTIONAL IN THE SIM
+ * (`ItemTypeData` does not declare it at all), because nothing the simulation decides reads
+ * it."* It reaches `bindContent` through `cloneItemType`'s rest spread, so it IS inside
+ * `World.contentHash` and a save taken under one grouping will not silently load under
+ * another — but it is not on the type, and this layer must not read a field off an object the
+ * type says is not there.
+ *
+ * SO THE HOST READS IT WHERE THE HOST ALREADY READS `sprite`: from the same JSON, through the
+ * same parser, at startup, once. Same all-or-nothing discipline — a document that fails here
+ * failed in `loadContent` above too, and the schema is the one authority on what an item type
+ * is.
+ *
+ * WHAT IT MUST NOT BECOME: a second definition of the catalogue. Nothing here filters,
+ * re-orders, prices or renames; `groupItemsByRoomType` in `catalogue.ts` inverts `suits` and
+ * that is the whole of the derivation.
+ * ---------------------------------------------------------------------------------------
+ */
+export function loadItemCatalogue(): readonly ItemType[] {
+  return parseItemTypes(itemTypesJson, 'item-types.json');
 }
 
 /**

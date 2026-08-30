@@ -28,7 +28,7 @@ import {
   stayDurationOf,
   toleranceOf,
 } from '@hotelsim/sim';
-import type { BoundContent, RoomTypeData, ScheduledCommand } from '@hotelsim/sim';
+import type { BoundContent, ItemTypeData, RoomTypeData, ScheduledCommand } from '@hotelsim/sim';
 
 /**
  * HOW OFTEN A GUEST WALKS IN, in ticks — the log's own cadence, named rather than repeated.
@@ -879,6 +879,34 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // second item type served the same need — and a second provider is exactly what makes an
   // item idle at the tick its door closes. Rooms and items are one candidate pool
   // (`providersFor`), so the question has to be asked of the pool.
+  //
+  // ==========================================================================================
+  // AND THE POOL IS THE ONE THIS LOG CAN PUT IN A WORLD (G-075b). "Sole" is a question about
+  // SUBSTITUTES, and a substitute that cannot exist substitutes for nothing.
+  //
+  // THIS WENT WRONG THE FIRST TIME A CATALOGUE LANDED, AND THE COMMENT ABOVE NAMED THE WRONG
+  // HAZARD. It says the order-dependence "lives there and ONLY there", in the fallback — add a
+  // room type sorting below the current fallback host and the fallback moves. **The PREFERRED
+  // branch turned out to be the fragile one**: it asked whether a need has exactly ONE provider
+  // in the whole of `item-types.json`, and G-075b's catalogue gave `guest_comfort` six. The
+  // preferred branch then matched nothing, the fallback took over, and because `bindContent`
+  // normalises tables into ID ORDER the fallback's first match is `games_room` and not
+  // `hotel_lounge` — so the stranded item silently became a `vending_machine`, both sealing
+  // ticks landed in gaps in a schedule aimed at a chair, and release cause (b) fell from two to
+  // one. Measured: `provider.determinism.test.ts`'s `itemSurvived` census, which is the test
+  // that exists to say so, went red at exactly one added `guest_comfort` item.
+  //
+  // THE REPAIR IS TO NARROW THE QUESTION TO WHAT THIS LOG CAN BUILD, not to re-aim the ticks.
+  // `schedule` issues `spawnEntity` for room types and for THE ITEMS THOSE ROOM TYPES REQUIRE,
+  // and nothing else — there is no `placeItem` in this log, by the same declaration at the head
+  // of this file that says there is no `drawRoom`. So an item type no room type REQUIRES can
+  // never stand in this world and can never take an engagement from the host's item. That is
+  // the same reachability notion `assertNeedsAreSatisfiable` uses in `bindContent`, and using
+  // it here makes the preferred branch depend on the shape of the world this log builds rather
+  // than on how many rows a designer has added to a catalogue.
+  // ==========================================================================================
+  const reachableItem = (itemType: ItemTypeData): boolean =>
+    content.content.roomTypes.some((room) => (room.requires ?? []).includes(itemType.id));
   const soleProviderNeedOf = (roomType: RoomTypeData): boolean =>
     roomType.id !== entityKind &&
     requiredItemsOf(content, roomType.id).some((itemId) =>
@@ -886,7 +914,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
         (needId) =>
           !content.content.roomTypes.some((other) => (other.provides ?? []).includes(needId)) &&
           !(content.content.itemTypes ?? []).some(
-            (other) => other.id !== itemId && (other.provides ?? []).includes(needId),
+            (other) => other.id !== itemId && reachableItem(other) && (other.provides ?? []).includes(needId),
           ),
       ),
     );

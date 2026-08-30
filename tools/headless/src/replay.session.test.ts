@@ -40,6 +40,21 @@
 //   the document, and add a line to this block saying which content edit forced it. The
 //   alternative — `--content <dir>` pointed at the content it was played under — replays it
 //   without moving anything, and is what the refusal itself recommends.
+//
+//   RE-DERIVED A SECOND TIME AT G-075b, BY THAT PROCEDURE, AND THIS IS THE RECORD OF IT.
+//   THE LOG IS STILL THE BROWSER'S, BYTE FOR BYTE: `seed`, `ticks`, all 6,501 `frameTicks` and
+//   all 158 `commands` are untouched, and this goal wrote no line of `packages/sim`.
+//
+//   WHAT FORCED IT: G-075b's catalogue took `item-types.json` from three rows to twenty-eight
+//   and added `suits` to every row (and `decorative` to the seven that serve no need), so
+//   `bindContent`'s fingerprint moved `97166d1a3988680e` -> `0539bc3f9f52fa33` and the same log
+//   — which contains no `placeItem`, and under which not one added row can exist, because no
+//   room type `requires` any of them — reached `887ee4443f8bcc30` -> `47b022acdce334f0`.
+//
+//   THE REFUSAL FIRED FIRST, WHICH IS THE WHOLE POINT OF THE PARAGRAPH ABOVE. `pnpm sim:replay`
+//   on the unmodified fixture printed the named content refusal with BOTH fingerprints and
+//   simulated nothing; the pair was then re-derived deliberately rather than discovered as a
+//   silent drift. Both fields were re-derived together, once, exactly as at G-076.
 // -----------------------------------------------------------------------------------------
 //
 // WHY THAT MATTERS MORE THAN IT SOUNDS. This goal exists because `exportSession` had NO
