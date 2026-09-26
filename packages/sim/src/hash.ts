@@ -1,8 +1,5 @@
-// SCAFFOLD — bootstrap substrate, owned by sim-engineer from G-001 onward.
-//
-// I2/I6: the state hash is the equality oracle for both determinism and save
-// round-trip. It must be a total function of world state with no dependence on key
-// insertion order (object keys are sorted) and no dependence on float formatting.
+// The state hash is the equality oracle for determinism and save round-trip: a total
+// function of world state, independent of key insertion order and float formatting.
 
 export type JsonValue =
   | null
@@ -13,11 +10,9 @@ export type JsonValue =
   | { readonly [key: string]: JsonValue };
 
 /**
- * Deterministic serialisation: object keys sorted, no whitespace.
- *
- * Throws on NaN, Infinity and undefined rather than silently emitting `null` the way
- * JSON.stringify does. A non-finite number reaching the hash is a determinism bug
- * that would otherwise be invisible.
+ * Deterministic serialisation: object keys sorted, no whitespace. Throws on NaN,
+ * Infinity and undefined rather than emitting `null` as JSON.stringify would, so a
+ * determinism bug cannot hide in the hash.
  */
 export function canonicalise(value: JsonValue): string {
   if (value === null) return 'null';

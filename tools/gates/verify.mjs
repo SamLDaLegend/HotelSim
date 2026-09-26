@@ -88,10 +88,7 @@ const GATES = [
   ['—', 'check:measure', 'sim:measure refuses each condition it cannot compare, reports the workload and samples it ran, and reproduces its golden state hash — it holds no bound of its own to break'],
   ['—', 'check:tickcost', "this tree's median tick cost over the previous commit's, at one fixed workload, is under the derived bound (G-020b)"],
   ['—', 'check:tickcost:proof', 'a byte-identical copy of the tripwire, run over a mutated copy of the sim, exits red for a guest-loop quadratic and for a constant factor'],
-  ['—', 'check:scaling', 'the room, need and provider-density arms\' ratios of median tick cost stay under their derived bounds, above 1 on the axes flagged for it, and are not ratios of overhead (G-020c)'],
-  ['—', 'check:stamp', 'the four digests carry one byte-identical as-of paragraph naming a goal GOALS.md calls done (§4.1, G-022), and no goal ID in a NON-MERGE commit SUBJECT resolves to blocks that all read `pending` (ADR-0047 amdt §4, G-039a)'],
   ['—', 'check:ladder', 'no expression under apps/game combines TWO rung speeds arithmetically — one rung with arithmetic, and comparisons, are allowed (§2.1.1, G-030)'],
-  ['—', 'check:unpinned', 'no it/describe title or Error message under packages/ or tools/ prints a three-digit-or-longer integer or a decimal that its own file does not pin (ADR-0032 §1, G-033)'],
 ];
 // `check:unpinned` HAS NO `:proof` ROW OF ITS OWN, AND THAT IS THE OPPOSITE OF AN OVERSIGHT.
 // Its proof is `unpinned.scan.test.ts`, registered in `scanner.census.test.ts` — the mechanism

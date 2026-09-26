@@ -1,8 +1,5 @@
-// The public surface of the headless simulation.
-//
-// I1: nothing in this package may import the render layer, the DOM, an engine API,
-// the filesystem or the network. Enforced by `pnpm check:purity` and by this
-// package's tsconfig, which has neither the "DOM" lib nor @types/node.
+// The public surface of the headless simulation. Nothing in this package may import the
+// render layer, the DOM, an engine API, the filesystem or the network (`pnpm check:purity`).
 
 export type { BuildInput, BuildOutcomes, BuildRefusalReason, BuildResult } from './build.js';
 export {
@@ -18,8 +15,6 @@ export {
   countConstructionTransactions,
   countDemolitionRefundTransactions,
   countFloorConstructionTransactions,
-  // G-075a — an item costs money (ADR-0111). The price accessor and the cross-subsystem law
-  // `countItemPurchaseTransactions(ledger) === buildOutcomes.placed`.
   countItemPurchaseTransactions,
   createBuildOutcomes,
   describeOccupied,
@@ -35,12 +30,8 @@ export type {
   BoundContent,
   EconomyData,
   GuestRulesData,
-  // G-057 — HOTELSIM.md section 8's M4 hard prerequisite: what the hotel OPENS with, and what a
-  // room the host places FREE does to that number.
   ScenarioData,
   SeededStockPolicyData,
-  // G-052a — the money loop's third term: who the hotel can employ, what one of them costs for
-  // a night, and who is on the opening payroll.
   StaffPostingData,
   StaffRoleData,
   DemandData,
@@ -59,9 +50,8 @@ export {
   accessRuleOf,
   bindContent,
   demolitionRefundOf,
-  // θ-b1. Exported for the reason `stayDurationOf` below is: the tests that compute the arms and
-  // the derivations live in `tools/headless`, outside this package, and read the shipped numbers
-  // rather than retyping them.
+  // Several content accessors below are exported so `tools/headless` reads the shipped
+  // numbers through the same fold rather than keeping a second copy.
   dissatisfactionCapacityOf,
   dissatisfactionReliefOf,
   findItemType,
@@ -76,12 +66,7 @@ export {
   seededStockPolicyOf,
   firstRoomTypeProviding,
   fitOf,
-  // G-038c. Exported for `demolitionRefundOf`'s reason: the harness reports what a floor cost
-  // and the tests that drive the sink read the shipped number rather than retyping it.
   floorConstructionCostOf,
-  // G-023b-ii. Exported for the same reason: the derivation of the speed FLOOR lives in
-  // `tools/headless/src/dissatisfaction.content.test.ts`, which reads the shipped dial rather
-  // than retyping it — a second copy of a content number is how a derived bound goes stale.
   guestSpeedOf,
   hasContentId,
   isRoomAccessRule,
@@ -95,51 +80,27 @@ export {
   minFootprintCellsOf,
   needTypesInOrder,
   ONE_WHOLE_BASIS_POINTS,
-  // G-043. Exported for `stayDurationOf`'s reason, and for `visitRoundOf`'s more sharply: the
-  // provisioning rule in `tools/headless/src/provisioning.ts` needs the realised party CYCLE to
-  // turn an arrival cadence into a guest count, and the copy of this walk that a harness kept
-  // instead answered a different mean for any table whose cycle does not start at the first
-  // ordinal. One fold, called from outside, rather than two that can disagree.
   partySizeOf,
   providesOf,
   requiredItemsOf,
   ROOM_ACCESS_RULES,
   roomTypeProvides,
   roomTypeServes,
-  // G-027a. Exported because the runner reports the stay length and the tests that compute
-  // the four arms need it from outside `packages/sim`; it is the `abandonMarginOf` shape and
-  // is on the surface for the same reason.
   stayDurationOf,
-  // θ-b2, and on the surface for `stayDurationOf`'s reason: the runner and the food-court arms
-  // need the visitor's clock from outside `packages/sim` to re-derive it rather than copy it.
   visitDurationOf,
-  // ADR-0031. Exported so `visit.content.test.ts` calls THE fold rather than keeping a second
-  // copy of it in step — the duplicate it replaces had drifted a whole sweep behind and returned
-  // 73/10/63 where this returns 70/34/36, under a docstring claiming they could not disagree.
   visitRoundOf,
   toleranceOf,
   wantAtOf,
   idleShareBasisPoints,
-  // G-041, ADR-0054/0057. The two ends of the quality range, exported so
-  // `needs.rates.test.ts` re-runs the shipped derivation through THE fold rather than keeping a
-  // second copy of the product in step with it.
   declaredRefill,
   serviceFloorRefill,
-  // G-052a. On the surface for `stayDurationOf`'s reason: the host reports the payroll and the
-  // wage bill, and re-derives them through THE accessors rather than keeping a second copy.
   findStaffRole,
   nightlyWageOf,
   openingStaffOf,
   staffRolesInOrder,
-  // G-051a. The star ladder, iterated in a total content-derived order (ADR-0003) — on the
-  // surface so the host reports the tier a hotel is climbing towards and re-derives it through
-  // THE accessor rather than keeping a second copy of the table.
   STAR_TIER_COUNTINGS,
   isStarTierCounting,
   starTiersInOrder,
-  // G-051b. The demand curve: the one content table this simulation reads to decide THAT A
-  // GUEST ARRIVES AT ALL. On the surface so a host can report what a hotel's rating is earning
-  // it, and re-derive that through THE accessors rather than keeping a second copy of the curve.
   firstDemand,
   maxPartiesPerDayOf,
   partiesPerDayAt,
@@ -166,16 +127,9 @@ export {
 } from './entities.js';
 export type { Corridors } from './corridors.js';
 export { assertCorridors, createCorridors, hasCorridorAt, withCorridor } from './corridors.js';
-// STAIRS (G-038a-ii-alpha). `stairwellOf` is exported because a host that wants to DRAW the
-// stairwell needs the same O(1) answer the tick uses, and a second copy of 'where the stairs
-// are' in a renderer is the drift `corridors.ts` refuses for the plan itself.
 export type { Stairs } from './stairs.js';
 export { assertStairs, createStairs, hasStairAt, stairwellOf, withStair } from './stairs.js';
-// THE LIFT (G-038b-i). A DECLARATION about the shaft the stairs describe, not a second
-// connector — see `lift.ts`. Exported for the reason `stairwellOf` is: a host that wants to
-// draw the car, or to offer a lift tool, must read the same declaration the tick reads.
-// `NO_LIFT` is exported because "this world has no lift" is a RULE with a name rather than a
-// bare `null` a caller has to know the meaning of.
+// `NO_LIFT` names the "this world has no lift" rule rather than leaving a bare `null`.
 export type { Lift } from './lift.js';
 export { assertLift, liftsEqual, NO_LIFT, withLift } from './lift.js';
 export type { Cell, Footprint, GridBounds } from './grid.js';
@@ -241,42 +195,16 @@ export {
   getGuest,
   guestCount,
   guestsInOrder,
-  // `isCutShort` WAS DELIBERATELY ABSENT AND IS NOW EXPORTED (G-019 `ai-critic` MINOR 1;
-  // reversed at G-059). The reason it was withheld was stated as a fact about the tree — *"no
-  // consumer outside `packages/sim`"* — and that fact stopped being true: review law B in
-  // `report.ts` now asks for a floor review per stay that DID NOT RUN ITS COURSE rather than
-  // per eviction, which is this predicate's exact partition and is NOT a string prefix. So this
-  // is `stairLeg`'s case below rather than `experienceBasisPoints`': the consumer arrived, and
-  // it asks the FUNCTION rather than a copy of it. `EVICTION_REASON_PREFIX` survives for the
-  // narrower question it answers — which of the cut-short rows are evictions — and the report
-  // still reads reasons as strings, so it walks `GUEST_DEPARTURE_REASONS` to reach this.
   isCutShort,
   isEngaged,
   isResting,
   lodgingNeedStateOf,
   maxGuestLifetimeTicks,
   NO_GUEST,
-  // `doorLeg` IS EXPORTED FOR THE SAME ONE CONSUMER AS THE TWO BELOW (G-046).
-  // `travel.walls.report.test.ts` re-runs the sim's own step to prove its reconstruction of
-  // the inputs is the sim's (`unreproduced`, asserted zero on every arm), and since a door is
-  // a PLACE the cell a guest walks towards is `doorLeg(stairLeg(...))` rather than
-  // `stairLeg(...)`. A copy of that composition in `tools/` would be the drift `placed`
-  // refuses in the sim — see the lift gate's comment there.
+  // `doorLeg`, `exitLeg`, `stairLeg` and `stepTowards` are exported so
+  // `travel.walls.report.test.ts` can re-run the sim's own step rather than copy it.
   doorLeg,
-  // `exitLeg` JOINS IT FOR THE SAME CONSUMER (G-046b). A room is LEFT through its door as well
-  // as entered through it, so the cell a guest walks towards is now
-  // `exitLeg(doorLeg(stairLeg(...)))`. `unreproduced` in that file is what says a reconstruction
-  // has gone stale — it went 0 -> 403 on the day `doorLeg` landed uncomposed — so the third leg
-  // is composed there rather than restated.
   exitLeg,
-  // `stairLeg` AND `stepTowards` ARE EXPORTED FOR ONE CONSUMER, AND IT IS THE OPPOSITE OF
-  // `isCutShort`'s case above (G-058). Both had lived inside this package because nothing
-  // outside it asked; `travel.walls.report.test.ts` now asks, and asks the FUNCTIONS rather
-  // than a copy of them. It attributes each through-wall landing to the branch of
-  // `stepTowards` that produced it, which needs the leg the sim actually walked towards
-  // (`stairLeg`) and a re-run of the step to prove its reconstruction of the inputs is the
-  // sim's (`stepTowards`). A second spelling of `stairLeg`'s condition in `tools/` is
-  // exactly the drift `placed` refuses in the sim — see the lift gate's comment there.
   stairLeg,
   standingCell,
   stepGuests,
@@ -297,26 +225,9 @@ export {
   isNeedSatisfiedIn,
   isNeedWanted,
   wantLineOf,
-  // `metAtDeparture` and `needBandOf` are DELIBERATELY ABSENT (G-028b, sweep 2). They were
-  // exported for one round on the ground that *"`tools/headless` has to ask the SHIPPED
-  // question when it folds a distribution"* — and **grep returns zero consumers there.** No arm
-  // outside `packages/sim` folds a band; the report divides its own share for printing and the
-  // headless arms read `met` off the summary, which is what `recordNeedsAtDeparture` already
-  // put there.
-  //
-  // IT IS THE EXACT CLASS THIS SAME DIFF DELETES `experienceBasisPoints` FOR, two lines below
-  // the epitaph quoting G-019's ruling about it: a function on the public surface for a
-  // consumer that does not exist. `packages/sim` is one package, so `review.scorer.test.ts` and
-  // `needs.scorer.test.ts` reach both directly without `index.ts` offering them to everybody
-  // else. If a headless arm ever does need to ask the shipped question, exporting them then is
-  // one line and will have a caller to point at.
   needOutcomeOf,
   recordNeedsAtDeparture,
   urgencyOf,
-  // G-028a. On the surface for the reason `stayDurationOf` is: the arms that measure ADR-0029's
-  // stranded-in-public population have to ask the SHIPPED question about a guest standing in the
-  // lobby, and a test that spelled the three exclusions itself would be a second definition of
-  // the predicate this goal exists to make single.
   wantsSomethingUnserved,
 } from './needs.js';
 export type {
@@ -327,25 +238,12 @@ export type {
   ReviewScale,
   SpokenRemark,
 } from './reviews.js';
-// `experienceBasisPoints` WAS DELIBERATELY ABSENT (G-019) AND IS NOW DELETED (G-028b), along
-// with `qualitySum` behind it. The score is no longer a sum of quality terms, so there is no
-// two-step intermediate to withhold — see the epitaph in `reviews.ts`, and note that the ONE
-// property the withheld export existed to name (the score is not a re-banded basis-point share)
-// survives in `review.scorer.test.ts` rather than dying with the function.
-// (`lodgingWaitBasisPoints` shared the original note until G-027a deleted it.)
 export {
   assertRecentRemarks,
   assertReviewOutcomes,
-  // G-065: the hotel's only voice. `guestRemarkSchema` carries why the table is not injected
-  // content, and that is what decides the shape of everything below it.
   bindGuestRemarks,
   createRecentRemarks,
   createReviewOutcomes,
-  // G-066a: THE FEED. A departure stores the four values a line is made FROM
-  // (`remarkRecordOf` -> `recordRemark`); a host with a book turns one back into a sentence
-  // (`spokenRemarkFrom`). The rendered text is never stored, so rewording a joke changes what
-  // an old save displays — which is the point — and no id into the remark table can dangle.
-  // `remarkFor` is the composition of the two for a caller holding a whole stay.
   RECENT_REMARKS_CAPACITY,
   recordRemark,
   recordReview,
@@ -388,16 +286,12 @@ export {
 export type { SettlementInput } from './settlement.js';
 export {
   countSettlementTransactions,
-  // G-052a. `countSettlementTransactions`' twin: the host reports the wage cadence it MEASURED
-  // rather than one it inferred (ADR-0007).
   countWageTransactions,
   isSettlementTick,
   nightlyUpkeepOf,
   settleNight,
 } from './settlement.js';
-// G-070, ADR-0109. The lose state is a MEASUREMENT and not a rule: nothing in `packages/sim`
-// reads `solvencyOf`, and its whole purpose is to give a host one answer to "is this hotel
-// losing, and how long has it got" instead of two.
+// The lose state is a measurement for hosts; nothing in `packages/sim` reads it.
 export type { Solvency } from './solvency.js';
 export { isLosing, solvencyOf } from './solvency.js';
 export type { StaffId, StaffMember, StaffStore } from './staff.js';
@@ -409,22 +303,11 @@ export {
   nightlyWagesOf,
   NO_STAFF,
 } from './staff.js';
-// G-051a — the STAR RATING. Derived from what the hotel HAS, never stored, and it feeds
-// NOTHING inside the simulation: the only consumers are hosts that display it. See the header
-// of `rating.ts` for why it is not reputation and why a stored one would be a cache that can
-// disagree with the hotel.
+// The star rating is derived from what the hotel has, never stored.
 export type { StarRating, StarShortfall } from './rating.js';
 export { starRatingIn, starRatingOf, UNRATED } from './rating.js';
-// G-051b — DEMAND. The star rating stopped feeding nothing: `runDemand` (below) turns it into
-// arrivals, which is the arrow at the end of the build loop. See the header of `demand.ts` for
-// why the arithmetic draws no randomness and what that decision costs.
 export { isDemandSlot, partiesArrivingAt } from './demand.js';
-// G-047a — THE ROUTE BETWEEN TWO LANDINGS. Nothing in this package calls it: `stepGuests`
-// chooses over LANDINGS and no cell it crosses is observable in the sim, a save, the state
-// hash or a recorded frame. This is the derivation that lets a HOST draw the walk, and it
-// adds no `World` field, no save version and no migration. See the header of `path.ts` for
-// the contract, for why the search is bounded to the step, and for why a floor change is a
-// third verdict rather than a failure.
+// Not used by the sim: lets a host draw the route a guest walks.
 export type { PathResult } from './path.js';
 export { pathBetween } from './path.js';
 export type { RngState } from './rng.js';
@@ -463,19 +346,12 @@ export type {
   ValidityContext,
 } from './validity.js';
 export {
-  // G-047a — `pathBetween`'s cross-floor verdict rests on it, and it is exported rather than
-  // restated so a drawn route and a walked one cannot drift. See `path.ts`.
   climbsFrom,
   countInvalidRooms,
   createValidityCache,
   createValidityContext,
   describeRoomInvalidity,
-  // THE DOOR AS A PLACE (G-046). Exported for `doorLeg`'s consumer above and for
-  // `travel.door.test.ts`; nothing outside this package derives a doorway of its own.
   doorwayFor,
-  // AND THE DOOR AS THE WAY OUT (G-046b). Exported for `travel.exit.test.ts` alone, which pins
-  // the two guards that make `exitLeg` terminate and needs to ask the way out DIRECTLY to show
-  // that a refused divert was refused by a guard rather than by there being no door.
   doorwayOut,
   draftEntities,
   guestAccessTo,

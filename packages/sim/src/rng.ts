@@ -1,13 +1,6 @@
-// SCAFFOLD — bootstrap substrate, owned by sim-engineer from G-001 onward.
-//
-// I2: the ONLY source of randomness in the simulation. Math.random is banned by
-// `pnpm test:determinism`. The generator is a pure function of its state: callers
-// thread the returned state forward, so the RNG is part of world state and is
-// therefore saved, hashed and replayed like everything else.
-//
-// Every operation is uint32. No floating point anywhere in this file — float
-// accumulation is the classic way a sim diverges between platforms, and I2 has no
-// tolerance to absorb it.
+// The only source of randomness in the sim. Pure: callers thread the returned state
+// forward, so the RNG is part of world state and is saved, hashed and replayed.
+// All arithmetic is uint32 — no floats, which could diverge across platforms.
 
 export type RngState = {
   readonly a: number;

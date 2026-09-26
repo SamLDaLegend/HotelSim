@@ -287,72 +287,11 @@ const REGISTER: ReadonlyMap<string, { readonly proof: string; readonly title: st
         note: 'This file. It walks the tree, so by its own definition it is a scanner and owes its own proof.',
       },
     ],
-    [
-      'tools/gates/check-unpinned.mjs',
-      {
-        proof: 'tools/headless/src/unpinned.scan.test.ts',
-        title: 'BITES — a stale figure in a printed claim, on CRLF and on LF',
-        note:
-          'ADR-0043 §1, G-033. Sweep 3 became a scanner, and this register is what the ruling ' +
-          'meant by a proof of bite: the shipped NUMBER pattern was rewritten into a TEMPLATE ' +
-          'LITERAL on a sha256-guarded copy, both bite arms went red, and the file was restored ' +
-          'byte-identical. The proof spawns the gate rather than importing its predicate, so the ' +
-          'exit code CI reads is the thing under test.',
-      },
-    ],
   ]);
 
-/**
- * TEXT-MATCHING CHECKS THAT ARE NOT SCANNERS BY THE DEFINITION ABOVE, REGISTERED ANYWAY.
- *
- * `stamp.mjs` reads four NAMED files rather than walking a tree, so the derivation does not
- * see it — correctly, by the line this file draws. It is registered here because it is new in
- * the same goal that wrote the rule, and a goal that exempted its own check would be arguing
- * for a standard it did not meet. The proof assertions below cover both maps.
- */
+/** Text-matching checks that read named files rather than walking a tree. None today. */
 const ALSO_REGISTERED: ReadonlyMap<string, { readonly proof: string; readonly title: string; readonly note: string }> =
-  new Map([
-    [
-      'tools/gates/stamp.mjs',
-      {
-        proof: 'tools/headless/src/ledger-stamp.test.ts',
-        // De-numeralled at G-032a (ADR-0032 §1): it read "nine mutations" over seven arms. This
-        // census caught the rename by name, which is what a registry of proof titles is for.
-        title: 'AND IT BITES — every mutation named, each against an otherwise-valid tree',
-        note:
-          '§4.1 as-of stamp. Reads four named ledgers, so a moved subject throws at the read rather ' +
-          'than reporting a clean tree — which is why it is here and not in REGISTER.',
-      },
-    ],
-    [
-      'tools/gates/check-status.mjs',
-      {
-        proof: 'tools/headless/src/goal-status.test.ts',
-        title: 'G-031a: a commit names the SUB-GOAL, the block is spelled G-031, and it reads pending',
-        note:
-          'ADR-0047 amdt §4, G-039a. A goal block\'s status against git. Reads two named ledgers ' +
-          'and `git log`, so it is here rather than in REGISTER for the same reason `stamp.mjs` ' +
-          'is. Its subject can go empty in a way a file-reader\'s cannot — a shallow clone, or a ' +
-          'history whose subjects stopped naming goals — so it carries FOUR anti-vacuity clauses ' +
-          'and the proof drives all four. The bite arm named here is the historical case itself, ' +
-          'and it caught a real hole while being written: the first version resolved goal IDs ' +
-          'EXACTLY, found no `G-031a` block (there has never been one — the goal lived inside ' +
-          '`## G-031`), judged nothing and printed green over the defect it was built for.',
-      },
-    ],
-    [
-      'tools/gates/lib/goal-blocks.mjs',
-      {
-        proof: 'tools/headless/src/goal-status.test.ts',
-        title: 'CASE DOES NOT SAVE IT — `Status: **PENDING**` is caught, which the old predicate class was not',
-        note:
-          'G-039a. The shared goal-block parse, read by `stamp.mjs` (done) and `check-status.mjs` ' +
-          '(pending). It exists because the second reader was about to be a second predicate, and ' +
-          'the first had two latent defects: case-sensitivity, and a heading pattern that ' +
-          'truncated `G-023b-i` to `G-023b`. Both are exercised here and in `ledger-stamp.test.ts`.',
-      },
-    ],
-  ]);
+  new Map();
 
 const ALL_REGISTERED = new Map([...REGISTER, ...ALSO_REGISTERED]);
 

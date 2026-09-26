@@ -2,11 +2,10 @@
 
 A casual, cartoon-styled hotel building and management sim. **Isometric floorplan view**
 (Theme Hospital / RollerCoaster Tycoon) — multi-floor, **one floor drawn at a time**, floors
-switchable. *(Ruled 2026-08-16, ADR-0046: this line read "side-on cross-section, not
-isometric" from before the first line of code until goal 33.)*
+switchable. You draw rooms and furnish them item by item.
 
-`HOTELSIM.md` is the source of truth for how this project is built and what may not change.
-`CLAUDE.md` is the short form. This file is the commands.
+`HOTELSIM.md` says what we're making, `GOALS.md` what's next, `CLAUDE.md` the working rules.
+This file is how to run and play it.
 
 ## Run it
 
@@ -17,14 +16,12 @@ pnpm dev            # opens the game in a browser: http://localhost:5180
 
 `pnpm dev` starts Vite on `apps/game` and opens a window showing the shipped hotel running
 in real time. **Placeholder art** — flat coloured isometric prisms with clear silhouettes
-(ADR-0014, ADR-0046 §6); real art is a separate track and nothing waits on it.
+; real art is a separate track and nothing waits on it.
 
-**Tiles are 2:1, 128x64 logical, authored at 2x** (ADR-0047 A2 — locked). **Wall height is
-64px and is PROVISIONAL**: the derivation is sound, but wall height is a *perceptual*
-property and ADR-0013 says a perceptual criterion needs a perceptual check. It ships to be
-looked at (ADR-0047 amendment §1, human ruling).
+**Tiles are 2:1, 128x64 logical, authored at 2x.** Wall height (64px) is provisional — it
+ships to be looked at.
 
-What you can do in it today (G-031a, rebuilt in isometric at G-035): **watch, choose a
+What you can do in it today: **watch, choose a
 speed, switch floors, and build.** The transport strip carries one button per rung of the
 play-speed ladder, labelled by content, plus pause (`space`).
 
@@ -59,8 +56,7 @@ not a viewer and must not grow into one — the browser is the viewer.
 is deliberately not among them: changing speed changes how many ticks are run, never what a
 tick does, and it never enters the command log.
 
-**A room is the size you drew it** (G-064). `HOTELSIM.md` §1: *"rooms are designed by the
-player, not placed from a catalogue"*. Press, drag, release: the blue outline under the
+**A room is the size you drew it.** Press, drag, release: the blue outline under the
 pointer is the rectangle you are currently covering, and it is one colour whatever size it is
 — **nothing here predicts whether the simulation will take it**. Too big for the room type,
 overlapping, off the plot, unaffordable: all four come back as recorded refusals with the word
@@ -115,12 +111,12 @@ cell size, in a photograph, and for a colour-blind viewer.
 
 A guest whose body is in the basement café while a bedroom upstairs shows its occupancy pip
 is **not a drawing bug**. Rest is served by *holding* a room rather than by standing in it,
-and that is the behaviour ADR-0017 changes. The renderer shows both halves deliberately.
+and the renderer shows both halves deliberately.
 
 ## The gates
 
 ```bash
-pnpm verify         # every §2 invariant gate and check, fourteen rows
+pnpm verify         # the six invariants and five checks, eleven rows
 ```
 
 | | check | what it holds |
@@ -131,22 +127,19 @@ pnpm verify         # every §2 invariant gate and check, fourteen rows
 | I4 | `test` | unit tests, including the append-only ledger fold |
 | I2 | `test:determinism` | same seed + log ⇒ identical hash after 100,000 ticks |
 | I6 | `test:save` | serialise → deserialise → re-hash is identical |
-| I5 | `sim:bench` | 365 days headless, inside the derived budget (§2.1.2) |
+| I5 | `sim:bench` | 365 days headless, inside its budget |
 | — | `check:measure` | the tick-cost instrument's own proofs |
 | — | `check:tickcost` | tick cost against the previous commit, inside a derived bound |
 | — | `check:tickcost:proof` | the tripwire, watched going red under two mutations |
-| — | `check:scaling` | rooms, needs and provider density scale as claimed |
-| — | `check:stamp` | the four ledger digests carry one byte-identical as-of line |
-| — | `check:ladder` | no render code computes one play speed from another (§2.1.1) |
-| — | `check:unpinned` | no claim in the tree quotes a figure nothing pins |
+| — | `check:ladder` | no render code computes one play speed from another |
 
-**Never edit a gate to make a build pass.** Changing an invariant is a human decision (§9).
+**Never edit a gate to make a build pass.** Changing an invariant is Sam's decision.
 
 ## The rest
 
 ```bash
 pnpm sim:run --days 30 --seed 7 --rooms 6      # headless, prints a report
-pnpm sim:run --days 30 --seed 7 --rooms 6 --demand   # the HOTEL earns its guests (G-051b)
+pnpm sim:run --days 30 --seed 7 --rooms 6 --demand   # the hotel earns its guests
 pnpm sim:run --days 30 --seed 7 --rooms 6 --record run.ndjson --record-every 10
 pnpm viewer                                     # watch a recording (tools/viewer, disposable)
 pnpm --filter @hotelsim/game build              # bundle the render layer, as CI does

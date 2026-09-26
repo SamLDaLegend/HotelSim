@@ -248,7 +248,7 @@ describe('the failure modes a diagnostic must survive, because it runs while som
     const other = join(dir, 'not-ours.txt');
     writeFileSync(other, 'KEEP-ME', 'utf8');
 
-    lib.prepareLogDir(dir, ['test', 'check:scaling']);
+    lib.prepareLogDir(dir, ['test', 'check:ladder']);
 
     expect(() => readFileSync(stale, 'utf8')).toThrow();
     // It clears by name, so a file this runner did not write is never at risk.

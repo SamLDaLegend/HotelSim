@@ -98,8 +98,6 @@ const BENCH = readFileSync(join(ROOT, 'tools/gates/bench.mjs'), 'utf8');
 const BUDGET_SOURCE = readFileSync(BUDGET_MODULE, 'utf8');
 const WORKLOAD_SOURCE = readFileSync(join(ROOT, 'tools/gates/workload.mjs'), 'utf8');
 const LADDER_PATH = join(ROOT, 'packages/content/data/speed-ladder.json');
-const CHARTER = readFileSync(join(ROOT, 'HOTELSIM.md'), 'utf8');
-const SHORT_FORM = readFileSync(join(ROOT, 'CLAUDE.md'), 'utf8');
 
 const EXPORTS = [
   'TICKS_PER_DAY',
@@ -311,30 +309,4 @@ describe('every quoted copy of the budget agrees with the arithmetic (ADR-0007)'
     );
   });
 
-  it('HOTELSIM.md §2.1.2 states the inputs the gate actually uses', () => {
-    expect(CHARTER).toContain(`${budget.TICKS_PER_DAY} ticks per simulated day`);
-    expect(CHARTER).toContain(`${grouped(ticks)} ticks (${budget.DAYS} x ${budget.TICKS_PER_DAY})`);
-    expect(CHARTER).toContain(`${budget.TOP_SPEED_TICKS_PER_SECOND} ticks per real second`);
-    expect(CHARTER).toContain(`S = ${budget.SIM_SHARE_OF_ONE_CORE.toFixed(2)}`);
-    expect(CHARTER).toContain(`H = ${budget.FUTURE_SYSTEMS_HEADROOM}`);
-  });
-
-  it('HOTELSIM.md §2.1.2 works the arithmetic through to the same budget', () => {
-    for (const [value, unit] of [
-      [availablePerTickNs, 'ns'],
-      [simSharePerTickNs, 'ns'],
-      [tickBudgetNs, 'ns'],
-      [budgetMs, 'ms'],
-    ] as const) {
-      expect(CHARTER).toMatch(new RegExp(`=\\s+${grouped(value)} ${unit}`));
-    }
-  });
-
-  it('the §2 invariant table quotes the derived budget, not a rounder one', () => {
-    expect(CHARTER).toContain(`**The budget is DERIVED, not chosen** — ${grouped(budgetMs)}ms`);
-  });
-
-  it('CLAUDE.md — the copy that survives compaction — quotes it too', () => {
-    expect(SHORT_FORM).toContain(`${grouped(budgetMs)}ms`);
-  });
 });

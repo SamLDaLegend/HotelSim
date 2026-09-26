@@ -1,59 +1,21 @@
-// Guests (G-004, G-012).
+// Guests. A guest arrives, forms one instance of every need the content defines, holds a lodging
+// room for the whole stay, engages one provider at a time for everything else, pays, and leaves
+// with a recorded outcome.
 //
-//   A guest arrives, forms one instance of every need the content defines, holds a
-//   lodging room for the whole stay, engages one provider at a time for everything
-//   else, pays, and leaves with a recorded outcome.
+// A guest is not an entity: it lives in its own store shaped like `EntityStore`, with monotonic
+// never-reused ids and `list` strictly ascending by id. No Set or Map in hashed state.
 //
-// A GUEST IS NOT AN ENTITY. `Entity.kind` is a content id validated against injected
-// content, and the only content that could name a guest is a guest ARCHETYPE — which is
-// M6 and out of scope here. So a guest is a guest: distinguished by nothing but its id
-// and its stay, in its own store shaped exactly like `EntityStore`. Ids come from a
-// monotonic counter and are never reused, `list` is strictly ascending by construction,
-// and there is no Set or Map in any of it (I2, I6).
+// Both reservations (lodging room and engagement) are fields of the guest and exist nowhere else.
+// There is no room -> occupant back-pointer, so the two directions cannot drift and a departed
+// guest cannot hold anything. Occupancy is derived by asking the guests. If lookup gets slow, add
+// a derived index (rebuilt on load, never saved).
 //
-// G-009: an invalid room is not a provider. This module asks ONE predicate —
-// `isValidRoom` — and knows nothing about what makes a room valid; the context it asks is
-// built by the `runGuests` phase in `tick.ts`. That is the seam on purpose: `validity.ts`
-// owns what a room is, this module owns what a guest does about it, and neither file has
-// to be opened to change the other. `needs.ts` is the same seam on the other side: it
-// owns what a need is and how it decays, and this file owns what a guest does about that.
+// `validity.ts` owns what makes a room valid and `needs.ts` owns what a need is; this module owns
+// what a guest does about them. It must not import `world.ts` or `tick.ts` (cycles).
 //
-// BOTH RESERVATIONS ARE FIELDS OF THE GUEST AND EXIST NOWHERE ELSE (G-012, ruled at
-// seeding). There is no room -> occupant back-pointer and no item -> user back-pointer,
-// so the directions cannot drift apart, and a despawned guest cannot hold anything
-// because it no longer exists. That is what closed §6.1's reservation-leak class BY
-// CONSTRUCTION at G-004, and adding a second reservation does not weaken it: it is the
-// PROPERTY that matters, not the field count. Occupancy is derived by asking the guests,
-// exactly as the cash balance is derived by folding the ledger (I4). If lookup ever gets
-// slow, the answer is a room -> occupant INDEX, which is derived state: rebuilt on load,
-// never saved, never authoritative.
-//
-// This module imports `entities.ts`, `content.ts`, `needs.ts` and `validity.ts` and
-// NOTHING ELSE from the sim. In particular it does not import `world.ts` or `tick.ts`:
-// `world.ts` needs the types here, and `tick.ts` needs the phase, so importing either
-// back would be a cycle. The tick phase in `tick.ts` is a dozen lines of plumbing around
-// `stepGuests`, and all of the behaviour is here.
-//
-// No randomness. `stepGuests` is a pure function of world state, injected content and
-// the number of PARTIES arriving — no RNG draw, no wall clock, no `dt`.
-//
-// ~~"Arrival RATE is demand, and demand is M4; today the host issues one `guestArrives` command
-// per arrival, so the command log fully describes who turned up and when (I2)."~~ STRUCK AT
-// G-051b. Demand shipped: `runDemand` (tick.ts) creates parties from the hotel's star rating and
-// adds them to the same doorway a `guestArrives` fills, so under content declaring a demand curve
-// THE COMMAND LOG NAMES ONLY THE ARRIVALS A HOST ASKED FOR. What this function takes is unchanged
-// — a COUNT of parties — and it neither knows nor cares which source produced it, which is why
-// this file needed no edit beyond the sentence. See `commands.ts`'s `guestArrives` for what I2
-// rests on now: same seed + same command log + SAME INJECTED CONTENT.
-//
-// HOW MANY GUESTS A PARTY IS, IS ALSO NOT A DRAW (G-040b-i). It is `partySizeOf` over the
-// party's ordinal and a content weight table — a repeating pattern rather than a sample, so
-// the seeded stream still advances exactly one draw per tick and stream position stays a pure
-// function of tick count. ~~"Party formation becomes random when demand does, which is M4."~~
-// STRUCK AT G-051b, AND THE PREMISE FAILED RATHER THAN THE PROPERTY: demand arrived and IS NOT
-// RANDOM, so the event this sentence was waiting for has happened and retired nothing. Party
-// formation is still a walk, the stream still advances exactly one draw per tick, and whether
-// EITHER should become a draw is now one question rather than two (`PARKING.md`).
+// No randomness: `stepGuests` is a pure function of world state, injected content and the number
+// of parties arriving (from commands and/or demand — it does not care which). Party size is a
+// deterministic walk over content weights (`partySizeOf`), not a draw.
 
 import {
   abandonMarginOf,
@@ -117,12 +79,8 @@ import type { ValidityContext } from './validity.js';
 import { abandonThresholdBasisPoints, needTieBreakRank, pressureBasisPoints } from './utility.js';
 
 /**
- * Opaque guest handle. Monotonic, never reused, within a run or across a save — the
- * same contract `EntityId` has, and for the same reason: a handle that fails to resolve
- * is a bug you find, a handle that resolves to the wrong guest is a bug you ship.
- *
- * A separate id space from `EntityId`. A guest is not an entity, and pretending the two
- * numbers are interchangeable is how a guest id ends up being despawned as an entity.
+ * Opaque guest handle. Monotonic, never reused, within a run or across a save. A separate id
+ * space from `EntityId`.
  */
 export type GuestId = number;
 
@@ -130,27 +88,12 @@ export type GuestId = number;
 export const NO_GUEST: GuestId = 0;
 
 /**
- * THE PARTY A GUEST BELONGS TO (G-040a, ADR-0055).
+ * The party a guest belongs to. A party is the unit that books a room; a room type's `capacity`
+ * is the party size it holds.
  *
- * A PARTY IS THE UNIT THAT BOOKS A ROOM, and `capacity` is how large a party a room type
- * holds — which is what `roomTypeSchema` in `packages/content` has said since M0:
- *
- *   > *"`capacity` is the size of the PARTY a room holds, NOT a count of unrelated bookings.
- *   > A party is one guest at M0."*
- *
- * SHIPPED PINNED AT ONE. Every party this build forms has exactly one member — `stepGuests`
- * writes `partyId = id` and nothing else ever writes the field — so every occupancy number,
- * every counter and every penny is what it was before this type existed. What changes is that
- * the SHAPE is now expressible: `held` counts rather than flags, `findFreeRoom` asks whether a
- * room has room enough, and `assertGuestStoreInvariants` bounds a claim rather than forbidding
- * a second one. G-040b hands parties more than one member; this goal makes them a thing.
- *
- * IT IS DRAWN FROM THE GUEST ID SPACE AND NOT FROM A SECOND COUNTER. `guests.nextId` already
- * hands out values nothing reuses, so a party id taken from it is unique for the life of the
- * run and needs no `nextPartyId` in hashed state and no migration default anybody had to
- * invent. It is NOT a live guest id in general — at one member the two coincide, and G-040b's
- * block records why the party must not be RE-READ as its leader: a departed leader would
- * strand the remainder.
+ * Party ids are drawn from the guest id space (`guests.nextId`), so they are unique without a
+ * separate counter. A party id is not the leader's guest id in general: do not re-read it as one,
+ * or a departed leader would strand the rest of the party.
  */
 export type PartyId = number;
 
@@ -158,150 +101,71 @@ export type PartyId = number;
 export const NO_PARTY: PartyId = 0;
 
 /**
- * The prefix of every "this guest is standing somewhere impossible" message (G-023a).
- *
- * A MODULE CONSTANT RATHER THAN A TEMPLATE LITERAL AT THE CALL SITE. `assertCell` is called
- * once per guest per tick from `assertGuestStoreInvariants`, so a message built per call is
- * a string allocated per guest per tick — the same shape as the array that call made
- * `assertCell` allocate, which is `sim-critic`'s MAJOR 1. The guest's id is passed separately
- * and joined only on the throw path. **No figure is claimed for it**: the campaign could not
- * separate it from the instrument's spread, and `assertCell`'s own note says so.
+ * Prefix of every "this guest is standing somewhere impossible" message. A constant so no string
+ * is built per guest per tick; the id is joined only on the throw path.
  */
 const GUEST_POSITION_INVALID = 'Guest store is invalid: guest';
 
 /**
- * A provider a guest is currently using, and what for (G-012).
- *
- * ONE OBJECT RATHER THAN TWO FIELDS, so the pair cannot half-exist. An entity id with no
- * need, or a need with no entity, is not a state the simulation has any reading of, and
- * two flat fields would make it expressible. `Entity.at` is the same shape for the same
- * reason: a required key with a `null` "nothing" value beats an optional one, because
- * `canonicalise` throws on `undefined` and hashed state must not depend on the difference
- * between an absent key and a present undefined one.
+ * A provider a guest is currently using, and what for. One object rather than two fields so the
+ * pair cannot half-exist; a required key with `null` rather than an optional one, because
+ * `canonicalise` throws on `undefined`.
  */
 export type Engagement = {
   readonly entityId: EntityId;
-  /** The need being served. Always a need in this guest's own vector, and always pending. */
+  /** The need being served. Always in this guest's own vector. */
   readonly needId: ContentId;
 };
 
 export type Guest = {
   readonly id: GuestId;
   /**
-   * THE PARTY THIS GUEST ARRIVED WITH (G-040a, ADR-0055). Hashed, saved, and never absent.
-   *
-   * EVERY MEMBER OF A PARTY CARRIES THE SHARED ROOM ID IN `roomEntityId`, AND THAT IS FORCED
-   * RATHER THAN CHOSEN. The smaller design — the leader holds the room, members point at the
-   * leader — is not available: `atHome` requires `guest.roomEntityId !== NO_ENTITY`, so a
-   * member holding no room id NEVER RESTS whatever it is standing in, and its lodging need
-   * becomes structurally unsatisfiable. That is why `RoomSearch.held` counts claims instead of
-   * flagging them, and why `claimEntity` is a bound rather than a refusal of the second holder.
-   *
-   * TODAY EVERY PARTY HAS ONE MEMBER and this equals `id` for every guest this build creates
-   * and for every guest `migrateV21ToV22` reads out of a v21 save. See `PartyId`.
+   * The party this guest arrived with. Every member carries the shared room id in `roomEntityId`:
+   * `atHome` requires a room id, so a member without one could never rest. Hence `RoomSearch.held`
+   * counts claims rather than flagging them.
    */
   readonly partyId: PartyId;
   /**
-   * WHERE THIS GUEST IS STANDING (G-023a). Hashed, saved, and never absent.
-   *
-   * NON-NULLABLE, DELIBERATELY, AND THIS IS THE ONE PLACE `Entity.at`'s SHAPE IS NOT COPIED.
-   * An entity may be unplaced because a v2 world genuinely did not record where its rooms
-   * were, and inventing a position for one would have been inventing history the simulation
-   * then acts on. A guest has no such era: `migrateV10ToV11` derives every migrated guest's
-   * cell FROM THE SAME BYTES that say what it is holding, so there is nothing left unknown
-   * to represent.
-   *
-   * WHY NOT `Cell | null` PLUS LAZY PLACEMENT, which is the cheaper-looking design. `null`
-   * plus "place it on the first tick after loading" is not a statement about history, it is
-   * deferred invention — and it happens IN THE TICK, where G-024 and G-025 will change the
-   * placement rule. The same v10 bytes would then produce a different world one tick after
-   * loading, depending on which build loaded them. That is exactly the drift ADR-0008
-   * forbids, laundered through a tick boundary. Deriving it once, in the migration, freezes
-   * it against the era that wrote the bytes.
-   *
-   * WHAT DECIDES IT TODAY IS `standingCell`: the provider it is engaged with, else the room
-   * it lodges in, else the entrance. NOTHING MOVES YET — G-023a places a guest where it
-   * already logically was, so no outcome anywhere changes and only hashes move. The field is
-   * authoritative rather than derived state even so, because G-023b makes it independent:
-   * a guest in transit is at neither end. It is checked against the plot at every commit and
-   * every load (`assertGuestStoreInvariants`), exactly as an entity's placement is.
+   * Where this guest is standing. Non-nullable: migrations derive it from the same bytes that say
+   * what the guest holds, so there is never an unknown position (and deferring placement to the
+   * first tick would let different builds produce different worlds from one save). Checked against
+   * the plot at every commit and load.
    */
   readonly at: Cell;
   /**
-   * The tick this guest arrived.
-   *
-   * Not decoration: it is what makes "stuck" a MEASURED fact rather than an assumption.
-   * A guest cannot legitimately live longer than the LARGER of its `toleranceTicks` and its
-   * stay (`maxGuestLifetimeTicks`, which explains why it is a max and not the sum this line
-   * used to name), so age is the one question that distinguishes a guest which is progressing
-   * from one the simulation has forgotten about.
+   * The tick this guest arrived. Lets "stuck" be measured: a guest cannot legitimately live longer
+   * than `maxGuestLifetimeTicks`.
    */
   readonly arrivedTick: number;
   /**
    * The room entity this guest lodges in, or `NO_ENTITY` while it is still waiting.
    *
-   * THE LODGING RESERVATION, held from check-in to check-out — the whole stay, so a guest
-   * that leaves the room to satisfy something else does not lose it to the next arrival.
-   * A guest is resting if and only if this is set, which is why there is no separate
-   * `activity` field to fall out of step with it.
+   * The lodging reservation, held for the whole stay so a guest that goes out does not lose its
+   * room to the next arrival.
    */
   readonly roomEntityId: EntityId;
   /**
-   * The provider this guest is engaged with, or `null`.
-   *
-   * THE ENGAGEMENT RESERVATION — one at a time, ever. Held while an engagement need is
-   * being served and released the moment it is met, the provider stops being valid, or
-   * the guest leaves. Progress is RETAINED, not reset, when it is released: a guest
-   * interrupted halfway through dinner has had half a dinner.
+   * The provider this guest is engaged with, or `null`. One at a time. Released when the need is
+   * full, the provider stops being valid, or the guest leaves; progress is retained on release.
    */
   readonly engagement: Engagement | null;
   /**
-   * One instance of every need type the content defined when this guest arrived,
-   * strictly ascending by need id (G-012).
-   *
-   * A guest MIGRATED from v5 carries exactly one — the need it formed under content that
-   * had no vector — and that is a true statement about it rather than a gap to fill in.
+   * One instance of every need type the content defined when this guest arrived, strictly
+   * ascending by need id. A guest migrated from v5 carries exactly one.
    */
   readonly needs: readonly NeedState[];
   /**
-   * HOW FED UP THIS GUEST IS, in ticks (θ-b1, ADR-0017 4(b), ADR-0026). **0 is content**;
-   * `dissatisfactionCapacityTicks` is out of the door.
+   * How fed up this guest is, in ticks. 0 is content; `dissatisfactionCapacityTicks` means it
+   * leaves.
    *
    * Rises by one on every tick the guest wants something nothing is serving, and falls by
-   * `dissatisfactionReliefPerTick` on every tick it wants nothing it is not getting. Clamped at
-   * both ends. A guest that occasionally misses dinner accumulates some and recovers; one that
-   * never eats saturates and leaves.
+   * `dissatisfactionReliefPerTick` otherwise, clamped at both ends. It drains rather than resets, so
+   * history persists and the same content produces a graded spread of outcomes instead of a
+   * saturation cliff.
    *
-   * ---------------------------------------------------------------------------
-   * A STOCK, AND THE FIELD IT REPLACED IN THE PLAN WAS A COUNTDOWN WEARING A STOCK'S CLOTHES.
-   * The rejected design was `starvedTicks`: incremented while a need was empty, **reset to zero**
-   * when anything served it. The reset is the defect. It erases the guest's history, so the only
-   * question the field can answer is *"is this hotel saturated right now"* — a yes/no question
-   * about a saturating resource, with no graded region for a content number to be tuned in.
-   * ADR-0026 measured it: 0% of residents evicted at 8.06 concurrent guests and 77.5% at 8.44.
-   *
-   * **NOTHING RESETS THIS FIELD.** It drains, one relief-per-tick at a time, and a guest that has
-   * been let down for two hundred ticks is still carrying most of that an hour later. That is the
-   * whole difference, and it is why the same content produces a spread — measured closed-loop
-   * across the same axis: 0% / 14.3% / 25.8% / 36.1% / 52.1% / 75.2% / 98.9%.
-   * ---------------------------------------------------------------------------
-   *
-   * WHY IT IS STORED AND NOT DERIVED, which is the question to ask of any new state. It is
-   * path-dependent by construction: two guests of the same age in the same room can carry
-   * completely different levels depending on what they were able to get and when. Nothing else in
-   * the world records that history — a departed provider leaves no trace, and `metBy` remembers
-   * only the last one.
-   *
-   * IT IS A GUEST'S FIELD RATHER THAN A NEED'S, deliberately. Per-need dissatisfaction would be
-   * `needTypes.length` more integers in hashed state, one migration default per need, and a
-   * departure rule that had to combine them — and the thing being modelled is the guest's
-   * patience with the HOTEL, which is one quantity. A guest does not leave because of dinner; it
-   * leaves because of the evening.
-   *
-   * NOT CLAMPED TO THE CEILING BY `assertGuestStoreInvariants`, and that is deliberate: content
-   * can legitimately shrink between saves, and a loaded guest carrying more than the new ceiling
-   * is a true statement about the world that wrote it. It departs on its first tick under the new
-   * rules, which is the correct reading of "you have already had enough".
+   * One value per guest, not per need: what is modelled is the guest's patience with the hotel.
+   * Not clamped to the ceiling at load: if content shrinks, the guest simply leaves on its first
+   * tick.
    */
   readonly dissatisfaction: number;
 };
@@ -314,11 +178,8 @@ export type GuestStore = {
 };
 
 /**
- * One guest's place in the line for the lift, and when it took that place (G-038b-i).
- *
- * `since` IS THE TICK IT JOINED THE LINE, NOT THE TICK IT ARRIVED AT THE HOTEL. ADR-0075 is
- * explicit that nothing in `World` recorded the second fact: *"`arrivedTick` is arrival at the
- * HOTEL, not at the queue point"*. This is the field that records the first.
+ * One guest's place in the line for the lift. `since` is the tick it joined the line, not the
+ * tick it arrived at the hotel.
  */
 export type LiftWaiter = {
   readonly guestId: GuestId;
@@ -326,51 +187,16 @@ export type LiftWaiter = {
 };
 
 /**
- * ==========================================================================================
- * THE LINE FOR THE LIFT, IN ORDER, FRONT FIRST (G-038b-i, ADR-0075).
+ * The line for the lift, front first. The first `lift.capacity` entries are in the car.
  *
- * The first `lift.capacity` entries are IN THE CAR. Everything behind them is waiting.
+ * The order is stored rather than derived from guest id: lowest-id-wins is not a queue, and the
+ * give-up rule already needs a per-guest wait clock, which is the same fact as "who was here
+ * first". The line is rebuilt every tick from guests that actually needed the shaft, so it cannot
+ * drift from the guest list.
  *
- * ------------------------------------------------------------------------------------------
- * THE ORDER IS STORED, AND THAT IS A DECISION TAKEN HERE RATHER THAN AN APPLICATION OF AN
- * EXISTING RULE. ADR-0075 required the choice to be made explicitly and the consequence
- * written at the point of use, so this is that paragraph.
- *
- * THE ALTERNATIVE WAS FREE AND WAS REJECTED. Every other ordering question in this simulation
- * is derived from ascending guest id — `findFreeRoom` walks it, and the two rules added since
- * G-034b change the CANDIDATE SET rather than the ORDER. Applying that here costs no field, no
- * schema shape and no code. **But lowest-id-wins is not a queue.** It means whoever CHECKED IN
- * EARLIEST boards first regardless of who has been standing at the doors longer, so the line
- * visibly reorders every time a long-resident guest walks up — and fairness is the one thing a
- * watching player can judge about a queue instantly (§5 WATCH, §6.1).
- *
- * AND THE STORED ANSWER TURNS OUT TO COST NOTHING THE DERIVED ONE SAVES, which is what
- * decided it. This goal must also make a guest GIVE UP after waiting too long, and *"how long
- * has this guest been waiting"* is the same inter-tick fact as *"who was here first"*. A
- * derived order still needs a wait clock in hashed state for the give-up; it just cannot use
- * it for the ordering. **One field answers both questions, or one field answers one of them.**
- * The schema bumps to v23 either way (ADR-0075: the new departure row forces it).
- *
- * THE CONSEQUENCE TO OWN: a queue is now a second record of a fact about guests, and a second
- * record can drift from the first. **It cannot drift here, because it is REBUILT EVERY TICK
- * from the guests that actually needed the shaft during that tick** — see `stepGuests`. An id
- * in this array is therefore always a guest that was alive and climbing at the end of the tick
- * that wrote it, which `assertWorldShape` checks against the guest list on the way in from a
- * save rather than trusting.
- * ------------------------------------------------------------------------------------------
- *
- * I2 NOTES, AND THEY ARE `corridors.ts`'S AND `stairs.ts`'S:
- *   - AN ARRAY, STRICTLY ASCENDING BY `(since, guestId)`. It is hashed and saved state, so two
- *     worlds whose lines contain the same guests must be the same world — and they are,
- *     because that order is total and `assertLiftQueue` refuses any other. No Set, no Map:
- *     neither has a canonical serialisation and both iterate in insertion order.
- *   - the ordering key is exactly what the rebuild produces: survivors keep their relative
- *     order (a filter preserves it) and the guests that joined this tick are appended in
- *     ascending id with `since = tick`, which is strictly greater than every `since` already
- *     in the array. **The rebuild is a MERGE, not a sort** — O(line), never O(line log line),
- *     and never a comparator that could disagree with this invariant.
- *   - every field is an INTEGER, checked by `assertLiftQueue` on the way in from a save.
- * ==========================================================================================
+ * Strictly ascending by `(since, guestId)`, a total order, so equal lines hash equally;
+ * `assertLiftQueue` refuses anything else. The rebuild is a merge, not a sort: survivors keep
+ * their order and this tick's newcomers are appended in ascending id with `since = tick`.
  */
 export type LiftQueue = readonly LiftWaiter[];
 
@@ -378,32 +204,18 @@ export type LiftQueue = readonly LiftWaiter[];
 const NO_ONE_WAITING: LiftQueue = Object.freeze([]);
 
 /**
- * A world in which nobody is standing at the lift.
+ * A world in which nobody is standing at the lift. (No lift at all is `world.lift === null`.)
  *
- * WHAT AN EMPTY LINE MEANS IS THE ABSENCE OF WAITING, NOT THE ABSENCE OF A LIFT — that is
- * `world.lift === null`, and the two are independent: a world with a lift nobody is queueing
- * for has an empty line, and a world with no lift can never have anything else.
- *
- * Deliberately NOT called by any migration (ADR-0008 (1), and the source scan in
- * `migration-scan.build.grid.provider.outcome.travel.save.test.ts` enforces it for the
- * constructors it lists): a migration's output must be a function of its input bytes and its
- * own era. `V23_MIGRATION_LIFT_QUEUE` in `save.ts` is the frozen literal.
+ * Must not be called by any migration; a migration's output must depend only on its input bytes.
+ * `save.ts` uses a frozen literal instead.
  */
 export function createLiftQueue(): LiftQueue {
   return NO_ONE_WAITING;
 }
 
 /**
- * Throws unless `queue` is a strictly ascending line of integer-keyed waiters.
- *
- * Called from `assertWorldShape`, so a save carrying a scrambled, duplicated or fractional
- * line is refused at LOAD rather than producing a world that boards guests in a different
- * order from the one that wrote it.
- *
- * IT DOES NOT LOOK AT THE GUESTS AND IT DOES NOT LOOK AT THE LIFT. Those are cross-field
- * laws — *"every waiter is a live guest"* and *"no lift means no line"* — and they live in
- * `assertWorldShape` beside the fields they relate, which is where every other cross-field
- * law in that file already lives. This one is about the array's own shape.
+ * Throws unless `queue` is a strictly ascending line of integer-keyed waiters. Called at load.
+ * Cross-field laws (waiters are live guests, no lift means no line) live in `assertWorldShape`.
  */
 export function assertLiftQueue(queue: unknown): asserts queue is LiftQueue {
   if (!Array.isArray(queue)) {
@@ -435,10 +247,8 @@ export function assertLiftQueue(queue: unknown): asserts queue is LiftQueue {
           'exactly a guest id and the tick it joined the line',
       );
     }
-    // THE ORDER IS THE QUEUE. A line that is not ascending by `(since, guestId)` is not a line
-    // this build could have written, and loading it would board guests in an order the world
-    // that wrote it never used — the same class of silent divergence `assertStairs` refuses
-    // for a misaligned stairwell.
+    // The order is the queue: loading any other order would board guests differently from the world
+    // that wrote it.
     if (previous !== null && compareWaiters(previous, waiter) >= 0) {
       throw new Error(
         `Save is corrupt: world.liftQueue must be strictly ascending by (since, guestId), found guest ` +
@@ -451,13 +261,8 @@ export function assertLiftQueue(queue: unknown): asserts queue is LiftQueue {
 }
 
 /**
- * The queue order, written once: longest wait first, guest id breaking a tie.
- *
- * A TIE IS NOT A CORNER CASE, IT IS THE COMMON CASE — every guest that joins the line on the
- * same tick shares a `since` — so the tie-break is what makes the order TOTAL and therefore
- * what makes I2 hold. Ascending id is the project's canonical tie-break (`findFreeRoom`), and
- * here it costs nothing to fairness: two guests that arrived at the doors on the same tick
- * have waited exactly as long as each other.
+ * The queue order: longest wait first, ascending guest id breaking ties. Ties are the common case
+ * (everyone joining on one tick shares a `since`), so the tie-break is what makes the order total.
  */
 function compareWaiters(a: LiftWaiter, b: LiftWaiter): number {
   if (a.since !== b.since) return a.since - b.since;
@@ -465,65 +270,34 @@ function compareWaiters(a: LiftWaiter, b: LiftWaiter): number {
 }
 
 /**
- * ==========================================================================================
- * THE LIFT AS ONE TICK SEES IT (G-038b-i). Tick-local, mutable, never hashed and never saved
- * — exactly what `held` and `exhausted` are, and for the same reason.
+ * The lift as one tick sees it. Tick-local and mutable; never hashed or saved. Built only when a
+ * lift is declared.
  *
- * IT IS BUILT ONCE PER TICK AND ONLY WHEN A LIFT IS DECLARED. `search.lift` is `null` in every
- * world this build ships, in the I2 log, in the bench and in every golden, so the whole
- * mechanism costs one null comparison per moving guest per tick until G-038b-ii declares one.
+ * The car is allocated from what the previous tick knows: everyone in `queue` joined earlier, and
+ * everyone joining this tick gets `since === tick` and comes after them. The pass visits guests in
+ * ascending id, so greedy allocation hands out places in exactly `compareWaiters` order — no sort.
  *
- * WHY THE ANSWER CAN BE DECIDED BEFORE THE PASS RUNS, WHICH IS THE LOAD-BEARING ARGUMENT.
- * *"Who wants to climb this tick"* is not knowable in advance — a destination is derived deep
- * inside `reserve`, per guest, and a pre-pass to discover it would duplicate the whole guest
- * step. So the car is allocated from what the PREVIOUS tick already knows:
- *
- *   - everybody in `queue` joined the line on an earlier tick, so every `since` is < `tick`;
- *   - everybody who joins DURING this tick gets `since === tick`;
- *   - therefore the standing line comes first, in its own stored order, and this tick's
- *     newcomers come after it in ascending guest id — and the pass visits guests in ascending
- *     id, so the greedy allocation below hands out places in EXACTLY the order
- *     `compareWaiters` defines.
- *
- * **That is not an approximation of the queue order, it IS the queue order.** No sort runs
- * anywhere in this mechanism, on any tick.
- *
- * THE ONE CONSEQUENCE TO OWN: A PLACE HELD BY A GUEST THAT CHANGES ITS MIND IS NOT REFILLED
- * UNTIL THE NEXT TICK. `spare` is computed from the length of the standing line, and a guest
- * in that line whose destination stopped being on another floor only reveals that when the
- * pass reaches it. So a car can travel with an empty place on the tick somebody stopped
- * needing it. It is one place for one tick, it cannot compound — the line is rebuilt below
- * from who actually needed the shaft — and the alternative is a second pass over every guest,
- * which is the O(n) per guest per tick that `sim:bench` exists to catch.
- * ==========================================================================================
+ * Consequence: a place held by a guest that stops needing the shaft this tick is not refilled
+ * until the next tick. One place for one tick, and it cannot compound.
  */
 type LiftTick = {
-  /** The declaration, read once per tick. Two integers; nothing here re-reads `world.lift`. */
+  /** The declaration, read once per tick. */
   readonly spec: Lift;
-  /** The line as the tick opened, front first. Iterated ONLY in array order (I2). */
+  /** The line as the tick opened, front first. Iterated only in array order. */
   readonly queue: LiftQueue;
-  /**
-   * The guests in the car this tick: the first `capacity` of `queue`. LOOKUP ONLY (I2): never
-   * iterated, never ordered, never hashed — `held` and `exhausted`'s contract exactly.
-   */
+  /** The guests in the car this tick: the first `capacity` of `queue`. Lookup only, never iterated. */
   readonly riding: Set<GuestId>;
-  /** When each guest in the standing line joined it. LOOKUP ONLY (I2), for `riding`'s reason. */
+  /** When each guest in the standing line joined it. Lookup only. */
   readonly since: Map<GuestId, number>;
   /** Places left for guests joining the line this tick, after the standing line has its own. */
   spare: number;
-  /** Which of `queue` still needed the shaft this tick. LOOKUP ONLY (I2). */
+  /** Which of `queue` still needed the shaft this tick. Lookup only. */
   readonly stillClimbing: Set<GuestId>;
   /** Guests that joined the line this tick, in the pass's own ascending-id order. */
   readonly joined: GuestId[];
 };
 
-/**
- * The lift as this tick sees it, or `null` when this world has no lift.
- *
- * O(line), and the line is empty in every shipped world. The two lookup structures are built
- * here rather than per guest for the reason `RoomSearch.speed` is read here: it is the same
- * answer for every guest in the hotel and the declaration cannot change inside a tick.
- */
+/** The lift as this tick sees it, or `null` when this world has no lift. O(line). */
 function beginLiftTick(lift: Lift | null, queue: LiftQueue): LiftTick | null {
   if (lift === null) return null;
   const riding = new Set<GuestId>();
@@ -532,7 +306,7 @@ function beginLiftTick(lift: Lift | null, queue: LiftQueue): LiftTick | null {
     const waiter = queue[i];
     if (waiter === undefined) continue;
     since.set(waiter.guestId, waiter.since);
-    // THE FRONT OF THE LINE IS THE CAR. Ordered array access, never a Set iteration.
+    // The front of the line is the car. Ordered array access, never Set iteration.
     if (i < lift.capacity) riding.add(waiter.guestId);
   }
   return {
@@ -540,7 +314,7 @@ function beginLiftTick(lift: Lift | null, queue: LiftQueue): LiftTick | null {
     queue,
     riding,
     since,
-    // NEGATIVE IS NOT A STATE: a line longer than the car simply offers newcomers nothing.
+    // A line longer than the car offers newcomers nothing.
     spare: Math.max(0, lift.capacity - queue.length),
     stillClimbing: new Set<GuestId>(),
     joined: [],
@@ -548,38 +322,23 @@ function beginLiftTick(lift: Lift | null, queue: LiftQueue): LiftTick | null {
 }
 
 /**
- * THE BOARDING RULE. A guest needs the shaft this tick: does it move, or does it stand?
+ * The boarding rule: a guest needs the shaft this tick — does it move, or stand? Called exactly
+ * once per climbing guest per tick, from `placed`.
  *
- * CALLED EXACTLY ONCE PER CLIMBING GUEST PER TICK, from `placed`, and calling it twice would
- * hand one guest two places. `placed` is the single site at which a guest's cell changes, so
- * that is structural rather than a promise.
+ * A rider keeps its place until its climb is done (a climb can take several ticks), so
+ * `capacity` is how many guests the shaft carries, not how many board per tick.
  *
- * A PLACE IS RELEASED AT THE END OF THE TICK ON WHICH ITS HOLDER STOPPED NEEDING THE SHAFT, SO
- * THE CAR SPENDS ONE TICK UNLOADING. That is a consequence of the design rather than a slip,
- * and it is refused a repair on purpose. `settleLiftQueue` is what discovers that a rider has
- * finished — it cannot be known earlier, because a destination is derived per guest deep inside
- * `reserve` — so the freed place is available from the NEXT tick. Promoting somebody during the
- * pass instead would hand it to the lowest guest ID still in the line rather than to the guest
- * nearest the FRONT, because the pass runs in ascending id and not in queue order: **the repair
- * would break the one property the stored order exists to provide.** The cost is one tick per
- * TRIP, not per waiter, and it reads as the car unloading.
- *
- * A PLACE IS KEPT WHETHER OR NOT THE GUEST MOVES, AND THAT IS THE CORRECTION THIS RULE NEEDED.
- * A rider keeps its place until its climb is DONE, not until it has moved once: with a guest
- * speed below the height of the shaft a climb takes several ticks, and a rider that gave its
- * place back after one of them would be ejected half way up and re-join at the BACK of the
- * line. So `capacity` is *how many guests the shaft is carrying*, and it equals *how many
- * board per tick* only when a climb fits in one tick — which is the shipped speed's case and
- * is exactly why the distinction has to be written down rather than discovered later.
+ * A place frees up only from the tick after its holder stops needing the shaft (the car spends a
+ * tick unloading). Promoting someone mid-pass would favour the lowest guest id rather than the
+ * front of the line.
  */
 function boardLift(lift: LiftTick, id: GuestId): boolean {
   if (lift.since.has(id)) {
     lift.stillClimbing.add(id);
     return lift.riding.has(id);
   }
-  // A NEWCOMER JOINS THE BACK OF THE LINE WHETHER OR NOT IT GETS A PLACE. The two cases differ
-  // only in whether it moves this tick; both are "standing in the line since `tick`", and a
-  // rider that is not recorded would give its place up on the next tick mid-climb.
+  // A newcomer joins the back of the line whether or not it gets a place; otherwise a rider would
+  // lose its place mid-climb next tick.
   lift.joined.push(id);
   if (lift.spare > 0) {
     lift.spare -= 1;
@@ -589,17 +348,8 @@ function boardLift(lift: LiftTick, id: GuestId): boolean {
 }
 
 /**
- * The line as this tick leaves it: everybody who still needed the shaft, in order.
- *
- * A MERGE AND NOT A SORT, which is what keeps the tick linear (see `LiftTick`). The survivors
- * of the standing line keep their relative order because a filter preserves it, and this
- * tick's newcomers are appended in ascending guest id with a `since` strictly greater than
- * every `since` already present — so the result is strictly ascending by `(since, guestId)`,
- * which is precisely what `assertLiftQueue` refuses to load anything else for.
- *
- * IDENTITY-RETURNING WHEN THE LINE DID NOT CHANGE, for `addDepartures`' reason: this runs on
- * every tick of every world that has a lift, and rebuilding an unchanged array to hold the
- * same guests is the per-tick allocation §6.1 asks `sim-critic` to watch for.
+ * The line as this tick leaves it: everybody who still needed the shaft, in order. A merge, not a
+ * sort. Returns the same array when nothing changed.
  */
 function settleLiftQueue(lift: LiftTick, tick: number): LiftQueue {
   if (lift.joined.length === 0 && lift.stillClimbing.size === lift.queue.length) return lift.queue;
@@ -608,112 +358,31 @@ function settleLiftQueue(lift: LiftTick, tick: number): LiftQueue {
     if (lift.stillClimbing.has(waiter.guestId)) next.push(waiter);
   }
   for (const id of lift.joined) next.push({ guestId: id, since: tick });
-  // The shared frozen empty, so a hotel whose line has just emptied stops allocating a new
-  // array on every tick for the rest of the run.
+  // The shared frozen empty, so an emptied line stops allocating.
   return next.length === 0 ? createLiftQueue() : next;
 }
 
 /**
- * WHY A STAY ENDED. A closed union, in the canonical order the table is stored in.
+ * Why a stay ended. A closed union in code (not content), in the canonical order the outcome
+ * table is stored in. Each reason is decided in exactly one place:
  *
- * NOT CONTENT (I3, ADR-0003). These are code-level reasons in the same family as
- * `TRANSACTION_REASONS` and `BUILD_REFUSAL_REASONS`: camelCase, decided by a branch in
- * this file, and meaningless to a designer editing JSON. A guest ARCHETYPE is content and
- * would be snake_case; "the room you were in stopped existing" is not a thing anyone
- * authors.
+ *   checkedOut              stepGuests step 6, the stay duration elapsed in a room
+ *   visitEnded              stepGuests step 6, a guest that booked no room finished its visit
+ *   gaveUp                  stepGuests step 6, a roomless guest reached `toleranceTicks`
+ *   gaveUpWaitingForLift    stepGuests step 6, waited outside the lift car for
+ *                           `lift.waitToleranceTicks`
+ *   leftDissatisfied        stepGuests step 6, the dissatisfaction stock saturated
+ *   evictedRoomGone         stepGuests step 1, the room entity is no longer in the draft
+ *   evictedRoomUnusable     stepGuests step 1, the entity is there but not a valid room
+ *   evictedCauseUnrecorded  `migrateV7ToV8` only — v7 recorded evictions without a cause
  *
- * EACH REASON IS DECIDED IN EXACTLY ONE PLACE, and the table is only worth the schema
- * bump because that is true:
+ * `gaveUp` and `leftDissatisfied` are separate because they tell the player opposite things
+ * (build more rooms vs. more amenities). `visitEnded` is separate from `checkedOut` because a
+ * visitor pays nothing, and `countRoomRevenueTransactions === checkedOut` must stay unconditional.
  *
- *   checkedOut            stepGuests step 6, the stay duration has elapsed in a room
- *   visitEnded            stepGuests step 6, a guest that booked no room finished its visit
- *   gaveUp                stepGuests step 6, a roomless guest reached `toleranceTicks`
- *                         (it read "the lodging need ran out of patience" until θ-a sweep 2,
- *                         which is the countdown model's name for the same row)
- *   gaveUpWaitingForLift  stepGuests step 6, a guest stood in the lift queue, outside the car,
- *                         for `lift.waitToleranceTicks` (G-038b-i)
- *   leftDissatisfied      stepGuests step 6, a guest's dissatisfaction stock saturated
- *   evictedRoomGone       stepGuests step 1, the room entity is no longer in the draft
- *   evictedRoomUnusable   stepGuests step 1, the entity is there and is not a valid room
- *   evictedCauseUnrecorded  `migrateV7ToV8` ONLY — see below
- *
- * THE FIRST TWO WERE `satisfied` AND `gaveUpWaiting` UNTIL G-027a, AND THE RENAME IS A
- * CORRECTION RATHER THAN A TIDY-UP (ADR-0017 §4). `satisfied` named a need's completion —
- * a stay ended on the tick `night_rest` was met — and that terminator no longer exists, so
- * the word would now be a claim about the guest's feelings that nothing computes: a guest
- * checks out having failed every engagement need it formed. `checkedOut` names what the
- * branch observes, which is a clock and a room.
- *
- * ---------------------------------------------------------------------------
- * `gaveUpWaiting` LOST ITS SECOND WORD IN ANTICIPATION OF A MERGE THAT WAS THEN OVERRULED, AND
- * BOTH HALVES OF THAT ARE KEPT BECAUSE THE PREDICTION IS THE INTERESTING PART.
- *
- * This paragraph said the word "waiting" *"over-narrows it the moment ADR-0017 4(b)'s
- * dissatisfaction threshold lands at G-027b"* — i.e. that one row would come to cover both ways a
- * guest ends its own stay. **ADR-0025 §2 overruled that, on the build loop rather than on cost**,
- * and θ-b1 ships the second row:
- *
- *   the guest left because          what the player should build
- *   nobody would give it a room     MORE ROOMS        -> `gaveUp`
- *   it had a bed and nothing to do  MORE AMENITIES    -> `leftDissatisfied`
- *
- * **Those are opposite instructions.** One counter averages them into a number that tells a
- * player they are doing badly and not which lever to pull, and the build loop is one of the
- * project's three named loops. So the narrowing the rename bought is exactly right and the
- * prediction that it would stop being right was wrong: `gaveUp` still means the lobby, and
- * "waiting" would still have been the honest half of the name.
- *
- * THE TWO CANNOT CROSS, AND IT IS CHECKED RATHER THAN INTENDED. A roomless guest's
- * dissatisfaction rises exactly as fast as its age, so which row it lands in is decided by which
- * content number is smaller; `assertDissatisfactionOutlastsTheLobby` refuses content where the
- * ceiling does not outlast the lobby tolerance.
- * ---------------------------------------------------------------------------
- *
- * `leftDissatisfied` IS INSERTED AT INDEX 2 RATHER THAN APPENDED, and the position is a schema
- * fact either way — `assertGuestOutcomes` compares row order, and `migrateV13ToV14` inserts at a
- * frozen index — so it costs nothing to choose the meaningful one. `isCutShort` partitions this
- * union: the stays the GUEST ended sit contiguously at the head and the three the HOTEL ended sit
- * contiguously at the tail, which is the order `evictedGuests` folds and the order a reader's eye
- * expects. Appending would have put a not-cut-short row after the evictions.
- * *(G-059 MOVED THE CUT LINE AND THE ORDER STILL HOLDS, which is the property this paragraph was
- * really buying: the predicate now splits after `visitEnded` rather than before `evictedRoomGone`,
- * and BOTH cuts are contiguous in this order. The evictions are still a contiguous tail inside the
- * cut-short half, so `evictedGuests` is untouched.)*
- *
- * ---------------------------------------------------------------------------
- * `visitEnded` IS INSERTED AT INDEX 1 (θ-b2), FOR THE SAME REASON AND AT SOME COST, AND THE COST
- * IS WHAT THE ROW BUYS.
- *
- * It is the twin of `checkedOut` — a guest that stayed as long as it meant to and left — so it
- * sits beside it, inside `isCutShort`'s not-cut-short head. **The alternative was to put visitors
- * IN `checkedOut` and condition the revenue law on the content**, and that is what a whole schema
- * version was spent to avoid:
- *
- *   `countRoomRevenueTransactions(ledger) === departureCountOf(outcomes, 'checkedOut')` is the
- *   ONLY cross-subsystem witness this table has (see `countRoomRevenueTransactions`). A visitor
- *   pays nothing, so putting it in `checkedOut` breaks that equality — and the repair on offer was
- *   to make the law fire only when the content declares a lodging need. **That switches the check
- *   off on precisely the code path θ-b2 adds.** The `else revenue === 0` half is worse than
- *   useless: `reserve` gates room acquisition on the lodging need existing, so under lodging-free
- *   content `payForStay` is unreachable and the clause is true before anything runs. **Measured
- *   at HEAD, with none of this goal's code: 45 arrivals, 23 departures, 0 roomRevenue
- *   transactions.** A criterion that already passes is not a criterion (ADR-0007).
- *
- * With the row, the law stays UNCONDITIONAL and non-vacuous on both content shapes, and
- * `revenue === 0` under a food court becomes a CONSEQUENCE a mutation can falsify rather than an
- * axiom nothing can move.
- *
- * And `checkedOut`'s own docstring says it means *"the clock ran out IN A ROOM"*. A roomless
- * visitor in that row makes the sentence false, and ADR-0024's corollary is that when a class
- * lives in a name the only two moves are rename and delete — fencing is not available.
- * ---------------------------------------------------------------------------
- *
- * `evictedCauseUnrecorded` IS NOT WRITABLE BY THE TICK, AND THAT IS A TYPE RULE RATHER
- * THAN A PROMISE. v7 carried a single `evicted` counter with no cause, so a migrated v7
- * world holds evictions whose cause was never recorded, and inventing one for them would
- * be exactly the history-drift ADR-0008 forbids. The tick records causes, so it must never
- * write this row: `TickDepartureReason` below excludes it, `stepGuests` accumulates into
- * that narrower type, and a future branch that tried would not compile.
+ * Order matters: `assertGuestOutcomes` compares row order and migrations insert at fixed
+ * indices. The two completed-stay rows come first, then the cut-short rows, with the evictions a
+ * contiguous tail.
  */
 export const GUEST_DEPARTURE_REASONS = Object.freeze([
   'checkedOut',
@@ -729,69 +398,25 @@ export const GUEST_DEPARTURE_REASONS = Object.freeze([
 export type GuestDepartureReason = (typeof GUEST_DEPARTURE_REASONS)[number];
 
 /**
- * The reasons a TICK may record. Everything but the migration-only row.
- *
- * ADR-0005's discipline — when a contract can be made structural at no cost, make it
- * structural. The alternative was a comment asking future authors not to.
+ * The reasons a tick may record: everything but the migration-only row, enforced by the type.
  */
 export type TickDepartureReason = Exclude<GuestDepartureReason, 'evictedCauseUnrecorded'>;
 
 /**
- * Whether this stay was CUT SHORT — it did not run its course (G-019, re-partitioned at G-059).
+ * Whether this stay was cut short (did not run its course), which floors its review.
  *
- * AN EXHAUSTIVE SWITCH WITH A `never` FALLTHROUGH, NOT A PREFIX TEST AND NOT A BOOLEAN
- * DECIDED AT EACH CALL SITE. `evictedInSummary` in the report tests the string prefix
- * because a JSON document carries reasons as strings and has no union to switch on; here
- * the union exists, so a NEW reason added to it is a TYPE ERROR at this line rather than
- * a silent `false` that quietly reviews an eviction as an ordinary stay. (It said "a sixth
- * reason" until θ-b2 added the seventh, which is the mechanism working — and is also why the
- * sentence now counts no rows: a claim that has to be re-numbered every time the union grows is
- * one that will eventually not be.) `evictedGuests`
- * above folds the same three rows and is the count; this is the predicate.
- *
- * `evictedCauseUnrecorded` is migration-only and can never reach `depart` — see
- * `GUEST_DEPARTURE_REASONS` — and it is answered anyway, because "the cause was not
- * recorded" does not make the eviction less of one.
- *
- * ---------------------------------------------------------------------------
- * IT PARTITIONS ON COMPLETION, AND IT USED TO PARTITION ON AGENCY (G-059, ADR-0104). ~~*"What
- * this predicate partitions on is AGENCY, not blame: the guest walked out on its own feet with
- * its own clock, exactly as it does in the lobby… forcing the floor on top would double-count
- * the same fact."*~~ **STRUCK.** The fact it relied on — that a guest which walks out is scored
- * badly anyway, *"by construction"* — is not one the mean carries: measured at `--days 200
- * --seed 42 --rooms 24 --amenities 1`, **1,677 of 3,186 guests stormed out and the review
- * distribution was `3:580, 4:2497, 5:109`**, so at least 1,097 of them filed FOUR STARS. A
- * `leftDissatisfied` guest is driven out by ONE need and the other three are near the top; the
- * mean washes out the one that ended the stay (ADR-0100).
- *
- * THE RULE NOW: **`checkedOut` and `visitEnded` are the stays that RAN THEIR COURSE. Everything
- * else did not happen or did not finish, and reviews at the floor.** The human's word for this
- * scale is a TripAdvisor score, and on that reading a guest who storms out — or one the hotel
- * never found a room for — does not file four stars.
- *
- * WHAT THE OLD PARTITION BOUGHT IS NOT LOST. The AGENCY distinction is still recorded, in the
- * place that was always its home: the DEPARTURE TABLE has a row per reason, and those rows are
- * what tell a player which lever to pull (*"nobody would give it a room -> MORE ROOMS; it had a
- * bed and nothing to do -> MORE AMENITIES"*, above). A five-point review scale was never able to
- * carry that instruction and was never read for it. What this predicate decides is one thing:
- * whether the guest had a stay to review.
- *
- * THE ROW ORDER STILL MAKES THE PARTITION CONTIGUOUS, which is what `GUEST_DEPARTURE_REASONS`
- * was ordered for and is why the reordering note above still reads true: the two completed rows
- * sit at the head, the five that are not follow, and `evictedGuests` still folds a contiguous
- * tail inside them.
- * ---------------------------------------------------------------------------
+ * Only `checkedOut` and `visitEnded` ran their course. A guest who storms out or was never housed
+ * should not leave a good review; the departure table still records which lever the player
+ * should pull. An exhaustive switch, so a new reason is a type error here rather than a silent
+ * `false`.
  */
 export function isCutShort(reason: GuestDepartureReason): boolean {
   switch (reason) {
     case 'checkedOut':
-    // A completed visit is the visitor's `checkedOut`: it left when it meant to, having had
-    // whatever the hotel managed to give it. Nothing cut it short (θ-b2).
+    // A completed visit is the visitor's `checkedOut`.
     case 'visitEnded':
       return false;
-    // EVERY OTHER ROW IS A STAY THAT DID NOT RUN ITS COURSE (G-059). Three the hotel ended and
-    // three the guest ended, and the review scale no longer separates them — see `reviewOf`,
-    // which carries the ruling and the measurement that reversed the agency partition.
+    // Every other row is a stay that did not run its course.
     case 'gaveUp':
     case 'gaveUpWaitingForLift':
     case 'leftDissatisfied':
@@ -813,70 +438,22 @@ export type GuestOutcomeRow = {
 };
 
 /**
- * What happened to every guest that has left, counted BY REASON (G-015).
+ * What happened to every guest that has left, counted by reason.
  *
- * Departed guests are NOT kept in the store. A store that only grew would make the
- * per-tick scan cost rise for the whole run and would eventually be the thing that
- * fails I5 — §6.1 asks `sim-critic` to watch for exactly that. Counters keep the cost
- * flat and are the "recorded outcome" the goal statement asks for.
+ * Departed guests are not kept in the store (per-tick cost stays flat). One row per reason,
+ * always all of them, in `GUEST_DEPARTURE_REASONS` order; `assertGuestOutcomes` refuses anything
+ * else, since extra or reordered keys would change the state hash.
  *
- * ONE ROW PER REASON, ALWAYS ALL OF THEM, IN `GUEST_DEPARTURE_REASONS` ORDER. The same
- * shape `needOutcomes` uses, so the codebase has one table idiom rather than two. A
- * missing row, a duplicate row, an unknown reason and a row out of order are all rejected
- * by `assertGuestOutcomes` — an extra or reordered key would land in the state hash
- * (`worldToJson` is an identity cast) and make a restored world hash differently from the
- * world it claims to be.
- *
- * THE CONSERVATION LAW, checked every tick and at every load:
+ * Conservation law, checked every tick and at load:
  *
  *   arrived === Σ departures[i].count + live guests
  *
- * IT IS NOT AN IDENTITY OVER ITS OWN INPUTS, and that sentence is the reason this type
- * looks the way it does. Three quantities, none derived from another: `arrived` is
- * incremented by the arrivals loop in `stepGuests`, the rows are incremented at the three
- * departure sites, and `list.length` is produced by a different data structure entirely.
- * There is deliberately NO stored total — `departedGuests` folds the rows at the call
- * site — because a stored total beside the rows that produce it is precisely the vacuous
- * check G-013 shipped and had to delete (ADR-0007, G-013 amendment).
+ * The three quantities are maintained independently, and there is deliberately no stored total
+ * (it would make the check an identity).
  *
- * WHAT THE LAW CANNOT SEE. A departure filed under the WRONG REASON keeps the total
- * intact, so the law says nothing about any individual row.
- *
- * ONE ROW OF THE SEVEN HAS A WITNESS, AND IT IS `checkedOut`:
- * *(It read "one row of the FIVE" until θ-b2 — stale since θ-b1 made it six, and missed by that
- * goal's own figure enumeration because a grep for the number six cannot find the number five.
- * ADR-0027: enumerating a list is not enumerating a class, and this is the class.)*
- * `countRoomRevenueTransactions(ledger) === the checkedOut row` — the
- * `countDemolitionRefundTransactions === demolished` pattern (`build.ts`), asserted **in
- * the report, and nowhere else**. Not at the tick boundary and not at load: `stepTick`'s
- * postcondition block never reads the ledger, and a save predating a feature legitimately
- * lacks its transactions (the policy `build.ts` states for its twin).
- *
- * EVERY OTHER ROW HAS NO CROSS-SUBSYSTEM WITNESS, AND SAYING SO IS CHEAPER THAN
- * DISCOVERING IT. A misfiling between `gaveUpWaiting` and `evictedRoomGone`, or between the
- * two eviction reasons, moves nothing anywhere else — an eviction writes no transaction, so
- * there is no second input to compare against. What covers them instead is coarser and is
- * named here so nobody mistakes it for a law: the pinned bench goldens (19 / 0 / 0 on the
- * churn arm) and the criterion-2 invocation, both of which are RUN-LEVEL pins that would
- * move if the split changed.
- *
- * A MISFILING BETWEEN `checkedOut` AND `gaveUp` IS NOW CHEAPER TO MAKE AND EXACTLY AS
- * VISIBLE (G-027a). The two branches were "the lodging need is met" and "the lodging need
- * failed" — one predicate, two outcomes. They are now "the clock ran out in a room" and "the
- * lodging need failed", which touch different state entirely; but `payForStay` still fires on
- * the first branch and only there, so the ledger witness above still separates them exactly.
- *
- * WHAT IS DELIBERATELY NOT HERE IS THE PER-NEED TALLY. These rows are about STAYS, and a
- * stay has exactly one outcome; a guest can leave satisfied having failed two of its
- * engagement needs. `World.needOutcomes` counts need instances and is bound to these
- * counters by its own law (`assertNeedOutcomes`).
- *
- * AND NOT AN IN-STAY EVENT COUNT EITHER. A guest abandoning one provider for a better one
- * (G-014b) is not a stay outcome: it can happen many times to a guest that departs once,
- * so a row for it would make Σ rows exceed departures and force the law to sum a SUBSET of
- * the rows. A law that skips rows is the vacuity shape this table exists to avoid — a
- * mistyped reason would silently drop out of the sum and nothing would fire. That tally
- * belongs on `NeedOutcome`, per need type, where `metByItem` already is.
+ * The law cannot see a departure filed under the wrong reason. Only `checkedOut` has a
+ * cross-subsystem witness (`countRoomRevenueTransactions`, asserted in the report); other rows are
+ * covered only by run-level pins. Per-need results and abandonments live in `NeedOutcome`.
  */
 export type GuestOutcomes = {
   /** Guests created since the world began. Never decreases. Never derived from the rows. */
@@ -894,12 +471,8 @@ export function createGuestOutcomes(): GuestOutcomes {
 }
 
 /**
- * How many stays ended for one reason. A linear walk of the departure table.
- *
- * A READ ACCESSOR, NOT A CACHE. Nothing stores this, so nothing can disagree with the
- * rows. Returns 0 for a reason the table does not carry, which is not a silent fallback:
- * `assertGuestOutcomes` has already refused any table that is missing one, so an absent
- * row cannot survive a tick or a load to reach here.
+ * How many stays ended for one reason. A linear walk; returns 0 for an absent row, which
+ * `assertGuestOutcomes` has already made impossible.
  */
 export function departureCountOf(outcomes: GuestOutcomes, reason: GuestDepartureReason): number {
   for (const row of outcomes.departures) {
@@ -909,17 +482,8 @@ export function departureCountOf(outcomes: GuestOutcomes, reason: GuestDeparture
 }
 
 /**
- * How many stays ended in an eviction, whatever the cause.
- *
- * A FOLD OVER THE EVICTION ROWS, the `totalInvalidRooms` / `totalBuildOutcomes` pattern:
- * derived at the call site, stored nowhere. It exists because "the stay ended because the
- * room stopped serving" is a real question — one a player asks — that is now spread over
- * three rows, and because the alternative is every caller writing the same three-term sum
- * and one of them forgetting a row when the union grows.
- *
- * IT IS NOT WHAT THE CONSERVATION LAW SUMS. That law folds every row through
- * `departedGuests`; this is a subtotal for readers, and nothing checks one against the
- * other — a subtotal checked against the rows it is made of is the identity G-013 deleted.
+ * How many stays ended in an eviction, whatever the cause. A derived subtotal for readers; the
+ * conservation law folds every row through `departedGuests` instead.
  */
 export function evictedGuests(outcomes: GuestOutcomes): number {
   return (
@@ -930,50 +494,15 @@ export function evictedGuests(outcomes: GuestOutcomes): number {
 }
 
 /**
- * How many `roomRevenue` transactions this log records (G-015).
+ * How many `roomRevenue` transactions this log records.
  *
- * Counted BY THE SIM, the `countDemolitionRefundTransactions` pattern, and it is the
- * ATTRIBUTION half of the outcome table's evidence. For any world ticked from 0 under this
- * build the law is
+ * `payForStay` is the only producer and runs only on checkout, so for any world ticked from 0:
  *
  *   countRoomRevenueTransactions(world.ledger) === departureCountOf(outcomes, 'checkedOut')
  *
- * exactly: `payForStay` is the only producer of a `roomRevenue` transaction and it is
- * called on the checkout path and nowhere else, while the row is incremented by a
- * different line for a different reason. A departure misfiled BETWEEN `checkedOut` AND ANY
- * OTHER ROW leaves the conservation law perfectly intact and moves this.
- *
- * IT WITNESSES ONE ROW, NOT THE TABLE. A misfiling that does not touch `checkedOut` — say
- * `gaveUp` into `evictedRoomGone` — moves nothing here and nothing in the
- * conservation law either. There is no second input to compare any other row against,
- * because an eviction writes no transaction; see `GuestOutcomes` for what covers them
- * instead, and for why that is a run-level pin rather than a law.
- *
- * ---------------------------------------------------------------------------
- * IT IS UNCONDITIONAL ACROSS CONTENT SHAPES, AND θ-b2 SPENT A SCHEMA ROW KEEPING IT THAT WAY.
- *
- * A VISITOR PAYS NOTHING — it books no room, so there is nothing to charge for — and it departs
- * on its own clock. Filing that in `checkedOut` would have broken this equality, and the repair
- * on offer was to fire the law only when the content declares a lodging need. **That would have
- * switched the only witness this table has off on exactly the code path θ-b2 added**, which is
- * ADR-0027's class arriving through a criterion instead of through a test.
- *
- * So `visitEnded` is its own row and this law is untouched: it holds on a hotel (both sides
- * non-zero) and on a food court (both sides zero, with the visitors accounted for one row over).
- *
- * `revenue === 0` UNDER LODGING-FREE CONTENT IS A CONSEQUENCE AND NOT AN AXIOM, and the
- * difference is the whole argument. `reserve` acquires a room only when the content declares a
- * lodging need, so `payForStay` is unreachable there — which means the clause was TRUE BEFORE
- * θ-b2 WROTE A LINE (measured on an arm at HEAD: 45 arrivals, 23 departures, 0 roomRevenue
- * transactions). Asserted on its own it would inspect nothing. What makes it evidence is that
- * this equality is what fails when a visitor is misfiled into `checkedOut`.
- * ---------------------------------------------------------------------------
- *
- * WHERE IT IS ASSERTED: `buildSummary`, and nowhere else. It is NOT part of `stepTick`'s
- * postcondition block, which never reads the ledger, and NOT part of the load path —
- * exactly as `countDemolitionRefundTransactions` is
- * not: a save predating a feature legitimately lacks its transactions, and a law that
- * fired on a legal old save would be a tripwire on history rather than on this build.
+ * This witnesses misfilings into or out of `checkedOut` only. It holds on lodging-free content
+ * too (both sides zero, visitors in `visitEnded`). Asserted in `buildSummary` only — not at the
+ * tick or at load, since an old save may legitimately lack transactions.
  */
 export function countRoomRevenueTransactions(log: readonly Transaction[]): number {
   let count = 0;
@@ -988,55 +517,20 @@ export function isResting(guest: Guest): boolean {
   return guest.roomEntityId !== NO_ENTITY;
 }
 
-/**
- * True when this guest is using a provider for an engagement need (G-012).
- *
- * The pair of `isResting`, and named for the same reason: "holds something" is asked in
- * enough places that spelling it as a field comparison would be four chances to compare
- * against the wrong sentinel. Read by the tests and by whatever draws a guest at M5.
- */
+/** True when this guest is using a provider for an engagement need. */
 export function isEngaged(guest: Guest): boolean {
   return guest.engagement !== null;
 }
 
 /**
- * WHERE A GUEST HOLDING THESE TWO THINGS IS STANDING (G-023a). The whole placement rule,
- * in one total function.
+ * Where a guest holding these two things is standing: the engaged provider, else its lodging
+ * room, else the entrance. An unplaced host falls through to the next candidate.
  *
- *   the provider it is engaged with  ->  else the room it lodges in  ->  else the entrance
+ * `tools/viewer/viewer.js` reads the result rather than re-deriving it. `migrateV10ToV11` states
+ * the same rule over v10 bytes and must not call this (a migration is frozen to its own era).
  *
- * ENGAGEMENT FIRST, BECAUSE THAT IS WHAT THE GUEST IS DOING. A guest holds its bedroom for
- * the whole stay and leaves it to eat; the café is where it is, and the bedroom is where its
- * luggage is. The viewer already had to make this choice and made the same one for the same
- * reason — see `tools/viewer/viewer.js`, which now reads this field instead of re-deriving
- * it, so there is one answer rather than two that can disagree.
- *
- * AN UNPLACED HOST FAILS OVER RATHER THAN SHORT-CIRCUITING. `isPlaced` is the test, so a
- * legacy room carried unplaced out of the v2 -> v3 chain behaves as "no cell here" and the
- * next candidate is tried. The alternative reading — an unplaced provider sends the guest
- * straight to the entrance, skipping a perfectly well-placed bedroom — states a fact the
- * bytes do not support, and would put a resting guest in the doorway. `travel.save.test.ts`
- * pins the mixed case, which is the one where the two readings differ.
- *
- * NOTHING MOVES HERE. This is a guest's CURRENT position stated from what it currently
- * holds, which at G-023a is a fact about the world rather than a journey. G-023b makes the
- * position lag the holdings — that is the whole of the travel goal — and this function is
- * what it will replace. Every `Guest.at` in the simulation comes from here: the exits of
- * `reserve` (through `placed`) and the arrival literal in `stepGuests`, which asks it for a
- * guest that holds nothing rather than spelling the entrance out a second time.
- *
- * `migrateV10ToV11` in `save.ts` states this same rule over the bytes of a v10 save, and
- * MUST NOT call this function: a migration's output is a pure function of its input bytes
- * and ITS OWN ERA (ADR-0008 (1)), so the day G-023b changes the rule here, the same v10
- * bytes must keep producing the same v11 world. The two copies coincide today and no
- * assertion can tell them apart, so the guard is the source scan named in `save.ts`
- * (ADR-0008 (3)).
- *
- * IT RETURNS A HOST'S CELL BY REFERENCE, AND THE COPY IS `placed`'s JOB — see the note
- * there. Stated here because this function is exported: a caller that lands the result in
- * hashed state without copying it would leave a guest sharing one `Cell` object with the
- * room it stands in, which is the sharing `migrateV10ToV11` refuses in its own copy of this
- * rule and which `draftSpawn` refuses for an entity's own placement.
+ * Returns a host's cell by reference; callers storing it in hashed state must copy it (`placed`
+ * does).
  */
 export function standingCell(
   lodgingRoom: Entity | null,
@@ -1049,15 +543,8 @@ export function standingCell(
 }
 
 /**
- * How many guests have departed. The right-hand side of the need tally's law.
- *
- * Written here rather than at each call site because three of them exist — the tick, the
- * load path and the report — and "departed" must mean the same thing in all three.
- *
- * A FOLD, NEVER A FIELD (G-015). The total is not stored anywhere: a stored `departed`
- * beside the rows that produce it would make `departed === Σ rows` an algebraic identity,
- * and the conservation law would compare a number against itself. Same reasoning as I4's
- * "balance is derived by folding the ledger, never stored".
+ * How many guests have departed: the right-hand side of the need tally's law. A fold, never a
+ * stored field.
  */
 export function departedGuests(outcomes: GuestOutcomes): number {
   let total = 0;
@@ -1096,25 +583,12 @@ export function getGuest(store: GuestStore, id: GuestId): Guest | undefined {
 }
 
 /**
- * This guest's lodging need — the one whose satisfaction is the stay — or undefined if
- * it formed none of that kind.
+ * This guest's lodging need instance, or undefined.
  *
- * Asked of the guest's OWN vector rather than of content alone, because the two can
- * legitimately disagree: a guest migrated from v5 carries one need, and if a designer
- * later marks a different need as lodging, that old guest still has only what it formed.
- *
- * `undefined` MEANS TWO THINGS SINCE θ-b2, AND WHICH ONE IS A FACT ABOUT THE CONTENT:
- *
- *   content HAS a lodging need   the guest formed no instance of it, so its stay can no longer
- *                                be progressed — the v5 case. `countStuckGuests` reports it.
- *   content has NONE             the guest is a VISITOR. It books no room by design, and
- *                                `visitDurationTicks` ends its visit. Not stuck, not waiting.
- *
- * This paragraph read *"Undefined there means the stay can no longer be progressed"* full stop,
- * which was exhaustive only while lodging-free content could not be written down. **Every caller
- * must therefore ask the content as well as the guest** — the one place that has to is
- * `countStuckGuests`, and it carries the argument for why conflating the two would hand the
- * migrated guest a terminator it must not have.
+ * Asked of the guest's own vector, since a v5-migrated guest may lack it. `undefined` means one
+ * of two things depending on content: content has a lodging need but the guest formed none (the
+ * v5 case, stuck), or content has none and the guest is a visitor. Callers must ask the content
+ * too; see `countStuckGuests`.
  */
 export function lodgingNeedStateOf(content: BoundContent, guest: Guest): NeedState | undefined {
   const lodging = lodgingNeedOf(content);
@@ -1123,171 +597,45 @@ export function lodgingNeedStateOf(content: BoundContent, guest: Guest): NeedSta
 }
 
 /**
- * The longest a guest can legitimately exist: it waits out its `toleranceTicks` for a room, or
- * it gets one and stays until its stay duration elapses.
+ * The longest a guest can legitimately exist, in ticks. `countStuckGuests` treats anything older
+ * as stuck.
  *
- * IT IS A MAX AND IT IS EXACT SINCE G-027a, WHERE IT USED TO BE A SUM AND AN OVERESTIMATE.
- * The old bound was `patienceTicks + satisfyTicks + 1` — the guest queued, then its stay ran
- * from the moment it got a room, so the two terms ADDED. The checkout clock runs from
- * ARRIVAL (`arrivedTick + stayDurationTicks`), so queueing no longer extends anything: a
- * guest either leaves at `toleranceTicks` having got nothing, or at `stayDurationTicks`
- * having got a room, and there is no path that reaches both. The bound is therefore the
- * larger of the two rather than their sum, and it is attained rather than merely respected —
- * which is what makes `countStuckGuests` below a measurement with no slack hiding inside it.
+ * With a lodging need: `max(stayDurationTicks, toleranceTicks) + 1`. The checkout clock runs from
+ * arrival, so a guest either leaves at tolerance having got nothing or at the stay duration, and
+ * the bound is attained. Leaving dissatisfied only ever shortens a life.
  *
- * ENGAGEMENT NEEDS DO NOT EXTEND IT. They are satisfied during the stay and never end it,
- * exactly as at G-004; what changed is that the LODGING need does not end it either.
+ * Without a lodging need (visitors only): `visitDeferredBoundTicks + 1`, because the visit
+ * terminator defers while the guest is at a provider. That bound is respected with some slack
+ * (`visit.content.test.ts`), not attained.
  *
- * ---------------------------------------------------------------------------
- * θ-b1 ADDS A THIRD TERMINATOR AND THIS BOUND DOES NOT MOVE. THAT IS A CLAIM, AND IT IS ASSERTED
- * RATHER THAN STATED (`guest.dissatisfaction.test.ts` drives a guest to the ceiling and reads its
- * age against this function's answer).
+ * The term is selected by whether content declares a lodging need, not maxed over both:
+ * `stayDurationTicks` is required on disk even for lodging-free content, so a max would give
+ * visitors a bound ~5x too loose and hide stuck ones.
  *
- * `leftDissatisfied` can only ever SHORTEN a life: it is one more reason to leave early and never
- * a reason to stay, so `max(stay, tolerance) + 1` remains an upper bound whatever
- * `dissatisfactionCapacityTicks` says — including values above the stay, which merely make the
- * rule unreachable. It also stays ATTAINED, which is the property that makes `countStuckGuests`
- * a measurement with no slack in it: a guest whose wants are all being met accumulates nothing
- * and still leaves at exactly `stayDurationTicks`.
- *
- * WHAT WOULD CHANGE IT is content with no lodging need — no stay, no tolerance, and the ceiling
- * the only terminator left. `bindContent` refuses a guest arriving under such content today
- * (`applyCommands`), and the goal that lifts that (θ-b2, optional lodging) inherits this
- * paragraph as its work: the third term goes in the `max` on the day a roomless guest is a
- * design rather than a queue.
- * ---------------------------------------------------------------------------
- *
- * ===========================================================================================
- * THAT DAY IS θ-b2 AND THE THIRD TERM IS HERE. A guest that formed no lodging need leaves at
- * `visitDurationTicks` — but the visit terminator DEFERS while the guest is at a provider
- * (ADR-0026 as amended, ADR-0028 §1), so the bound is the visit plus the longest single filling
- * that can still be in progress when the clock runs out:
- *
- *     visit + ceil( (wantLine + visit) / slowest refillPerTick ) + 1
- *       208 + ceil( (420 + 208) / 7 )                           + 1  =  299
- *
- * **THE SECOND TERM IS `wantLine + visit` AND NOT `capacityTicks`, AND THAT DISTINCTION IS THE
- * WHOLE VALUE OF THIS FUNCTION.** A need's deficit when the guest sits down is at most the want
- * line plus one tick of decay per tick of the visit; the full 1,400-tick capacity is unreachable
- * inside a 208-tick visit. ADR-0028 first stated this bound with `capacityTicks` — 409 — and it
- * was **respected and never approached**. A 112-tick slack is what `countStuckGuests` cannot
- * carry, so the term was tightened to the reachable deficit.
- *
- * ---------------------------------------------------------------------------
- * THIS PARAGRAPH CLAIMED ATTAINMENT AND CITED A FIGURE FROM AN ARM THAT IS NOT IN THE TREE.
- * BOTH ARE WITHDRAWN (sweep 2), and neither is restated.
- *
- * It read *"its entire warrant is that this bound is ATTAINED … against which 297 is one deferral
- * short of the worst case"*.
- *
- *   **ATTAINED IS MEASURED FALSE for the VISIT bound.** The executed arm —
- *   `visit.content.test.ts`, over content loaded from disk, five contention regimes — reads a
- *   worst observed age of **275 against a bound of 299**, and that arm says in its own words that
- *   it records slack rather than claiming attainment. A docstring asserting the opposite, in the
- *   function the arm is about, is ADR-0027 §3: *a repair to prose sweeps every surface carrying
- *   the same claim in that file*, and this one was left behind while the test was repaired.
- *
- *   **297 CAME FROM A DIFFERENT INSTRUMENT.** It was measured on a materialised scratch arm over
- *   regimes that are not the ones this goal ships ("up to 45 concurrent guests per provider"),
- *   through a hand-rolled seeder rather than `schedule()`. Citing it beside a bound the shipped
- *   arm reaches 275 on is slot one and slot five at once. **Withdrawn, not restated.**
- *
- * WHAT IS TRUE, AND IT IS THE WEAKER CLAIM THE ARM ACTUALLY PINS: the bound is RESPECTED with 24
- * ticks of slack, and the second term is load-bearing — the worst observed age is comfortably
- * past `visitDurationTicks`, so a bound of `visit + 1` would be violated outright.
- *
- * THE LODGING BOUND ABOVE IS A DIFFERENT MATTER AND IS GENUINELY ATTAINED: a guest checks out at
- * exactly `stayDurationTicks`, and `guest.stay.terminator.test.ts` drives the three ages either
- * side of it. Only the VISIT term carries slack, and only because the deferral's worst case needs
- * a guest blocked for its whole visit.
- * ---------------------------------------------------------------------------
- *
- * IT CANNOT DEFER FOREVER, WHICH IS WHAT MAKES A BOUND EXIST AT ALL: step 5 releases an
- * engagement on the tick its need reaches FULL, so no single engagement outlives one filling, and
- * a guest can be inside at most one when its clock expires.
- * ===========================================================================================
- *
- * ===========================================================================================
- * THE TERM IS **SELECTED**, NOT MAXED OVER (ADR-0028 amendment 2), AND IT WAS A `max` FOR ONE
- * SWEEP. THAT `max` WAS THE LARGEST SLACK IN THE GOAL, BY TEN TIMES.
- *
- * The paragraph here read: *"`stayDurationTicks` is absent only for content with no lodging need,
- * so the visit term stands alone … both terms are in the `max` regardless, so the bound never
- * depends on which shape the content is — a `max` over inapplicable-but-declared terms is loose
- * in the direction that cannot hide a leak."*
- *
- * **EVERY CLAUSE OF THAT IS FALSE, AND THE FIXTURE IN THE SAME COMMIT FALSIFIED IT.**
- * `guestRulesSchema` makes `stayDurationTicks` REQUIRED ON DISK, so every food-court document
- * written through the real loader declares one — the shipped fixture declares 1,440 and says so
- * in as many words. The stay term therefore WINS the max on lodging-free content and the visit
- * term never stands alone. Measured through the real loader, `--rooms 0 --amenities 1`,
- * arrivals/30: **bound 1,441, observed oldest 275, slack 1,166.**
- *
- * That is **ten times the slack amendment 1 refused**, arrived at by the same reasoning it
- * refused — and its consequence is live: a visitor the simulation has genuinely stopped
- * progressing goes unreported by `countStuckGuests`, and therefore unrefused by `emitReport`, for
- * nearly seven visit durations, **on the one content shape this goal exists to enable.**
- *
- * > **A `max` over terms that are required on disk regardless of applicability is not
- * > conservative. It is unfalsifiable.**
- *
- * So the term is chosen by the SAME FACT branch 6b chooses the terminator by — does this content
- * declare a lodging need — and there is exactly one such fact in the file rather than two that
- * can drift.
- * ===========================================================================================
- *
- * The `+ 1` is the arrival tick itself, on which a guest is created and may already
- * reserve a room. Anything older than this has not been progressed by the simulation.
- * **It is NOT part of `visitDurationTicks` itself** — that number is a completion AGE and the
- * arrival tick costs it nothing. The two terms look alike and are not, which is why the derivation
- * lives in `visitDurationTicksSchema` and says so.
+ * The `+ 1` is the arrival tick itself.
  */
 export function maxGuestLifetimeTicks(content: BoundContent, needId: ContentId): number {
   const needType = findNeedType(content, needId);
   if (needType === undefined) return 0;
-  // THE ONE FACT, ASKED ONCE. Content with no lodging need produces VISITORS and nothing else:
-  // `reserve` never acquires a room, so no guest can reach the checkout clock or the lobby wait,
-  // and both of those terms are inapplicable however loudly the document declares them. This is
-  // the same question `stepGuests` step 6b asks and `countStuckGuests` asks; three readers, one
-  // fact, so none of them can drift into bounding a population that cannot exist.
+  // The same fact `stepGuests` step 6b and `countStuckGuests` branch on: lodging-free content
+  // produces only visitors.
   if (lodgingNeedOf(content) === undefined) return visitDeferredBoundTicks(content) + 1;
   const stay = stayDurationOf(content) ?? 0;
-  // THE WAIT TERM IS `toleranceTicks` SINCE G-027b, WHERE IT WAS THE LODGING NEED'S OWN
-  // `patienceTicks`. The two are the same quantity — how long a guest that never gets a room
-  // waits before it leaves — and the number is carried across unchanged (180); what moved is
-  // which table states it. It is asked of the LODGING need's id still, because that is what
-  // makes this bound about the one need a guest can fail to be given at all.
   const tolerance = toleranceOf(content) ?? 0;
-  // AND THE VISIT TERM IS NOT HERE, because under content that declares a lodging need no guest
-  // can be a visitor — `stepGuests` step 6b refuses the branch on the same fact. A guest that
-  // formed no lodging need under such content is the v5-MIGRATED case: it reaches no terminator
-  // at all and is counted STUCK, which is a bound this function must not appear to give it.
+  // No visit term: under lodging content a guest without a lodging need is the v5-migrated case,
+  // which reaches no terminator and is counted stuck.
   return Math.max(stay, tolerance) + 1;
 }
 
 /**
- * How long a VISIT can run once the deferral is allowed for, in ticks — or 0 for content that
- * declares no visit duration (θ-b2, ADR-0028 §1 as amended).
+ * How long a visit can run once the deferral is allowed for, in ticks — or 0 for content that
+ * declares no visit duration.
  *
- * `visitDurationTicks` is when the clock EXPIRES. This is when the guest can actually be gone,
- * and the gap is one filling: the terminator does not fire while the guest is at a provider
- * (ADR-0026 as amended), so a visit whose clock runs out mid-meal ends when the meal does.
+ *     visit + ceil((wantLine + visit) / slowest refillPerTick)
  *
- *     visit + ceil( (wantLine + visit) / slowest refillPerTick )
- *
- * THE NUMERATOR IS THE LARGEST DEFICIT A NEED CAN CARRY WHEN THE GUEST SITS DOWN, and deriving it
- * rather than reaching for `capacityTicks` is the whole point — see `maxGuestLifetimeTicks`, which
- * carries the measurement and the 409-versus-299 correction. A need starts at its want line and
- * decays at most one per tick, so after `visit` ticks it is at most `wantLine + visit` below full.
- *
- * THE SLOWEST REFILL, not the need's own: this is a bound over every need the guest might be
- * engaged with, and the slowest one fills last. On a single-rate table the two coincide, which is
- * exactly when a bound like this stops being checked — so it is written for the table that does
- * not.
- *
- * ZERO FOR CONTENT WITH NO VISIT DURATION, which is content no visitor can arrive under
- * (`assertEveryVisitCanEnd`). A zero term in a `max` is the identity, so such content gets the
- * bound it had before this goal, unchanged.
+ * The numerator is the largest deficit a need can carry when the guest sits down (it starts at
+ * the want line and decays at most one per tick), not `capacityTicks`, which would be far looser.
+ * The slowest refill, because the guest might be engaged with any need.
  */
 function visitDeferredBoundTicks(content: BoundContent): number {
   const visit = visitDurationOf(content);
@@ -1298,8 +646,7 @@ function visitDeferredBoundTicks(content: BoundContent): number {
     if (slowest === 0 || needType.refillPerTick < slowest) slowest = needType.refillPerTick;
   }
   if (slowest === 0) return visit;
-  // The want line is a share of a need's own capacity, so the largest arrival deficit is taken
-  // over the table rather than assumed uniform — the same reason the refill is the slowest one.
+  // The want line is a share of each need's own capacity, so take the largest over the table.
   let largestWantDeficit = 0;
   for (const needType of needTypesInOrder(content)) {
     const deficit = Math.floor((wantLine * needType.capacityTicks) / ONE_WHOLE_BASIS_POINTS);
@@ -1309,90 +656,16 @@ function visitDeferredBoundTicks(content: BoundContent): number {
 }
 
 /**
- * Guests the simulation has stopped progressing — the exit criterion's "stuck in a
- * non-terminal state".
+ * Guests the simulation has stopped progressing: older than `maxGuestLifetimeTicks`, whatever
+ * state they claim to be in. Guests still resting or waiting within tolerance are not counted.
  *
- * Measured against real state rather than asserted: a guest older than its own
- * worst-case lifetime should have terminated by now, whatever state it claims to be in.
- * If the guest system stopped running, every live guest exceeds this within a day. If
- * a countdown stopped draining, the guests holding it pile up here.
+ * `>=` against `limit = max + 1` counts the first age no correct simulation can produce (checkout
+ * fires during the tick on which age reaches the stay). This catches a checkout written `>` for
+ * `>=` or a stalled stay clock, which the conservation law cannot see.
+ * `guest.stay.terminator.test.ts` drives the boundary ages.
  *
- * Note what this deliberately does NOT count: a guest that is simply still resting, or
- * still waiting inside its tolerance. Those are guests the hotel is working on, and
- * counting them would make the criterion fail on a busy hotel — which would teach
- * whoever reads the report to ignore the number.
- *
- * IT IS RE-BASED ON THE STAY CLOCK AT G-027a AND IT GOT SHARPER, NOT LOOSER. The bound it
- * compares against is now attained rather than merely respected (see `maxGuestLifetimeTicks`),
- * so a guest that overstays by ONE tick is counted, where the old sum-shaped bound would have
- * hidden anything up to `satisfyTicks` of drift. That matters because this number is what
- * would catch a checkout comparison written `>` where it meant `>=`, or a stay clock that
- * silently stopped: both leave a guest holding a room forever, and both are invisible to the
- * conservation law, which is satisfied by a guest that simply never leaves.
- *
- * ---------------------------------------------------------------------------
- * THE COMPARISON BELOW IS `>=`, AND IT WAS `>` FOR ONE CRITIQUE ROUND. That paragraph claimed
- * a one-tick overstay was counted, and offered as its motivation the very mutation it could
- * not see. With `>` against `limit = max(stay, tolerance) + 1` the first age counted was
- * `max + 2` — measured at stay 200 / tolerance 30: ages 199, 200, 201 gave 0, and 202 gave 1 —
- * while the `>`-for-`>=` checkout mutation makes checkout fire at age `stay + 1` and leaves
- * the guest at exactly 201. **The detector missed the mutation the comment named as its
- * reason for existing.** A claim and its predicate disagreeing inside the comment that offers
- * the predicate as evidence is ADR-0007's class, in the sentence about ADR-0007's class.
- *
- * WHY `>=` IS THE TIGHTEST CORRECT COMPARISON AND NOT ONE TICK TIGHTER. The oldest age a LIVE
- * guest can legitimately have at a commit boundary is `max(stay, tolerance)`: checkout fires
- * DURING the tick on which age reaches `stay`, so the guest is still in the store at the
- * boundary that tick ends on, and gone from the next. `limit` is that plus one, so `>=` counts
- * the first age no correct simulation can produce, and nothing before it.
- *
- * `guest.stay.terminator.test.ts` drives ages `max`, `max + 1` and `max + 2` through this
- * function rather than leaving the arithmetic as a paragraph — which is what the round before
- * it did.
- * ---------------------------------------------------------------------------
- *
- * ===========================================================================================
- * θ-b2 RE-KEYS IT, AND IT HAD **TWO** PATHS TO THE SAME WRONG ANSWER. Both are named because
- * repairing either alone leaves the report throwing, and only one of them is obvious:
- *
- *   THE PREDICATE   `lodgingNeedStateOf(...) === undefined` counted the guest outright.
- *   THE LIMIT       `lodging === undefined ? 0 : ...` made `limit` **zero**, so `age >= 0` is
- *                   true of every guest on every tick — INDEPENDENTLY of the predicate.
- *
- * Measured before the repair, food-court content, every arm: **stuck === the whole live
- * population, at every tick**, and `emitReport` refuses the run.
- *
- * AND THE PREDICATE COVERS TWO POPULATIONS THAT MUST NOT SHARE A FATE. This is the part that
- * makes it a re-key rather than a deletion:
- *
- *   THE VISITOR            content declares no lodging need, so the guest formed none. It has a
- *                          terminator — `visitDurationTicks` — and is NOT stuck. Bounded by
- *                          `maxGuestLifetimeTicks` like everyone else.
- *   THE MIGRATED GUEST     content DOES declare a lodging need and this guest carries no
- *                          instance of it — the v5 case `lodgingNeedStateOf` was written for. It
- *                          can never check out and nothing else will end its stay. **Still
- *                          counted, exactly as before.**
- *
- * The two are told apart by the CONTENT, not by the guest: a guest with no lodging need under
- * content that has one is a guest whose stay can no longer be progressed; the same guest under
- * content that has none is a visitor doing exactly what it came to do.
- *
- * ---------------------------------------------------------------------------
- * AND THIS PARAGRAPH DESCRIBED A HAZARD THE TICK WAS ALREADY IN, AS THOUGH IT HAD BEEN AVOIDED.
- *
- * It read: *"keying the visitor branch on the guest alone would have handed the migrated guest a
- * terminator it must not have — silently, and only for content a designer had not written yet."*
- * **`stepGuests` step 6b was keyed on the guest alone**, in the same commit, and the shipped
- * `guest-rules.json` now declares `visitDurationTicks` — so the branch was live for the migrated
- * guest immediately, not for hypothetical future content. Reproduced: strip the lodging need from
- * a housed guest under hotel content and step 40 ticks — **live 0, visitEnded 1**, while THIS
- * function reported the same guest stuck.
- *
- * **The two halves were asserted apart and neither test stepped the world**, so nothing saw the
- * contradiction. Both now ask the same content fact, and `guest.visit.test.ts` steps the stripped
- * world forward rather than only counting it.
- * ---------------------------------------------------------------------------
- * ===========================================================================================
+ * A guest with no lodging need instance is stuck only if the content has a lodging need (the v5
+ * migrated case). Under lodging-free content it is a visitor, bounded like everyone else.
  */
 export function countStuckGuests(
   tick: number,
@@ -1400,22 +673,13 @@ export function countStuckGuests(
   content: BoundContent,
 ): number {
   const lodging = lodgingNeedOf(content);
-  // ASKED OF THE LODGING NEED WHEN THERE IS ONE, AND OF ANY NEED WHEN THERE IS NOT. The bound is
-  // a property of the CONTENT — `max(stay, tolerance) + 1` for a hotel, the deferred visit bound
-  // for a food court — and the need id only selects which table row proves the need exists at
-  // all. `maxGuestLifetimeTicks` owns the choice between them. Passing the lodging id was never
-  // the point;
-  // it was the only id this function had. `needTypesInOrder(content)[0]` is the lowest id after
-  // normalisation, so the answer is order-independent (I2).
+  // The bound is a property of the content; the need id only selects a row proving a need exists.
+  // `needTypesInOrder(content)[0]` is the lowest id, so the choice is order-independent.
   const anyNeed = lodging ?? needTypesInOrder(content)[0];
   const limit = anyNeed === undefined ? 0 : maxGuestLifetimeTicks(content, anyNeed.id);
   let stuck = 0;
   for (const guest of guests.list) {
-    // A guest carrying no instance of this content's lodging need can never check out — UNLESS
-    // this content has no lodging need at all, in which case the guest is a VISITOR and its
-    // `visitDurationTicks` clock is what ends its visit. The distinction is the content's, not
-    // the guest's; see the block above for why conflating them would give the migrated guest a
-    // terminator it must not have.
+    // Missing lodging instance under lodging content: can never check out (see above).
     if (lodging !== undefined && lodgingNeedStateOf(content, guest) === undefined) {
       stuck += 1;
       continue;
@@ -1426,59 +690,23 @@ export function countStuckGuests(
 }
 
 /**
- * Reservations that no longer describe reality — the exit criterion's "guests holding a
- * reservation after despawn".
+ * Reservations that no longer describe reality. Five shapes, each built in
+ * `needs.reservations.test.ts`:
  *
- * IT INSPECTS BOTH FIELDS (G-012, criterion 4). The lodging/engagement split re-opens the
- * leak class G-004 closed by construction, and this is what makes the re-opening loud.
- * Five shapes are reachable, and `needs.reservations.test.ts` builds one of each and
- * watches this return 1:
+ *   1. Dangling lodging     — a guest holds a room entity that is not live.
+ *   2. Dangling engagement  — a guest is engaged with an entity that is not live.
+ *   3. Double-booked room   — lodgers from different parties in one room, or a party larger than
+ *                             the room type's capacity.
+ *   4. Double-engaged       — two guests using one provider.
+ *   5. Crossed              — one guest's lodging room is another's engagement provider.
  *
- *   1. DANGLING LODGING     — a guest holds a room entity that is not live.
- *   2. DANGLING ENGAGEMENT  — a guest is engaged with an entity that is not live.
- *   3. DOUBLE-BOOKED ROOM   — two guests OF DIFFERENT PARTIES lodging in one room, or one
- *                             party with more members in a room than its type holds.
- *   4. DOUBLE-ENGAGED       — two guests using one provider. A provider serves one guest
- *                             at a time; a queue with capacity is M3's.
- *   5. CROSSED              — one guest's lodging room is another's engagement provider.
- *                             A bedroom is somebody's, so it is not a shared amenity.
+ * None is reachable through the tick; one appearing means a release path broke or the world came
+ * from outside. Returns a count so a host can report it every run.
  *
- * None is reachable through the tick — every exit path releases both — so reaching one
- * means either a release path broke or the world came from outside the simulation (a
- * hand-built or corrupt save, which is why `assertGuestStoreInvariants` refuses to load
- * one). This returns a count rather than throwing so a host can REPORT it every run.
- *
- * ===========================================================================================
- * TWO COUNTS, NOT ONE, AND THAT IS WHAT KEEPS FIVE SHAPES FIVE (G-040a).
- *
- * THIS PARAGRAPH USED TO SAY *"ONE set for both kinds of reservation, which is what makes
- * shape 5 visible at all"*, and it was right — while a room held one guest. A party may now
- * fill a room to its capacity, so a second LODGER in a bedroom is legal, and a single count
- * would make three different worlds indistinguishable:
- *
- *   two members of one party in a capacity-2 room     LEGAL     — the mechanic itself
- *   one lodger and one engager in that same room      CROSSED   — shape 5
- *   two guests at one café                            DOUBLE-ENGAGED — shape 4
- *
- * So the two claim kinds are counted APART. Lodging is bounded by the room type's `capacity`
- * and by party identity; engagement is still bounded by ONE; and the cross-clause is its own
- * predicate, asked of the OTHER structure in each branch. That is why this takes content
- * where it never used to: `capacity` is content, and there is nowhere else to read it.
- *
- * IT NEVER ITERATES EITHER STRUCTURE (I2), which is what makes the cross-clause a lookup
- * rather than a second pass. Each branch asks whether the other kind already claimed the
- * entity, so a crossed pair is counted exactly once whichever member is visited first — and
- * the total is the same for every visiting order, which is the property this function has
- * always had and must keep.
- *
- * WHY IT IS STRICTER THAN `assertGuestStoreInvariants`, DELIBERATELY. That validator is
- * CONTENT-FREE by construction (`assertWorldShape` has no content in hand), so it can bound a
- * lodging claim by party identity and no further. This function has content, so it can also
- * say that six people are not a party of two — and reporting it is the right response rather
- * than refusing the load, for the reason the `dissatisfaction` clause in that validator gives:
- * capacity can legitimately SHRINK between saves, and a world carrying more lodgers than
- * today's content admits is a true statement about the build that wrote it.
- * ===========================================================================================
+ * Lodging and engagement claims are counted separately (a room legitimately holds a whole party),
+ * and each branch checks the other structure for shape 5, so the total is independent of visiting
+ * order. Stricter than `assertGuestStoreInvariants` because it has content (capacity); over-capacity
+ * is reported rather than refused because content can shrink between saves.
  */
 export function countOrphanedReservations(
   guests: GuestStore,
@@ -1486,8 +714,7 @@ export function countOrphanedReservations(
   content: BoundContent,
 ): number {
   let orphaned = 0;
-  // Lookup only, never iterated, so nothing here can affect an order (I2). Allocated only if a
-  // reservation is actually seen — the `assertGuestStoreInvariants` discipline.
+  // Lookup only, never iterated. Allocated lazily.
   let lodged: Map<EntityId, LodgingClaim> | null = null;
   let engaged: Set<EntityId> | null = null;
   for (const guest of guests.list) {
@@ -1495,8 +722,7 @@ export function countOrphanedReservations(
     if (roomId !== NO_ENTITY) {
       if (indexOfEntity(entities, roomId) === -1) orphaned += 1;
       else if (engaged !== null && engaged.has(roomId)) {
-        // SHAPE 5, reached from the lodging side: somebody is already being served by the
-        // thing this guest calls its bedroom.
+        // Shape 5, from the lodging side.
         orphaned += 1;
       } else {
         lodged ??= new Map<EntityId, LodgingClaim>();
@@ -1505,8 +731,7 @@ export function countOrphanedReservations(
         else if (claim.partyId !== guest.partyId) orphaned += 1;
         else {
           claim.count += 1;
-          // A room holds a PARTY, and `capacity` is how large a one. A party overflowing its
-          // own room is the same leak as two strangers in it, seen one member later.
+          // A party overflowing its room's capacity.
           if (claim.count > lodgingCapacityOf(content, entities, roomId)) orphaned += 1;
         }
       }
@@ -1515,8 +740,7 @@ export function countOrphanedReservations(
     if (engagementId === NO_ENTITY) continue;
     if (indexOfEntity(entities, engagementId) === -1) orphaned += 1;
     else if (lodged !== null && lodged.has(engagementId)) {
-      // SHAPE 5, reached from the engagement side. A bedroom is somebody's, so it is not
-      // also a shared amenity — whichever of the two guests the list happens to reach first.
+      // Shape 5, from the engagement side.
       orphaned += 1;
     } else {
       engaged ??= new Set<EntityId>();
@@ -1527,7 +751,7 @@ export function countOrphanedReservations(
   return orphaned;
 }
 
-/** One room, the party lodging in it, and how many of that party are in it. Lookup only (I2). */
+/** One room, the party lodging in it, and how many of that party are in it. Lookup only. */
 type LodgingClaim = {
   readonly partyId: PartyId;
   count: number;
@@ -1535,12 +759,7 @@ type LodgingClaim = {
 
 /**
  * How large a party this entity holds, or 0 for anything that is not a room type of this
- * content (G-040a).
- *
- * ZERO FOR A NON-ROOM IS THE STRICT READING AND IT IS THE RIGHT ONE HERE: a guest lodging in
- * an ARM CHAIR holds something no party fits in, so the second claim on it is a leak on the
- * first member rather than the second. `countGuestsInInvalidRooms` reports the first member
- * separately, which is the split that keeps one defect from reading as two.
+ * content (so lodging in an item is a leak on the first member).
  */
 function lodgingCapacityOf(content: BoundContent, entities: EntityStore, id: EntityId): number {
   const entity = getEntity(entities, id);
@@ -1549,18 +768,9 @@ function lodgingCapacityOf(content: BoundContent, entities: EntityStore, id: Ent
 }
 
 /**
- * Guests resting in a room that is not a valid room — the exit criterion's "guests served
- * by an invalid room" (G-009).
- *
- * THIS IS WHAT MAKES THE CLI'S ZERO A MEASUREMENT. The tick evicts a guest on the tick
- * its room stops being valid, so a healthy run reports zero — but a number that could
- * only ever be zero proves nothing, which is why this counts real state rather than
- * asserting the rule. It CAN be non-zero: a hand-built or corrupt save can carry one,
- * and `validity.guest.test.ts` builds exactly that world and watches this return 1.
- *
- * IT COUNTS ENGAGEMENTS TOO (G-012). A guest being served by an invalid amenity is the
- * same defect as a guest sleeping in one, and the tick releases both on the same tick for
- * the same reason. Counted rather than thrown so a host can REPORT it every run.
+ * Guests resting in, or engaged with, something that is not a valid provider. The tick evicts on
+ * the tick a room goes invalid, so a healthy run reports zero; a corrupt save can produce a
+ * non-zero count (`validity.guest.test.ts`). Counted rather than thrown so a host can report it.
  */
 export function countGuestsInInvalidRooms(
   guests: GuestStore,
@@ -1573,22 +783,16 @@ export function countGuestsInInvalidRooms(
   let count = 0;
   let validity: ValidityContext | null = null;
   for (const guest of guests.list) {
-    // THE TWO FIELDS ASK DIFFERENT QUESTIONS SINCE G-013, and folding them into one loop
-    // over `[room, engagement]` — which is what this was — would now be wrong in both
-    // directions: it would call a legitimately engaged ARM CHAIR an invalidity, and it
-    // would accept an ITEM as somewhere to sleep.
+    // Lodging and engagement ask different questions: an engaged item is fine, a lodged item is not.
     if (guest.roomEntityId !== NO_ENTITY) {
       const room = getEntity(entities, guest.roomEntityId);
-      // A reservation on a room that does not exist is a DIFFERENT failure, counted by
-      // `countOrphanedReservations`. Counting it here too would make one leak look like two.
+      // A nonexistent room is counted by `countOrphanedReservations`, not here.
       if (room !== undefined) {
-        // A guest lodges in a ROOM. An item in this field is not a shape the tick can
-        // produce — `findFreeRoom` searches `validRoomsProviding`, which is rooms only —
-        // and calling `roomInvalidity` on one would throw rather than report.
+        // A guest lodges in a room; the tick cannot produce an item here, and `roomInvalidity` would
+        // throw on one.
         if (!isRoomKind(content, room.kind)) count += 1;
         else {
-          // Allocated only once a guest is actually holding something, so an empty hotel
-          // pays nothing — the `assertGuestStoreInvariants` discipline.
+          // Allocated lazily, so an empty hotel pays nothing.
           validity ??= createValidityContext(content, bounds, corridors, stairs, storeEntities(entities));
           if (!isValidRoom(validity, room)) count += 1;
         }
@@ -1598,10 +802,7 @@ export function countGuestsInInvalidRooms(
     if (engagement !== null) {
       const provider = getEntity(entities, engagement.entityId);
       if (provider !== undefined) {
-        // ROOMS AND ITEMS ALIKE, through the one predicate the tick uses (G-013). A guest
-        // being served by an item whose room has lost its floor is the same defect as a
-        // guest sleeping in that room, and the tick releases both on the same tick for the
-        // same reason.
+        // Rooms and items alike, through the same predicate the tick uses.
         validity ??= createValidityContext(content, bounds, corridors, stairs, storeEntities(entities));
         if (!isProviding(validity, provider)) count += 1;
       }
@@ -1626,25 +827,12 @@ function indexOfEntity(entities: EntityStore, id: EntityId): number {
 }
 
 /**
- * Throws if this guest store could iterate non-deterministically, collide on ids, or
- * hold a reservation that does not describe the entity store beside it.
+ * Throws if this guest store could iterate non-deterministically, collide on ids, or hold a
+ * reservation that does not describe the entity store beside it.
  *
- * Called on every commit AND on every load (`assertWorldShape`), so "a valid guest
- * store" has exactly one definition in the codebase — the same contract
- * `assertEntityStoreInvariants` has. The reservation half is the load-time defence
- * against a save carrying a leak: such a world would load fine, report a healthy zero,
- * and be wrong.
- *
- * CONTENT-FREE, deliberately and as always: `assertWorldShape` has no content, so every
- * check here is a fact about the world's own shape. "This guest's engagement names a need
- * it actually formed" is such a fact; "that need is one this content defines" is not, and
- * belongs to `bindContent`.
- *
- * IT TAKES THE PLOT SINCE G-023a, for the reason `assertEntityStoreInvariants` takes one: a
- * guest now stands somewhere, and a position that is fractional, non-finite or off the plot
- * would load happily and then place a guest where the simulation cannot address it. Against
- * the plot THIS WORLD carries — for a load, the plot the SAVE carries rather than this
- * build's default.
+ * Called on every commit and every load, so a valid guest store has one definition. Content-free,
+ * because the load path has no content. Takes the plot so positions are checked against the plot
+ * this world carries.
  */
 export function assertGuestStoreInvariants(
   guests: GuestStore,
@@ -1654,11 +842,8 @@ export function assertGuestStoreInvariants(
   if (!Number.isSafeInteger(guests.nextId) || guests.nextId < 1) {
     throw new Error(`Guest store is invalid: nextId must be a positive safe integer, got ${String(guests.nextId)}`);
   }
-  // Allocated only if a reservation is actually seen. This runs at the end of EVERY
-  // tick, and an empty hotel is most of a 365-day run (I5). ONE map for both kinds, so a
-  // room that is one guest's bedroom and another's amenity is caught by the same clause
-  // that catches two PARTIES in one bed — see `claimEntity` for what changed at G-040a and
-  // for the one thing this validator cannot say without content.
+  // Allocated lazily: this runs every tick and an empty hotel is common. One map for both kinds of
+  // claim; see `claimEntity`.
   let held: Map<EntityId, StoreClaim> | null = null;
   let previous = 0;
   for (let i = 0; i < guests.list.length; i += 1) {
@@ -1681,15 +866,8 @@ export function assertGuestStoreInvariants(
     }
     previous = guest.id;
 
-    // WHICH PARTY IT BELONGS TO (G-040a). Content-free, like every other clause here: how large
-    // a party may be is `capacity`, which is content and which this validator has none of — so
-    // what it can say is that the id is an id, and that it comes from the space `guests.nextId`
-    // is handing out from.
-    //
-    // THE UPPER BOUND IS THE SAME ARGUMENT `id` MAKES TWO CLAUSES UP, and it is not decoration:
-    // a party id at or above `nextId` will be handed out AGAIN to a future arrival, and the two
-    // unrelated parties sharing it would then be allowed into one room — which is the one thing
-    // ADR-0055's ruling keeps forbidden. A save carrying one was not written by this build.
+    // Party ids come from the guest id space, so one at or above `nextId` would be handed out again
+    // and let two unrelated parties share a room.
     if (!Number.isSafeInteger(guest.partyId) || guest.partyId < 1) {
       throw new Error(
         `Guest store is invalid: guest ${guest.id} has a partyId of ${String(guest.partyId)}; it must be a positive ` +
@@ -1706,16 +884,8 @@ export function assertGuestStoreInvariants(
     if (!Number.isSafeInteger(guest.arrivedTick) || guest.arrivedTick < 0) {
       throw new Error(`Guest store is invalid: guest ${guest.id} has a non-integer arrivedTick`);
     }
-    // HOW FED UP IT IS (θ-b1). Content-free, like every other clause here: the CEILING is
-    // content and this validator has none in hand, so what it can say is that the level is a
-    // level — a non-negative whole number of ticks. An absent key is a save that predates the
-    // field, and `migrateV13ToV14` is what turns one into the other; reaching here without it
-    // means bytes this build did not write.
-    //
-    // DELIBERATELY NOT CHECKED AGAINST THE CEILING, even where content is available elsewhere.
-    // A world saved under a more generous ceiling and loaded under a tighter one carries guests
-    // above it, and that is a true statement about those bytes rather than corruption: they
-    // depart on their first tick, which is the honest reading of "you have already had enough".
+    // Content-free: the ceiling is content, so only check it is a non-negative integer. Above the
+    // ceiling is legal (content may have shrunk); the guest departs on its first tick.
     if (!Number.isSafeInteger(guest.dissatisfaction) || guest.dissatisfaction < 0) {
       throw new Error(
         `Guest store is invalid: guest ${guest.id} has a dissatisfaction of ${String(guest.dissatisfaction)}; it must ` +
@@ -1723,24 +893,17 @@ export function assertGuestStoreInvariants(
           'is serving and drains while it does not, so a save carrying anything else was not written by this build.',
       );
     }
-    // WHERE IT IS STANDING (G-023a). `null` is NOT legal here, unlike `Entity.at`: a guest
-    // always has a position, so the absent-or-null case is a save this build did not write
-    // and cannot vouch for. Checked through `assertCell`, which is the same function
-    // `draftSpawn` uses, so "a cell this simulation can address" has one definition —
-    // integer-ness first, then the plot, so a float inside the plot fails as what it is.
+    // A guest always has a position; null is not legal here (unlike `Entity.at`). `assertCell` checks
+    // integer-ness, then the plot.
     const at: Cell | null | undefined = guest.at;
     if (at === undefined || at === null || typeof at !== 'object') {
       throw new Error(
         `Guest store is invalid: guest ${guest.id} has no position. A guest is always somewhere — the provider it is using, the room it holds, or the entrance (it is hashed state).`,
       );
     }
-    // THE MESSAGE IS A CONSTANT AND THE ID IS A NUMBER, which is not a style choice: a
-    // template literal here builds a string for every guest on every tick, and this call is
-    // the one that made `assertCell` a hot function. Same defect as the array `assertCell`
-    // used to allocate, one argument over — see the note there for both measurements.
+    // Constant message and numeric id: no string built per guest per tick.
     assertCell(at, bounds, GUEST_POSITION_INVALID, guest.id);
-    // The need vector: non-empty, ascending, integer countdowns. `needs.ts` owns what a
-    // valid vector is, for the reason `validity.ts` owns what a valid room is.
+    // `needs.ts` owns what a valid need vector is.
     assertNeedVector(guest.needs, guest.id);
 
     if (guest.roomEntityId !== NO_ENTITY) {
@@ -1750,11 +913,8 @@ export function assertGuestStoreInvariants(
       held = claimEntity(held, entities, guest, guest.roomEntityId, true, 'lodges in');
     }
 
-    // Typed wider than the field, because this runs at LOAD against bytes nobody in this
-    // build wrote: an absent key is a save that predates the field, and `null` is a
-    // statement the writer made. The two must not be conflated, for the reason `Entity.at`
-    // gives — `canonicalise` throws on `undefined`, so an absent key in hashed state is a
-    // live hazard rather than a stylistic one.
+    // Typed wider than the field: at load an absent key and `null` are different statements, and
+    // `canonicalise` throws on `undefined`.
     const engagement: Engagement | null | undefined = guest.engagement;
     if (engagement === undefined) {
       throw new Error(
@@ -1770,9 +930,7 @@ export function assertGuestStoreInvariants(
         `Guest store is invalid: guest ${guest.id} is engaged with entity ${String(engagement.entityId)}, which is not a live entity id`,
       );
     }
-    // The engagement names a need this guest actually formed. Without this, a save could
-    // carry a guest occupying a provider for a need it does not have — a reservation the
-    // simulation could never release, because nothing would ever satisfy it.
+    // The engagement must name a need this guest formed, or nothing could ever end it.
     const served = findNeedState(guest.needs, engagement.needId);
     if (served === undefined) {
       throw new Error(
@@ -1780,12 +938,7 @@ export function assertGuestStoreInvariants(
           'An engagement is always for one of the guest\'s own needs; otherwise nothing could ever end it.',
       );
     }
-    // A PROVIDER IS NEVER HELD FOR A FULL NEED, and this is what that invariant became at
-    // G-027b. It used to say "already resolved", which under a stock is a state that does not
-    // exist — a need is never done. What it can still say, and what it must, is that nothing
-    // holds a table it has no reason to be at: step 5 releases the engagement on the tick the
-    // deficit reaches zero, so a saved world showing otherwise is one the tick never wrote.
-    // Content-free, like every other clause here.
+    // A provider is never held for a full need: step 5 releases it the tick the deficit reaches zero.
     if (served.deficit === 0) {
       throw new Error(
         `Guest store is invalid: guest ${guest.id} is engaged for need "${engagement.needId}", which is already full. ` +
@@ -1796,41 +949,23 @@ export function assertGuestStoreInvariants(
   }
 }
 
-/** What stands against one entity in `assertGuestStoreInvariants`. Lookup only, never iterated (I2). */
+/** What stands against one entity in `assertGuestStoreInvariants`. Lookup only. */
 type StoreClaim = {
-  /** The party lodging here, or `NO_PARTY` when this is an engagement claim. */
+  /** The party lodging here, or `NO_PARTY` for an engagement claim. */
   readonly partyId: PartyId;
-  /** How many guests LODGE here. `0` for an engagement claim, which is bounded by one. */
+  /** How many guests lodge here. 0 for an engagement claim, which is bounded by one. */
   lodgers: number;
 };
 
 /**
- * One entity claimed, and the BOUND on who else may claim it. Throws if it is not live, or if
- * the claim is one this world has no reading of.
+ * One entity claimed. Throws if it is not live or the claim has no legal reading:
  *
- * BOTH RESERVATIONS GO THROUGH HERE, which is what makes "a bedroom is not a shared amenity" a
- * checked fact rather than a convention: the map does not care which field the claim came from,
- * so a room that is one guest's bed and another's café fails however it was claimed.
+ *   second lodger, same party         allowed (`lodgers` counts them)
+ *   second lodger, different party    refused
+ *   an engager on a lodged room       refused (shape 5, from either side)
+ *   a second engager                  refused
  *
- * ===========================================================================================
- * IT WAS A REFUSAL OF THE SECOND HOLDER, AND AT G-040a IT BECOMES A BOUND (ADR-0055).
- *
- * A room holds a PARTY. So a second LODGER is legal exactly when it is a member of the party
- * already there, and everything else stays a refusal:
- *
- *   second lodger, same party         ALLOWED     — the mechanic. `lodgers` counts them.
- *   second lodger, different party    REFUSED     — two strangers never share a room, which
- *                                                 is the bound ADR-0055's ruling KEEPS.
- *   an engager on a lodged room       REFUSED     — shape 5, from either side.
- *   a second engager                  REFUSED     — a provider serves one guest at a time.
- *
- * AND THE ONE THING IT CANNOT SAY: whether those lodgers exceed the room type's `capacity`.
- * This validator is CONTENT-FREE by construction — `assertWorldShape` has no content in hand,
- * and the `dissatisfaction` clause above records why that is not a gap to be plugged: content
- * can legitimately shrink between saves, so a world carrying three lodgers under content that
- * now says two is a true statement about the build that wrote it rather than corruption.
- * `countOrphanedReservations` HAS content and reports exactly that, every run.
- * ===========================================================================================
+ * Capacity is not checked here (no content); `countOrphanedReservations` reports it.
  */
 function claimEntity(
   held: Map<EntityId, StoreClaim> | null,
@@ -1864,25 +999,11 @@ function claimEntity(
 }
 
 /**
- * Throws unless every guest is accounted for.
+ * Throws unless every guest is accounted for: `arrived === Σ departures[i].count + live`.
  *
- *   arrived === Σ departures[i].count + live
- *
- * A guest that vanished without an outcome, an outcome recorded for a guest that never
- * arrived, and a departure counted twice are all the same failure from the report's
- * point of view: the numbers stop describing the simulation. This is the check that
- * makes the CLI's "guests arrived" line evidence rather than decoration.
- *
- * THE ORDER OF THE THREE CHECKS IS LOAD-BEARING, not tidiness. Counter sanity first
- * (a NaN in a row would make the sum meaningless), then the CONSERVATION LAW over
- * whatever rows are present, then the table's shape. So a table with a non-zero row
- * DELETED fails on the conservation law by name — which is the failure a reader of a
- * corrupt save most needs to see, and the one G-015's exit criterion watches. A table
- * missing a ZERO row conserves correctly and is caught by the shape check below it.
- *
- * Allocation-free: index walks, no `map`, no `Object.entries`, no temporary arrays. This
- * runs on every tick of every run, and `assertGuestStoreInvariants` records what the
- * convenient form cost the last time somebody wrote one.
+ * Check order matters: counter sanity first, then conservation over whatever rows are present,
+ * then the table's shape — so a deleted non-zero row fails as a conservation error. Allocation-free,
+ * since it runs every tick.
  */
 export function assertGuestOutcomes(outcomes: GuestOutcomes, guests: GuestStore): void {
   assertCounter('arrived', outcomes.arrived);
@@ -1905,9 +1026,7 @@ export function assertGuestOutcomes(outcomes: GuestOutcomes, guests: GuestStore)
         'Every guest is either still in the hotel or has exactly one recorded outcome.',
     );
   }
-  // THE SHAPE. Every reason, exactly once, in the canonical order — so the table cannot
-  // grow a duplicate row that sums correctly, lose a zero row, or reorder itself into a
-  // different state hash for the same history.
+  // Every reason exactly once, in canonical order, so equal histories hash equally.
   if (rows.length !== GUEST_DEPARTURE_REASONS.length) {
     throw new Error(
       `Guest outcomes are invalid: ${rows.length} departure row(s) against ${GUEST_DEPARTURE_REASONS.length} known reason(s). ` +
@@ -1938,47 +1057,32 @@ export type GuestTickInput = {
   readonly tick: number;
   readonly guests: GuestStore;
   readonly outcomes: GuestOutcomes;
-  /** The per-need tally (G-012). Moved only by a departure. */
+  /** The per-need tally. Moved only by a departure. */
   readonly needOutcomes: readonly NeedOutcome[];
-  /** The review distribution (G-019). Moved only by a departure, and read by nothing. */
+  /** The review distribution. Moved only by a departure; read by nothing. */
   readonly reviewOutcomes: readonly ReviewOutcomeRow[];
-  /** The remark feed (G-066a). Moved only by a departure, and read by nothing in this package. */
+  /** The remark feed. Moved only by a departure; read by nothing in this package. */
   readonly recentRemarks: readonly RemarkRecord[];
   readonly ledger: readonly Transaction[];
   /** The open entity draft: spawns staged this tick are visible, despawns are not. */
   readonly entities: EntityDraft;
   readonly content: BoundContent;
   /**
-   * The validity rules, over the same draft (G-009).
-   *
-   * BUILT BY THE PHASE, NOT BY THIS MODULE. `runGuests` in `tick.ts` constructs it, so
-   * the guest loop never sees a placement index, never sorts a cell and never learns what
-   * "enclosed" means. It asks one predicate. That is the seam: `validity.ts` owns what
-   * makes a room a room, and this module owns what a guest does about it.
+   * The validity rules over the same draft, built by `runGuests` in `tick.ts`. The guest loop only
+   * asks predicates of it.
    */
   readonly validity: ValidityContext;
   /**
-   * PARTIES arriving this tick, one per `guestArrives` command (G-040b-i).
-   *
-   * It was `arriving` and it counted guests, which was the same number while every party had one
-   * member. It is not any more: a command is one party walking in, and how many guests that is
-   * comes from `partySizeOf` and the party's ordinal. The name says parties so that the count
-   * that reaches `outcomes.arrived` — which must be GUESTS — cannot be taken from here by
-   * somebody reading the field name.
+   * Parties arriving this tick (from commands and demand). Parties, not guests: party size comes
+   * from `partySizeOf`, and `outcomes.arrived` counts guests.
    */
   readonly arrivingParties: number;
   /**
-   * THE LIFT INSTALLED IN THIS WORLD'S SHAFT, or `null` when it has none (G-038b-i).
-   *
-   * `null` IS A RULE AND NOT A MISSING VALUE — *no lift means the shaft is a staircase and the
-   * floor axis is unbounded*, which is what every build before this one did. It is `null` in
-   * every world this build ships and in every world it migrates; see `lift.ts`.
+   * The lift installed in this world's shaft, or `null` (no lift: the shaft is a staircase and the
+   * floor axis is unbounded).
    */
   readonly lift: Lift | null;
-  /**
-   * THE LINE FOR THAT LIFT as the tick opens, front first (G-038b-i). Empty whenever `lift` is
-   * `null`, which `assertWorldShape` checks rather than assumes.
-   */
+  /** The line for that lift as the tick opens, front first. Empty whenever `lift` is `null`. */
   readonly liftQueue: LiftQueue;
 };
 
@@ -1990,32 +1094,17 @@ export type GuestTickResult = {
   readonly recentRemarks: readonly RemarkRecord[];
   readonly ledger: readonly Transaction[];
   /**
-   * THE LINE AS THIS TICK LEAVES IT (G-038b-i), returned BY REFERENCE when nobody joined it and
-   * nobody left it — which is every tick of every world that has no lift, and most ticks of one
-   * that has. `runGuests` compares it by identity to decide whether the tick allocated a world.
+   * The line as this tick leaves it; the same reference when unchanged, which `runGuests` uses to
+   * detect whether the tick allocated a world.
    */
   readonly liftQueue: LiftQueue;
 };
 
 /**
- * What a guest that checks out pays: one stay at the rate of the room type it lodged in.
+ * What a guest that checks out pays: one stay at the nightly rate of the room type it lodged in.
  *
- * THE SEAM FOR M4. Pricing, demand, per-night proration and nightly settlement are that
- * milestone's, and this is the single call site they will replace. ADR-0010 records what
- * this actually charges — once per COMPLETED STAY, not once per night — and G-012 does not
- * touch it: engagement needs are free, because charging for them is pricing.
- *
- * THE STAY IT IS CHARGED FOR IS NOW `stayDurationTicks` AND NOT `night_rest.satisfyTicks`
- * (G-027a). Nothing about this function changes; what changes is the length of the thing it
- * bills, and therefore the margin. ADR-0020 supersedes ADR-0010's arithmetic and
- * `stayDurationTicksSchema` in `packages/content` carries the live formula. Per-night
- * proration is now EXPRESSIBLE for the first time — the checkout terminator is what ADR-0017
- * said would make it so — and is still M4's.
- *
- * A guest that gave up or was evicted pays nothing, which is not a balance decision so
- * much as the only honest one: it never had a whole stay. Note what this no longer implies:
- * a guest that pays is not a guest that was HAPPY. It is a guest that stayed the course, and
- * it may have failed every engagement need it formed. That is what the review is for.
+ * Charged once per completed stay (not per night). Guests who gave up or were evicted pay nothing.
+ * Paying does not imply the guest was happy; that is what the review is for.
  */
 function payForStay(
   ledger: readonly Transaction[],
@@ -2026,7 +1115,6 @@ function payForStay(
   const roomType = findRoomType(content, roomKind);
   if (roomType === undefined) {
     // Unreachable: a guest only ever holds a room it was matched to through content.
-    // Kept as the postcondition of that matching, not as evidence anything was checked.
     throw new Error(`payForStay: room kind "${roomKind}" is not in the injected content`);
   }
   return appendTransaction(ledger, {
@@ -2039,187 +1127,62 @@ function payForStay(
 /**
  * The most preferred free provider of `needId`, or `null`.
  *
- * WHAT "MOST PREFERRED" MEANS IS THE CANDIDATE LIST'S BUSINESS, NOT THIS FUNCTION'S, and
- * that seam is what keeps this an early-exit walk rather than a scan for a maximum. Since
- * G-014a `providersFor` hands back its list in (fit descending, id ascending) order, so the
- * first free entry IS the best one; `validRoomsProviding` is still ascending by id, because
- * a guest chooses where to LODGE without consulting fit (see `reserve`).
+ * Candidate lists come pre-ordered (`providersFor`: fit descending then id ascending;
+ * `validRoomsProviding`: id ascending, since lodging ignores fit), so this is an early-exit walk
+ * and the first free, permitted entry wins. Lowest id is therefore the stable tie-break.
  *
- * LOWEST ID IS THEREFORE THE TIE-BREAK RATHER THAN THE RULE. Two providers a designer
- * ranked equally are settled by the lower entity id, which must be the same on every
- * machine and every replay (I2) — never "whichever we found first in some map". At M3 it
- * becomes nearest-by-path, and a guest walking past a free room to reach a distant one is
- * exactly the "correct but reads as stupid" defect §6.1 warns about; ordering by a
- * designer's ranking does not create that behaviour, and ordering by anything unstable
- * would.
- *
- * ONE FUNCTION FOR BOTH RESERVATIONS (G-012). A bedroom and an amenity are found the same
- * way — the lowest-id provider that offers the need and nobody holds — because `held`
- * carries both kinds of claim. That is what makes "a thing is either somebody's bedroom or
- * a free amenity, never both" true by construction rather than by a second rule.
- *
- * WHAT DIFFERS SINCE G-013 IS THE CANDIDATE LIST, NOT THE RULE (`forLodging`). A guest
- * lodges in a room and engages a provider, which may be an item. Both lists are in the
- * same canonical ascending-id order, so "lowest id wins" is one sentence with one meaning.
- *
- * "AN INVALID ROOM IS NOT A PROVIDER" IS STILL THIS FUNCTION'S CLAUSE (G-009), but it is
- * asked once per entity set rather than once per candidate per tick: the candidates come
- * from `validRoomsOf`, which IS the invalid rooms already filtered out.
+ * One function for both reservations: `held` carries both kinds of claim, so an entity is either
+ * somebody's bedroom or a free amenity, never both. Invalid rooms are already filtered out of the
+ * candidate lists.
  */
 function findFreeRoom(
   search: RoomSearch,
   needId: ContentId,
   forLodging: boolean,
   /**
-   * The room this guest is lodging in, or `NO_ENTITY` (G-036c, ADR-0047 B6).
-   *
-   * THE ONE PER-GUEST INPUT THIS FUNCTION HAS EVER TAKEN, and it is why the exhausted memo
-   * below had to learn a new clause. Everything else here — the candidate list, `held`,
-   * validity — is the same for every guest on this tick.
+   * The room this guest is lodging in, or `NO_ENTITY`. A per-guest input, which is why the
+   * exhausted memo must not be armed on per-guest denials.
    */
   lodgingRoomId: EntityId,
-  /**
-   * The party this guest belongs to (G-040a). THE SECOND PER-GUEST INPUT THIS FUNCTION TAKES,
-   * and like `lodgingRoomId` it is why the exhausted memo needs a clause: a room that is full
-   * for THIS party may have room for the next one, and vice versa.
-   */
+  /** The party this guest belongs to. Also per-guest: a room full for this party may suit the next. */
   partyId: PartyId,
   /**
-   * How many guests are in that party (G-040b-i). THE THIRD PER-GUEST INPUT, and the one that
-   * makes the capacity clause below a PARTY-level fit rather than a per-member one.
-   *
-   * IT IS THE PARTY'S ORIGINAL SIZE, DERIVED FROM ITS ORDINAL, AND NOT A COUNT OF WHO IS HERE —
-   * the ruling is written out where it is computed, in `reserve`. One guest of a pair asking
-   * this function for a room must be refused a single bed even though it would fit in one
-   * alone, or the pair is split before the second member exists.
+   * The party's original size (derived from its ordinal in `reserve`), not a count of members
+   * present, so a pair's first member is refused a single bed rather than splitting the pair.
    */
   partySize: number,
 ): Entity | null {
-  // THE SHORT-CIRCUIT (G-010, sharpened by G-012). If a scan for this need already came up
-  // empty and NOTHING THAT PROVIDES IT HAS BEEN RELEASED SINCE, the answer is still empty
-  // and the scan is skipped.
-  //
-  // Why that is exact rather than an approximation: within one tick, entity membership is
-  // frozen, so `validRoomsOf` is a fixed list; `roomTypeProvides` is a fact about content;
-  // and the only other input is `held`, which this loop can only ADD to — except at the
-  // release sites, every one of which goes through `release` and un-exhausts exactly the
-  // needs the freed room provides. So between two scans with this need still marked, the
-  // candidate set can only have shrunk, and a set that was empty cannot have become
-  // non-empty.
-  //
-  // WHY IT IS PER NEED RATHER THAN A GLOBAL RELEASE COUNTER, and this is a measured change
-  // rather than a tidier one. G-010 keyed the memo by need but compared it against ONE
-  // counter of all releases, so any release anywhere re-armed every need. With one need per
-  // guest that was free. With four it is not: in a hotel that has bedrooms and no amenities
-  // — a real hotel, and the one `--amenities 0` describes — three needs per waiting guest
-  // have no provider at all, and every stay that ended re-armed all three, so each waiting
-  // guest rescanned every valid room three times a tick. `vitest run scaling` measured 6.65x
-  // for 4x the rooms against its 6x bound, in the goal after the one that spent itself
-  // making tick cost linear. Releasing a bedroom cannot make a CAFÉ appear, and saying so
-  // exactly costs one content lookup at the release site.
+  // Short-circuit: if a scan for this need already came up empty this tick and nothing providing it
+  // has been released since, it is still empty. Exact, because within a tick the candidate list is
+  // fixed and `held` only grows except through `release`, which un-exhausts exactly the needs the
+  // freed provider serves. Per need rather than a global release counter, so freeing a bedroom does
+  // not force a rescan for needs with no provider at all.
   const exhausted = search.exhausted;
   if (exhausted !== null && exhausted.has(needId)) return null;
 
-  // ONE EXHAUSTED SET FOR BOTH SEARCHES, AND THAT IS SOUND BECAUSE THEY PARTITION THE NEED
-  // SPACE (G-013). The lodging search is only ever asked for the lodging need, and the
-  // engagement pass in `reserve` explicitly skips it — so no need id is ever asked of both
-  // candidate lists, and one memo cannot answer for the other. `bindContent` is what makes
-  // that a fact rather than a habit: an item may not provide the lodging need, so the two
-  // lists could not disagree about it even if something did ask twice.
-  //
-  // The one canonical ascending-id order, filtered to things that work AND that offer this.
-  // A guest LODGES in a room and ENGAGES a provider, so the lodging search sees rooms only
-  // (`payForStay` charges a room type's rate; there is no rate on a chair) while the
-  // engagement search sees rooms and items alike.
+  // One exhausted set serves both searches because they partition the need space: lodging is only
+  // asked for the lodging need, engagement skips it, and content forbids items providing lodging.
+  // Lodging candidates are rooms only; engagement candidates are rooms and items.
   const candidates = forLodging
     ? validRoomsProviding(search.input.validity, needId)
     : providersFor(search.input.validity, needId);
-  // ============================================================================
-  // AND THE ACCESS RULE (G-036c, ADR-0047 B6). THE ONE PLACE B6 BITES.
-  //
-  // A guest does not engage a provider whose room excludes it: a vending machine somebody put
-  // in bedroom 3 serves the guest in bedroom 3, and a staff-only room serves nobody. That is
-  // the difference between a rule and a field with no consumer, which is the standard this
-  // project applied to `forbidden adjacencies` one goal ago and refused.
-  //
-  // WHY THE MEMO NEEDS A NEW CLAUSE, AND IT IS A CORRECTNESS BUG IF IT DOES NOT GET ONE.
-  // `exhausted` records "no free provider of this need" ONCE PER TICK and every later guest
-  // reads it. That is exact while the candidate set is the same for all of them — which is
-  // precisely what a per-GUEST denial breaks: guest 1 cannot use bedroom 3's machine, and
-  // without the clause it would mark the need exhausted for the whole hotel, including for the
-  // guest who is actually lodging in bedroom 3. **A guest standing in the lobby beside its own
-  // vending machine**, which is §6.1's literal case and the same defect `release` exists to
-  // prevent one field over.
-  //
-  // `closedToGuests` DOES NOT SUPPRESS THE MEMO, and the split is why `guestAccessTo` returns
-  // three verdicts rather than two: a staff-only room is closed to every guest in the building,
-  // so a scan that found only those really did find nothing for anybody, and the short-circuit
-  // stays as sharp as it was. Only `reservedForItsOwnGuest` is per-guest.
-  // ============================================================================
+  // Access rule: a guest does not engage a provider whose room excludes it (e.g. an item in someone
+  // else's bedroom, or a staff-only room). `reservedForItsOwnGuest` is a per-guest denial and must
+  // not arm the `exhausted` memo, or one guest's denial would hide the provider from its own lodger.
+  // `closedToGuests` applies to everyone, so it does not suppress the memo.
   let deniedThisGuestOnly = false;
   for (const room of candidates) {
-    // ==========================================================================
-    // AND THE CAPACITY RULE (G-040a, ADR-0055). THE ONE PLACE `capacity` BITES.
-    //
-    // A room holds a PARTY. `held` therefore counts claims rather than flagging them, and a
-    // room somebody is already in is a candidate for exactly one guest: another member of the
-    // party that is in it, and only while the room has room enough.
-    //
-    // TWO DENIALS WITH DIFFERENT REACH, AND CONFLATING THEM IS THE BUG THIS CLAUSE EXISTS TO
-    // AVOID. A room held by ANOTHER party is unavailable to every party in the building, so it
-    // suppresses nothing — exactly as the plain `held` test did before this goal. A room with
-    // no room LEFT is a fact about THIS guest's party, so it sets `deniedThisGuestOnly` for the
-    // reason `reservedForItsOwnGuest` does thirty lines down: `exhausted` is recorded once per
-    // tick and read by every later guest, and arming it on a per-party fact would mark lodging
-    // exhausted for every party of one queued behind a party of two — **a guest standing in
-    // the lobby beside an empty room it could have had**, which is §6.1's literal case.
-    //
-    // AN ENGAGEMENT CLAIM IS STILL A FLAT REFUSAL. A provider serves one guest at a time, and a
-    // room somebody sleeps in is not a shared amenity — so any standing claim, of either kind,
-    // takes an entity out of the engagement search. That is `countOrphanedReservations`' shape
-    // 5, kept unrepresentable by construction rather than by a second rule.
-    // ==========================================================================
+    // Capacity rule: a room holds one party. A room held by another party is unavailable to everyone
+    // (no memo suppression). A room without enough space is a per-party fact (sets
+    // `deniedThisGuestOnly` below). Any standing claim removes an entity from the engagement search.
     const standing = search.held.get(room.id);
     if (standing !== undefined && (!forLodging || standing.partyId !== partyId)) continue;
-    // ==========================================================================
-    // AND THE FLOOR-PATIENCE RULE (G-038c, ADR-0047 B8). THE ONE PLACE B8's THIRD PART BITES.
+    // Floor reach: a guest will not lodge more than `lodgingReach` floors from the entrance. A hard
+    // filter, not a score, so the candidate order is unchanged (the lodging search must not consult
+    // fit). Lodging only; engagement distance is paid in walking time. Same for every guest, so it
+    // does not suppress the memo. `Math.abs` because a basement is as far as a penthouse.
     //
-    // A guest will not take a room more than `lodgingReach` floors from the entrance. **A HARD
-    // REFUSAL, RULED AT PLAN**, and the ruling is written out in
-    // `maxLodgingFloorsFromEntranceSchema` in `packages/content`. The short form, because the
-    // reason it is a filter and not a score is the reason it is legal to write here at all:
-    //
-    //   A PREFERENCE WOULD BE A FIT TERM, AND `reserve`'s DOCBLOCK RULES THE LODGING SEARCH DOES
-    //   NOT CONSULT FIT — "a fit term with no price term would make the most expensive suite
-    //   strictly preferred, which is the dominant-strategy shape `balance-critic` hunts" — with
-    //   `assertFitIsReadable` in `bindContent` ENFORCING it. This changes the CANDIDATE SET, not
-    //   the ORDER, which is exactly what `guestAccessTo` does three lines down. Nothing here
-    //   ranks anything, so the list stays ascending by id and "lowest id wins" keeps its one
-    //   meaning.
-    //
-    // LODGING ONLY, and that is the scope line rather than an omission: the engagement half of
-    // "how far will a guest go" is a TIME cost, paid in ticks spent walking — and at G-023b-ii
-    // those ticks began to exist. Shipped content now declares `guestCellsPerTick`, so an
-    // engaging guest pays its distance in TIME rather than in a second patience dial. **The
-    // scope line stands and its reason is discharged rather than pending**: the engagement half
-    // is priced, by the mechanism this field's sibling turns on, and this refusal is still
-    // lodging-only.
-    //
-    // IT DOES NOT SUPPRESS THE `exhausted` MEMO, AND THE SPLIT IS THE SAME ONE `closedToGuests`
-    // GETS. A room's floor and the plot's entrance are the same facts for every guest in the
-    // building, so a scan that found only out-of-reach rooms really did find nothing for
-    // anybody. Only `reservedForItsOwnGuest` is per-guest, and only it sets the flag below.
-    //
-    // `Math.abs` BECAUSE A BASEMENT IS AS FAR AS A PENTHOUSE. Floors below the entrance are
-    // negative (`Cell.floor`), and two floors down is two floors of stairs exactly as two floors
-    // up is. A signed comparison would let a designer's "3" mean an unbounded basement.
-    // ==========================================================================
-    //
-    // `isPlaced` IS A TYPE NARROWING AND NOT A CASE. An unplaced room has no floor to measure,
-    // and `computeRoomInvalidity` already answers `unplaced` for one — so it is not in
-    // `validRooms` and cannot reach this loop. Written as a guard rather than an assertion
-    // because the compiler cannot see that, and because a room with no floor is not a room a
-    // guest could be too far from.
+    // `isPlaced` is a type narrowing: unplaced rooms are never valid, so never reach here.
     if (forLodging && search.lodgingReach !== undefined && isPlaced(room)) {
       if (Math.abs(room.at.floor - search.entranceFloor) > search.lodgingReach) continue;
     }
@@ -2229,40 +1192,14 @@ function findFreeRoom(
       continue;
     }
     if (access === 'closedToGuests') continue;
-    // LAST, AFTER THE CHEAP FILTERS, because it is the only clause here that reads content — one
-    // O(log n) lookup, and only for a room that has already survived everything else. `?? 0`
-    // rather than a throw: a lodging candidate is always a room type by construction
-    // (`validRoomsProviding`), so the fallback is the postcondition of that list rather than a
-    // case, and a hand-built world that broke it would find no bed rather than crash the tick.
+    // Last, since it is the only clause that reads content. `?? 0` is unreachable for a lodging
+    // candidate; a hand-built world that broke it finds no bed rather than crashing.
     if (forLodging) {
       const capacity = findRoomType(search.input.content, room.kind)?.capacity ?? 0;
-      // ========================================================================================
-      // TWO TESTS, AND THE FIRST ONE IS THE FIX (G-040b-i). THE ROOM MUST HOLD THE WHOLE PARTY.
-      //
-      // `lodgers + 1 > capacity` alone is a PER-MEMBER fit, and a per-member fit takes a room
-      // only some of the party fits in. With a single (capacity 1) and a double (capacity 2) in
-      // one hotel — content `guest.party.save.test.ts` blesses by name, *"a hotel with singles
-      // AND doubles is a design a designer may write"* — the lower-id member of a pair takes the
-      // single and its partner takes the double: SPLIT. Put a stranger in the double first and
-      // the partner takes nothing at all, **for life**: nothing else can serve its lodging need,
-      // so its dissatisfaction fills with nothing draining it and it departs `gaveUp` while its
-      // partner sleeps. That is §6.1's first shape, and `assertPartiesCanBeHoused` cannot catch
-      // it — that refusal measures the ROOMIEST type in the content, and the hotel a player
-      // actually built is not the content.
-      //
-      // THE SECOND TEST IS KEPT AND IS NOT REDUNDANT. Party fit says the room is big enough for
-      // the party; the seat count says there is a bed free in it right now. They agree on every
-      // world the tick can produce — a member only ever joins its own party's room, and a party
-      // never has more members than its size — so this is a bound on hand-built and loaded
-      // worlds, where a room may already hold more lodgers than its type admits (content can
-      // legitimately SHRINK between saves, ADR-0068). Overfilling such a room would turn a
-      // reportable state into a growing one.
-      //
-      // BOTH SET `deniedThisGuestOnly`, because both are facts about THIS party rather than
-      // about the hotel: a full double is no answer for a pair and a perfectly good answer for
-      // the party of one queued behind it. Arming `exhausted` on either would leave that guest
-      // standing in the lobby beside a room it could have had.
-      // ========================================================================================
+      // The room must hold the whole party (`capacity < partySize`); a per-member fit would split a
+      // pair across a single and a double, or strand a member for life. The seat-count test bounds
+      // loaded worlds whose rooms already hold more lodgers than their (shrunk) type admits. Both are
+      // per-party facts, so both set `deniedThisGuestOnly`.
       if (capacity < partySize || (standing?.lodgers ?? 0) + 1 > capacity) {
         deniedThisGuestOnly = true;
         continue;
@@ -2270,21 +1207,14 @@ function findFreeRoom(
     }
     return room;
   }
-  // Allocated only when a scan actually fails, so a hotel that is never full pays nothing —
-  // the `assertGuestStoreInvariants` discipline. Lookup only: never iterated, never
-  // ordered, never hashed (I2).
+  // Allocated only when a scan fails. Lookup only; never iterated, ordered or hashed.
   if (!deniedThisGuestOnly) (search.exhausted ??= new Set<ContentId>()).add(needId);
   return null;
 }
 
 /**
- * What stands against one entity for the rest of this tick (G-040a).
- *
- * The tick-local twin of `StoreClaim`, and deliberately the same shape: `partyId` is the party
- * LODGING here or `NO_PARTY` for an engagement, and `lodgers` counts the members in the room.
- * Two types rather than one shared one because the two live in different worlds — this one is
- * mutable tick state that never escapes `stepGuests`, and that one is built inside a validator
- * that runs on every load. Merging them would tie a hot-path allocation to a load-path contract.
+ * What stands against one entity for the rest of this tick. The tick-local twin of `StoreClaim`:
+ * `partyId` is the lodging party or `NO_PARTY` for an engagement, and `lodgers` counts members.
  */
 type TickClaim = {
   readonly partyId: PartyId;
@@ -2293,130 +1223,47 @@ type TickClaim = {
 
 /**
  * The tick-local state of looking for a room: who holds what, and what has been given back.
- *
- * TICK-LOCAL AND MUTABLE, exactly like `EntityDraft` and `CommandAccumulator`. It never
- * escapes `stepGuests` and nothing here is hashed or saved.
+ * Mutable, never escapes `stepGuests`, never hashed or saved.
  */
 type RoomSearch = {
   readonly input: GuestTickInput;
-  /**
-   * How many cells a guest covers in one tick, or `undefined` for content that does not say
-   * (G-023b-i). READ ONCE PER TICK, for the reason `lodgingNeed` and `stayDuration` are: it is
-   * one array index behind two optional chains and it is the same answer for every guest.
-   */
+  /** Cells a guest covers per tick, or `undefined` if content does not say. Read once per tick. */
   readonly speed: number | undefined;
-  /**
-   * HOW MANY FLOORS FROM THE ENTRANCE A GUEST WILL GO TO REACH ITS ROOM, or `undefined` for
-   * content that sets no limit (G-038c, ADR-0047 B8). READ ONCE PER TICK, for `speed`'s reason:
-   * it is one array index behind two optional chains and it is the same answer for every guest.
-   */
+  /** Max floors from the entrance a guest will lodge, or `undefined` for no limit. Read once per tick. */
   readonly lodgingReach: number | undefined;
-  /**
-   * The floor a guest walks in on, read once per tick beside the reach it is measured against
-   * (G-038c). A total function of the plot (`entranceCell`), and the plot cannot change inside a
-   * tick — so this is the one place the pair is resolved and nothing below can reach a different
-   * entrance than the line above it.
-   *
-   * IT IS ONLY MEANINGFUL WITH `lodgingReach`, and it is computed unconditionally anyway: it is
-   * three integer comparisons on a value `placed` already asks for on every tick.
-   */
+  /** The floor a guest walks in on; the other half of the `lodgingReach` comparison. */
   readonly entranceFloor: number;
   /**
-   * THE STAIRWELL COLUMN, or `null` when this world has declared no stair (G-038a-ii-alpha).
-   *
-   * READ ONCE PER TICK, for the reason `speed`, `lodgingReach` and `entranceFloor` are: it is
-   * the same answer for every guest in the hotel and the plan cannot change inside a tick.
-   * `stairwellOf` is an ARRAY INDEX — stairs are ALIGNED, one stairwell column through the plot
-   * — so this costs one lookup per tick and NOT one scan per moving guest per tick. That is the
-   * whole reason the alignment rule exists, and the reason the router notice ADR-0056 left open
-   * is not being cashed here.
-   *
-   * `null` IS NOT A MISSING VALUE, IT IS A RULE: *no stair declared anywhere in this world =>
-   * the floor axis spends unconditionally*, which is what `stepTowards` did for every build
-   * before this one and exactly what a v20 save says. See `stairs.ts`.
+   * The stairwell column, or `null` when this world declares no stair (the floor axis then spends
+   * unconditionally). Stairs are aligned, so this is one lookup per tick, not a scan per guest.
    */
   readonly stairwell: Cell | null;
-  /**
-   * THE LIFT AS THIS TICK SEES IT, or `null` when this world has no lift (G-038b-i).
-   *
-   * BUILT ONCE PER TICK, for the reason `stairwell` is read once per tick: the declaration
-   * cannot change inside a tick and the standing line is the same line for every guest. When it
-   * is `null` — every shipped world — the whole mechanism is one comparison per moving guest.
-   *
-   * Tick-local and mutable exactly like `held` and `exhausted`: `boardLift` writes to it as the
-   * pass runs and `settleLiftQueue` reads it once at the end. Nothing in it is ever hashed.
-   */
+  /** The lift as this tick sees it, or `null`. Written by `boardLift`, read by `settleLiftQueue`. */
   readonly lift: LiftTick | null;
   /**
-   * Rooms currently held, as bedrooms OR as engagements, AND BY HOW MANY (G-040a). Lookup only:
-   * never iterated, never ordered, never hashed (I2), exactly like `EntityDraft.removed`.
-   *
-   * A COUNT RATHER THAN A FLAG, because a room holds a party and a party may have more than one
-   * member. `release` is the one place it shrinks and it decrements rather than deleting, which
-   * is what makes "one bed came free in a room that still has somebody in it" expressible — see
-   * the note there for why the exhausted memo must be re-armed on THAT event and not only on the
-   * last member leaving.
+   * Entities currently held, as bedrooms or engagements, with lodger counts. Lookup only. `release`
+   * is the only place it shrinks.
    */
   readonly held: Map<EntityId, TickClaim>;
-  /**
-   * Needs a scan has already found no free provider for, this tick. LOOKUP ONLY (I2):
-   * never iterated, never ordered, never hashed.
-   */
+  /** Needs a scan has already found no free provider for, this tick. Lookup only. */
   exhausted: Set<ContentId> | null;
-  /**
-   * The per-need tally, threaded through the tick (G-016).
-   *
-   * It lives here rather than in a `let` inside `stepGuests` because `depart` is the only
-   * thing that moves it and `depart` is no longer a closure — see the note on `depart`.
-   * Tick-local and mutable exactly like `held` and `exhausted`: it is handed back out
-   * through `GuestTickResult` and is never itself hashed or saved.
-   */
+  /** The per-need tally, threaded through the tick; moved only by `depart`. */
   needOutcomes: readonly NeedOutcome[];
-  /**
-   * The review distribution, threaded through the tick beside the need tally (G-019).
-   *
-   * Here for the reason `needOutcomes` is here: `depart` is the only thing that moves it
-   * and `depart` is not a closure. Tick-local and mutable, handed back out through
-   * `GuestTickResult`, never itself hashed until it reaches the world.
-   */
+  /** The review distribution, threaded through the tick; moved only by `depart`. */
   reviewOutcomes: readonly ReviewOutcomeRow[];
-  /**
-   * The remark feed, threaded through the tick beside the review distribution (G-066a).
-   *
-   * Here for the reason `reviewOutcomes` is here, and moved by the same one line of `depart`.
-   * Tick-local and mutable, handed back out through `GuestTickResult`, never itself hashed
-   * until it reaches the world.
-   */
+  /** The remark feed, threaded through the tick; moved only by `depart`. */
   recentRemarks: readonly RemarkRecord[];
   /**
-   * THE HOTEL'S STAR RATING AS THIS TICK SEES IT, resolved on first use (G-059).
+   * The hotel's star rating this tick, resolved lazily on first departure. `null` means "not asked
+   * yet" (0 is a legitimate `UNRATED` value).
    *
-   * `null` MEANS "NOT ASKED YET", NOT "UNRATED" — `UNRATED` is 0 and is a value this field
-   * legitimately holds. The lazy shape is the reason it is mutable rather than read once beside
-   * `speed` and `stairwell`: **the only reader is a DEPARTURE**, and a departure happens on a
-   * small fraction of ticks (469 of 43,200 at `--days 30 --rooms 24 --amenities 1`), while
-   * `starRatingIn` is an O(rooms) tally. Reading it eagerly would put that fold on every tick of
-   * every run to serve the ticks nobody leaves on — the shape `isDemandSlot` guards against one
-   * phase up, and the shape §6.1 asks `sim-critic` to watch for.
-   *
-   * IT CANNOT GO STALE INSIDE A TICK, which is what makes one resolution per tick correct rather
-   * than merely cheap: entity membership changes exactly once, at `commitEntities`, which is
-   * phase 5 — so the draft this reads is fixed for the whole of `runGuests`.
-   *
-   * IT IS THE SAME NUMBER `runDemand` READ THIS TICK, off the same `ValidityContext` through the
-   * same `starRatingIn`. So the rating that decided who turned up and the rating a departing
-   * guest scores cannot disagree about the building. Tick-local, never hashed, never saved.
+   * Lazy because only departures read it and `starRatingIn` is O(rooms). It cannot go stale within
+   * the tick (entities commit later, in phase 5), and it is the same number `runDemand` read.
    */
   hotelStanding: number | null;
 };
 
-/**
- * The hotel's star rating this tick, resolved once. See `RoomSearch.hotelStanding`.
- *
- * `starRatingIn` RATHER THAN AN INDEX INTO ANYTHING — the sim's own accessor, for the reason the
- * report gives one field over: a second way of deciding what the hotel scores is a second answer
- * that can disagree with the first.
- */
+/** The hotel's star rating this tick, resolved once. See `RoomSearch.hotelStanding`. */
 function hotelStandingOf(search: RoomSearch): number {
   const resolved = search.hotelStanding;
   if (resolved !== null) return resolved;
@@ -2426,75 +1273,36 @@ function hotelStandingOf(search: RoomSearch): number {
 }
 
 /**
- * A room goes back into the pool. THE ONE PLACE `held` SHRINKS.
+ * A room goes back into the pool. The one place `held` shrinks; every release must come through
+ * here, or `findFreeRoom`'s short-circuit could hide a free room for the rest of the tick.
  *
- * Every release must come through here, because `findFreeRoom`'s short-circuit is only
- * sound while it sees them all. A `held.delete` written anywhere else would make a room
- * invisible to every guest for the rest of the tick — a guest standing in the lobby beside
- * an empty room, which is §6.1's "correct but reads as stupid" in its literal form.
- *
- * `freed` IS THE ROOM ITSELF WHEN IT IS STILL USABLE, and `null` when the caller knows it
- * is not — gone, or no longer a valid room. That is not an optimisation detail, it is the
- * whole soundness argument in one parameter: a room that is still a valid room becomes
- * available to whatever it provides, and a room that has ceased to exist becomes available
- * to nobody. Every call site knows which case it is in, so there is no third "unknown"
- * branch to be conservative about.
+ * `freed` is the entity when it is still a usable provider, or `null` when it is gone or invalid
+ * (then it frees nothing).
  */
 function release(search: RoomSearch, id: EntityId, freed: Entity | null, content: BoundContent): void {
-  // ==========================================================================================
-  // AND IT IS SIZE-AWARE SINCE G-040a, WHICH IS TWO SEPARATE STATEMENTS.
-  //
-  //   THE CLAIM SHRINKS BY ONE, not to nothing. A capacity-2 room with two members in it and
-  //   one of them leaving is still held — by the member who stayed — so deleting the entry
-  //   would hand that bedroom to a stranger, which is the thing ADR-0055's ruling keeps
-  //   forbidden.
-  //
-  //   THE MEMO IS RE-ARMED ON EVERY DECREMENT, not only on the last one. A bed came free, and
-  //   `exhausted` says "no room with room enough for anybody" — which that bed may have just
-  //   falsified for a party of one. Un-exhausting too eagerly costs a rescan that finds
-  //   nothing; un-exhausting too late is a guest standing in the lobby beside a free bed for
-  //   the rest of the tick, which is the failure this whole function exists to prevent. The
-  //   cheap direction is the sound one, and it is the one taken.
-  // ==========================================================================================
+  // A multi-member claim shrinks by one rather than disappearing, so a stranger cannot take a room a
+  // party member still occupies. The memo is re-armed on every decrement: a rescan that finds
+  // nothing is cheap, a guest missing a free bed is the bug.
   const standing = search.held.get(id);
   if (standing !== undefined && standing.lodgers > 1) standing.lodgers -= 1;
   else search.held.delete(id);
   const exhausted = search.exhausted;
   if (exhausted === null || freed === null) return;
-  // Un-exhaust exactly what this provider can serve. `providesOf` answers for a room type
-  // OR an item type (G-013) — it was `findRoomType(...).provides`, which silently answered
-  // `[]` for every item and would have left a freed vending machine invisible to every
-  // guest for the rest of the tick. `provides` is a short frozen list, so this is a content
-  // lookup and a couple of deletes.
+  // Un-exhaust exactly what this provider serves (`providesOf` handles both room and item types).
   for (const needId of providesOf(content, freed.kind)) exhausted.delete(needId);
 }
 
 /**
- * A guest leaves. THE ONE PLACE both reservations are given back and needs are counted.
+ * A guest leaves. The one place both reservations are given back, needs are tallied and the
+ * review and remark are recorded — every departure branch comes through here, so "every guest
+ * that leaves leaves a review" is structural.
  *
- * The two entities are passed in rather than looked up, because only the caller knows
- * whether each is still a usable room — see `release`.
+ * The two entities are passed in because only the caller knows whether each is still usable (see
+ * `release`). `reason` is passed rather than re-derived, so there is one answer to why the stay
+ * ended.
  *
- * A TOP-LEVEL FUNCTION RATHER THAN A CLOSURE INSIDE `stepGuests`, AND IT IS THE LARGEST
- * SINGLE SAVING G-016 FOUND: **9.5% of the 365-day bench**, 6,914ms -> 6,260ms, paired and
- * interleaved against the unchanged build in the same minutes, with the state hash unmoved.
- *
- * WHY IT COSTS ANYTHING AT ALL — STATED AS A HYPOTHESIS, BECAUSE IT WAS NOT ISOLATED. It was
- * a closure capturing five mutable locals (`needOutcomes`, `search`, `content` and the
- * counters), and a closure over mutable locals makes V8 heap-allocate a context object for
- * the enclosing function, so every read of every local in the hottest loop here becomes a
- * context slot load. Under `tsx` (esbuild with `keepNames`) it also cost one
- * `Object.defineProperty` per tick. Both are plausible and neither was measured on its own;
- * what IS measured is the 9.5% above. Do not repeat the mechanism as though it were the
- * finding.
- *
- * AND A WARNING ABOUT HOW THIS NUMBER WAS NEARLY GOT WRONG, WHICH IS WORTH MORE THAN THE
- * NUMBER. The first measurement of this change said 14%, and a sibling change said 34%; both
- * were inflated, because the machine drifted nearly 2x FASTER across the session and each
- * arm had been timed against a baseline captured at a different moment. The same G-012 build
- * measured 3,087ms and later 1,740ms on the identical workload. ONLY PAIRED, INTERLEAVED
- * MEASUREMENTS TAKEN IN THE SAME MINUTES MEAN ANYTHING HERE — PARKING.md has now recorded
- * that lesson three times, and this is the goal that learned it the expensive way.
+ * Top-level rather than a closure inside `stepGuests`: the closure version was measurably slower
+ * on the 365-day bench.
  */
 function depart(
   search: RoomSearch,
@@ -2507,92 +1315,22 @@ function depart(
 ): void {
   if (guest.roomEntityId !== NO_ENTITY) release(search, guest.roomEntityId, lodgingRoom, content);
   if (guest.engagement !== null) release(search, guest.engagement.entityId, engagedRoom, content);
-  // HOW LONG THERE WAS TO FAIL THIS GUEST IN — the denominator of `unservedTicks` (G-028a).
-  //
-  // IT IS AT LEAST 1 AND THAT IS STRUCTURAL, not an assumption: arrivals are appended AFTER the
-  // loop over existing guests, so a guest created on tick t is not stepped until t + 1 and
-  // cannot reach any departure branch before then. The report divides by this.
-  //
-  // FOR THE EVICTION BRANCH IT COUNTS ONE TICK THE ACCUMULATOR DID NOT RUN ON, said rather than
-  // discovered: step 3 evicts before step 4 accumulates, so an evicted guest's denominator
-  // includes the tick it was evicted on and its numerator does not. The bound stays true in the
-  // direction that matters (`unservedTicks <= instanceTicks`) and the share is understated by at
-  // most one tick of a stay for that one branch. The alternative — a second definition of "how
-  // long was this guest here" that varies by exit path — is the thing `reason` is a parameter to
-  // avoid (see below).
+  // The denominator of `unservedTicks`. At least 1: arrivals are appended after the loop over
+  // existing guests, so a guest is first stepped the tick after it arrives. For evictions (step 3,
+  // before step 4 accumulates) it includes one tick the numerator did not count.
   const stayTicks = tick - guest.arrivedTick;
-  // ONE DERIVATION SITE FOR THE BAND COUNT (G-028b). `met` and the review are the same per-need
-  // band under ADR-0037, so they must be quantised on the same number: a build where they could
-  // disagree is a build where `report.ts`'s review law A compares two different questions and
-  // exits 1 on a correct run.
-  //
-  // THIS COMMENT SAID "ONE SCALE, READ ONCE, HANDED TO BOTH READERS" UNTIL SWEEP 2 AND THE CODE
-  // DOES NOT DO THAT. The line below reads the scale for `bands`, and `reviewOf` reads it again
-  // for `min` — the two lookups the sentence claimed to prevent, in the diff that claimed it.
-  // **What is true is that `reviewScaleOf` is the only place `bands` is derived from content
-  // anywhere**, and it is a pure function of content, so the number cannot differ between them.
-  // `review.boundary.test.ts` fences every export of `reviews.ts` to six named files — **and what that scan does and does not
-  // hold is worth being exact about, because the first version of this comment over-reached.**
-  // It fences every NAME `reviews.ts` exports to six files and asserts the set is exactly those
-  // six — so a seventh FILE calling `reviewScaleOf` turns it red. It does NOT see a `bands`
-  // spelled from `reviewScoreMax - reviewScoreMin + 1` against raw content fields: that names no
-  // export, returns zero hits from the shipped predicate, and is invisible to the fence in any
-  // file including the six allowed. **What is mechanically held is the SET OF FILES; what keeps
-  // the number single inside them is that `reviewScaleOf` is the only function that derives it
-  // and review is a leaf module with nothing else to reach for.**
-  // `undefined` is content
-  // that declares no review scale — the historical case, which leaves no review at all and keeps
-  // the era's own definition of `met` (`metAtDeparture`).
+  // `met` and the review use the same band count, derived only by `reviewScaleOf`. `undefined` is
+  // content with no review scale: no review, and the want-line definition of `met`.
   const bands = reviewScaleOf(content)?.bands;
   search.needOutcomes = recordNeedsAtDeparture(content, search.needOutcomes, guest.needs, stayTicks, bands);
-  // THE REVIEW, AND IT IS RECORDED HERE FOR THE REASON THE RESERVATIONS ARE RELEASED HERE
-  // (G-019). This is the ONE exit path — EVERY departure branch in `stepGuests` goes through
-  // it, the eviction in step 3 and the rest in step 6 — so "every guest that leaves leaves a
-  // review" is structural rather than a rule each call site has to remember. It is the same
-  // argument G-012 makes for the reservation release and G-015 makes for the outcome row, and
-  // it is why the report can assert `Σ reviews === departed` exactly rather than approximately.
-  //
-  // THE COUNT IS DELIBERATELY NOT SPELLED, and this sentence is why. It read "all FOUR departure
-  // branches … three of them in step 6" and later "a rule three call sites have to remember" —
-  // three numbers, none of them checked by anything, and θ-b2 added the branch that made all
-  // three wrong at once (there are five call sites, four of them in step 6). It survived a
-  // published enumeration of the row-count claim class **that reported 11 sites driven to zero**,
-  // because a grep for the word "six" cannot find the word "FOUR". *Enumerating a list is not
-  // enumerating a class* (ADR-0027) — and the durable repair is the one `addDepartures` and the
-  // conservation-law docstring already took: say "every", and let the reader count.
-  //
-  // `reason` IS TAKEN AS A PARAMETER RATHER THAN INFERRED FROM THE GUEST. Every caller
-  // already knows it — it is the counter it is about to increment — and re-deriving it
-  // here would be a second answer to "why did this stay end" that could disagree with the
-  // one the table records. `lodgingLost` in step 3 is the same discipline one goal older.
-  //
-  // `undefined` under content that declares no review scale, in which case nothing is
-  // recorded and the distribution stays empty — the historical case, not a failure.
-  //
-  // IT TAKES THE STAY LENGTH AGAIN AT G-028b, AND NOT THE TWO TICKS. G-027a removed both with
-  // the argument that *"the guest's arrival and departure ticks say nothing about its
-  // experience"* — true of a WAIT, which is what that era was computing from them, and false of
-  // the window an integral is taken over. What crosses now is `stayTicks`, the same local the
-  // tally above divides by, so the review and the tally are shares of one denominator. The
-  // clock-reading the old sentence was guarding against is still forbidden: this function gets a
-  // duration, never a tick.
-  // THE HOTEL AS IT STANDS AT THIS DEPARTURE (G-059). Resolved lazily, once per tick — and it is
-  // read AFTER the cut-short test costs nothing, because `reviewOf` needs it either way and the
-  // memo makes the second departure of a tick free. `reviews.ts` carries the ruling this
-  // implements and the defence of at-departure over at-arrival.
+  // The review. `reviewOf` takes a duration (`stayTicks`), never a tick, and the hotel's rating as
+  // it stands at this departure. `undefined` under content with no review scale: nothing recorded.
   const score = reviewOf(content, guest.needs, isCutShort(reason), stayTicks, hotelStandingOf(search));
   if (score === undefined) return;
   search.reviewOutcomes = recordReview(search.reviewOutcomes, score);
-  // AND WHAT IT SAID, AS THE FOUR VALUES A LINE IS MADE FROM (G-066a). Behind the SAME
-  // `score !== undefined` guard as the histogram above and one line below it, so the feed and
-  // the distribution move together or not at all: a departure that leaves no review leaves no
-  // remark either, and `assertRecentRemarks` states that as a law rather than trusting this
-  // comment. THE SCORE IS THE ONE ALREADY COMPUTED, never a second call — `remarkRecordOf`
-  // takes it rather than deriving it, which is why the two records cannot disagree.
-  //
-  // NO SENTENCE IS RENDERED HERE AND NONE CAN BE: rendering needs a `RemarkBook`, and the remark
-  // table is deliberately not injected content, so no `BoundContent` in this simulation carries
-  // one. That is the design rather than a limitation — see `reviews.ts`.
+  // The remark record, behind the same guard as the review so the feed and the histogram move
+  // together. It stores the score just computed; no sentence is rendered here (no `RemarkBook` is
+  // reachable from content — see `reviews.ts`).
   const record = remarkRecordOf(guest.needs, score, guest.id);
   if (record !== undefined) search.recentRemarks = recordRemark(search.recentRemarks, record);
 }
@@ -2600,57 +1338,41 @@ function depart(
 /**
  * One tick of the guest loop. Pure: same input, same output, on every machine.
  *
- * ORDER OF SERVICE, and why it is what it is:
+ * Order of service:
  *
- *   Guests are visited in ASCENDING GUEST ID, which is arrival order, so the guest who
- *   has waited longest is served first. Two guests who want the same room are settled
- *   by the lower id — a stable, explicit rule, never the order a Set happened to
- *   iterate in (I2). It is also the only rule that does not read as stupid to somebody
- *   watching a queue.
+ *   Guests are visited in ascending guest id (arrival order), so the guest who has waited
+ *   longest is served first and two guests wanting the same room are settled by the lower id.
  *
- *   Arrivals are processed AFTER everyone already here, so a guest who walks in this
- *   tick cannot take a room from someone who has been waiting since last tick. Once
- *   past the existing queue they try to reserve immediately, so a guest walking into an
- *   empty hotel starts its stay at once rather than standing in the lobby for a minute.
+ *   Arrivals are processed after everyone already here, so a newcomer cannot take a room from
+ *   someone who has been waiting; they then try to reserve immediately.
  *
- *   Within one guest: DECAY FIRST, then departure, then reservations. So a guest reserves
- *   on the tick it arrives but is not served on it — check-in is not a night's sleep —
- *   which is exactly the timing G-004 shipped, now applied to every need rather than one.
+ *   Within one guest: decay first, then departure, then reservations. So a guest reserves on the
+ *   tick it arrives but is not served on it.
  *
- * COMMITMENT IS TOTAL FOR THE LODGING ROOM AND CONDITIONAL FOR THE ENGAGEMENT (G-014b). A
- * guest that holds a room never re-evaluates — the room IS the stay, and there is no
- * per-tick score for it to oscillate on. A guest that is engaged now re-scores its other
- * pending needs every tick, and abandons the engagement only when one of them beats it by
- * the content-defined margin AND has a free provider. The thrashing §6.1 hunts for stopped
- * being unexpressible at this goal, and the margin is what keeps it rare; `abandoned` in the
- * need tally is the witness, because I2 cannot be one (a scorer that thrashes identically
- * every run hashes identically every run).
+ * Commitment is total for the lodging room and conditional for the engagement: an engaged guest
+ * re-scores its other needs every tick and abandons only when one beats it by the content-defined
+ * margin and has a free provider. `abandoned` in the need tally is the witness for thrashing,
+ * since I2 cannot detect deterministic thrash.
  */
 export function stepGuests(input: GuestTickInput): GuestTickResult {
   const { tick, guests, outcomes, content, arrivingParties } = input;
 
-  // O(1) idle tick. An empty hotel costs nothing, which is what keeps a 365-day run
-  // inside the I5 budget while it waits for the interesting part.
+  // O(1) idle tick: an empty hotel costs nothing.
   if (guests.list.length === 0 && arrivingParties === 0) {
     return {
       guests,
       outcomes,
       needOutcomes: input.needOutcomes,
       reviewOutcomes: input.reviewOutcomes,
-      // BY REFERENCE, for `reviewOutcomes`'s reason: an empty hotel has nobody to depart, so
-      // nobody says anything and the ring is the one it was handed (G-066a).
       recentRemarks: input.recentRemarks,
       ledger: input.ledger,
-      // BY REFERENCE. An empty hotel has nobody in the line, so there is nothing to settle and
-      // nothing to allocate — the O(1) idle tick this branch exists for.
+      // By reference: nobody is in the line, so there is nothing to settle.
       liftQueue: input.liftQueue,
     };
   }
 
-  // ONE FORWARD PASS OVER `guests.list`, WHICH IS ASCENDING BY CONSTRUCTION (I2). A party is
-  // resolved by accumulating into a lookup structure that is never iterated — there is no
-  // `Map<PartyId, GuestId[]>` here and there must never be one, because iterating it would make
-  // the tick's answer depend on insertion order.
+  // One forward pass over `guests.list` (ascending). Parties are resolved by accumulating into a
+  // lookup that is never iterated; iterating one would make the answer depend on insertion order.
   const held = new Map<EntityId, TickClaim>();
   for (const guest of guests.list) {
     if (guest.roomEntityId !== NO_ENTITY) {
@@ -2658,70 +1380,43 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       if (standing === undefined) held.set(guest.roomEntityId, { partyId: guest.partyId, lodgers: 1 });
       else standing.lodgers += 1;
     }
-    // NOT A COUNT, DELIBERATELY: a provider serves one guest at a time, so a second engagement
-    // claim on one entity is a world `assertGuestStoreInvariants` already refused to load.
+    // Not a count: a provider serves one guest at a time.
     if (guest.engagement !== null) held.set(guest.engagement.entityId, { partyId: NO_PARTY, lodgers: 0 });
   }
   const search: RoomSearch = {
     input,
     held,
     speed: guestSpeedOf(content),
-    // THE FLOOR-PATIENCE PAIR (G-038c), read here for the reason `speed` is: one lookup per tick
-    // rather than one per guest per candidate room. `undefined` is not a missing value, it is
-    // "a guest will climb anything" — see `maxLodgingFloorsFromEntranceOf`.
+    // Read once per tick rather than per guest per candidate room. `undefined` means no floor limit.
     lodgingReach: maxLodgingFloorsFromEntranceOf(content),
     entranceFloor: entranceCell(input.entities.bounds).floor,
-    // THE STAIRWELL (G-038a-ii-alpha), read here for `speed`'s reason: one array index per tick
-    // rather than one per moving guest. O(1) only because stairs are aligned.
+    // One array index per tick; O(1) only because stairs are aligned.
     stairwell: stairwellOf(input.validity.stairs),
-    // THE LIFT (G-038b-i), read here for `stairwell`'s reason: one pass over the standing line
-    // per tick rather than one per climbing guest. `null` — every shipped world — costs one
-    // comparison and allocates nothing at all.
+    // One pass over the standing line per tick. `null` (no lift) allocates nothing.
     lift: beginLiftTick(input.lift, input.liftQueue),
     exhausted: null,
     needOutcomes: input.needOutcomes,
     reviewOutcomes: input.reviewOutcomes,
     recentRemarks: input.recentRemarks,
-    // NOT READ HERE, DELIBERATELY — unlike every field above it. `hotelStandingOf` resolves it on
-    // the first departure of the tick and most ticks have none. See the field's own note.
+    // Resolved lazily by `hotelStandingOf` on the tick's first departure.
     hotelStanding: null,
   };
   const lodgingNeed = lodgingNeedOf(content);
-  // READ ONCE PER TICK, NOT ONCE PER GUEST (G-027a). It is one array index behind two
-  // optional chains, and it is the same answer for every guest in the hotel — the
-  // `lodgingNeed` line above is here for the same reason. Per-archetype durations are M6's,
-  // and the day they land this becomes a per-guest lookup rather than a per-tick one; saying
-  // so here is cheaper than discovering that this hoist was load-bearing.
+  // Content values below are read once per tick: the same answer for every guest.
   const stayDuration = stayDurationOf(content);
-  // READ ONCE PER TICK, for the reason `stayDuration` is, and it is the twin of that field: how
-  // long a guest that booked NO room is here (θ-b2). Per-archetype durations are M6's, and the
-  // day they land BOTH become per-guest lookups together.
   const visitDuration = visitDurationOf(content);
-  // READ ONCE PER TICK, for the reason `lodgingNeed` and `stayDuration` are: each is one array
-  // index behind two optional chains and each is the same answer for every guest in the hotel.
-  // Per-archetype want lines and tolerances are M6's, and the day they land these become
-  // per-guest lookups rather than per-tick ones.
   const wantAt = wantAtOf(content);
   const tolerance = toleranceOf(content);
-  // READ ONCE PER TICK, for the reason the four above are. `undefined` here is content that
-  // predates θ-b1, and it turns the whole mechanism off — the loop below asks this ONE question
-  // before it does any per-need work, so such content pays nothing at all for a rule it does not
-  // have. Per-archetype tempers are M6's, and the day they land these become per-guest lookups.
+  // `undefined` capacity means content without a dissatisfaction stock: the mechanism is off.
   const dissatisfactionCapacity = dissatisfactionCapacityOf(content);
   const dissatisfactionRelief = dissatisfactionReliefOf(content);
-  // ALLOCATED ONCE PER TICK, for the reason the six above are read once (G-032b). Step 4's walk
-  // over a guest's needs answers two questions — the per-need count and the one-bit mood — and
-  // this is where it puts the second one. Written and read inside one guest's step, never across
-  // guests and never across ticks, so it is scratch space rather than state: nothing hashes it
-  // (I2) and no iteration order can reach it. A returned pair would allocate per guest per tick,
-  // which is the shape G-010 spent a goal removing.
+  // Scratch holder for step 4's second answer, allocated once per tick; never crosses guests or
+  // ticks, so it is not state.
   const unservedWalk: UnservedWalk = { letDown: false };
 
   const next: Guest[] = [];
   let ledger = input.ledger;
-  // ONE LOCAL PER REASON, WRITTEN OUT rather than an array indexed by ordinal: the table is
-  // rebuilt once at the end of the tick instead of once per departure, and a tick with no
-  // departures allocates nothing at all (see `addDepartures`).
+  // One local per reason, folded into the table once at the end of the tick (see `addDepartures`).
   let checkedOut = 0;
   let visitEnded = 0;
   let gaveUp = 0;
@@ -2732,45 +1427,23 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
 
   for (const existing of guests.list) {
     let guest = existing;
-    // The two rooms this guest holds, as they stand THIS tick: the entity when it is still
-    // a valid room, null when it is not. Every release below reads them, so "is this room
-    // still usable" is answered once per guest per tick rather than at each release site.
+    // The two things this guest holds, as they stand this tick: the entity when still usable, null
+    // when not. Every release below reads them.
     let lodgingRoom: Entity | null = null;
     let engagedRoom: Entity | null = null;
     /**
-     * Why the lodging room stopped serving this guest, or `null` while it still does.
-     *
-     * THE CAUSE IS KEPT FROM THE BRANCH THAT ALREADY KNEW IT (G-015). Step 1 below has to
-     * distinguish "the entity is gone" from "the entity is there and is not a valid room"
-     * in order to answer the question at all; before this goal it threw that distinction
-     * away and step 3 recorded one undifferentiated `evicted`. Asking again later would be
-     * a second lookup that could disagree with the first.
+     * Why the lodging room stopped serving this guest, or `null` while it still does. Kept from the
+     * branch that already distinguished the two causes, rather than asked again later.
      */
     let lodgingLost: TickDepartureReason | null = null;
 
-    // 1. IS EACH THING IT HOLDS STILL SERVING IT? Both questions are asked BEFORE
-    //    either is acted on, and that ordering is load-bearing rather than tidy.
+    // 1. Is each thing it holds still serving it? Both questions are asked before either is acted
+    //    on: `release` only un-exhausts needs for a provider that is still usable, so departing before
+    //    resolving the engagement would free a working café while leaving its need marked unavailable.
     //
-    //    A guest evicted mid-meal gives its CAFÉ back, and the café is usually still a
-    //    perfectly good café. `release` un-exhausts the needs of a provider that is still
-    //    usable and nothing when it is not (see `release`), so departing without having
-    //    resolved the provider first would free the café while leaving its need marked
-    //    "nothing available" for the rest of the tick — a guest standing in the lobby
-    //    beside an empty table, which is §6.1's "correct but reads as stupid" in the
-    //    literal form G-010 spent a critique round on.
-    //
-    //    TWO PREDICATES, NOT ONE (G-013). The lodging room must be a VALID ROOM. The
-    //    engagement must be PROVIDING, which for an item means its own room is valid —
-    //    and asking `isValidRoom` of an arm chair would throw rather than answer. That
-    //    single substitution is where all three of the new release causes arrive:
-    //    the host room was demolished (the item went with it, so `draftGet` is undefined),
-    //    the host room stopped being valid (the item stands but serves nobody), or the
-    //    item itself was despawned. One site, three causes, no fourth branch.
-    //
-    //    THE TWO EVICTION CAUSES ARE THIS BRANCH AND THERE IS NO THIRD (G-015). A room
-    //    either left the draft or is still standing and no longer counts as a room; the
-    //    reason recorded downstream is whichever of those two the lookup found, so no
-    //    departure can be filed under a cause nothing observed.
+    //    The lodging room must be a valid room; the engagement must be providing (for an item, its
+    //    host room is valid — `isValidRoom` would throw on an item). The two eviction causes come
+    //    from this lookup and nowhere else.
     if (guest.roomEntityId !== NO_ENTITY) {
       const room = draftGet(input.entities, guest.roomEntityId);
       if (room === undefined) lodgingLost = 'evictedRoomGone';
@@ -2782,50 +1455,19 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       if (provider !== undefined && isProviding(input.validity, provider)) engagedRoom = provider;
     }
 
-    // 2. THE PROVIDER STOPPED BEING A PROVIDER: the engagement is released, the need stays
-    //    pending, AND ITS PROGRESS IS RETAINED — a guest interrupted halfway through
-    //    dinner has had half a dinner (ruled at seeding). Losing an amenity does not end a
-    //    stay, which is the whole difference between the two reservations.
+    // 2. The provider stopped providing: release the engagement. The need keeps its progress, and
+    //    losing an amenity does not end the stay.
     if (guest.engagement !== null && engagedRoom === null) {
       release(search, guest.engagement.entityId, null, content);
       guest = { ...guest, engagement: null };
     }
 
-    // 3. THE LODGING ROOM STOPPED BEING A ROOM: gone, or no longer valid — the storey below
-    //    was demolished, or something was built against its only free side. Both are the
-    //    same event from the guest's point of view: the thing it was paying for is gone.
-    //    The stay ends VISIBLY, with an outcome recorded, rather than the guest carrying on
-    //    in a room that is not there — the silent-fallback failure §6.1 names for
-    //    pathfinding, which has exactly the same shape here.
+    // 3. The lodging room is gone or no longer valid: the stay ends visibly as an eviction, with the
+    //    cause recorded.
     //
-    //    WHICH of the two it was is recorded rather than flattened (G-015). "Somebody
-    //    knocked your room down" and "your room is still there and stopped working" are
-    //    different events to a player, and a single `evicted` counter could not tell them
-    //    apart — WATCH #1's whole method is looking at a run and asking what happened.
-    // AND THE EVICTED GUEST'S NUMERATOR IS ONE TICK SHORTER THAN ITS DENOMINATOR (G-028b).
-    // This branch departs at step 3; `accumulateUnservedTicks` runs at step 4c, so an evicted
-    // guest is never counted on the tick it is evicted on while `stayTicks` includes it.
-    // `depart`'s own note has said so since G-028a in the direction that mattered then — the
-    // bound `unservedTicks <= instanceTicks` stays true — and G-028b makes the share LOAD-BEARING
-    // rather than reported, so it is worth saying what it costs: an evicted guest's bands are
-    // computed over a window one tick longer than the one its counters ran in, which understates
-    // its neglect by at most one tick of a stay. **Two docblocks call the review and the tally
-    // "shares of the same denominator" and that is exactly true of both** — `stayTicks` is
-    // computed once, a few lines into `depart`, and the identical local goes to both readers.
-    // What differs is the NUMERATOR's window, and only for this one exit path.
-    //
-    // AND IT IS DISCHARGED FOR ONE OF THE TWO READERS, NOT BOTH, WHICH IS THE HALF THE FIRST
-    // VERSION OF THIS COMMENT MISSED. `reviewOf` floors on `cutShort`, so the mismatched
-    // numerator cannot reach an evicted guest's SCORE — it is the scale's minimum whatever the
-    // bands say. **`recordNeedsAtDeparture` takes no `cutShort`**, so `metAtDeparture` computes
-    // the band from that numerator and nothing floors it: an evicted guest's tally row is
-    // decided by a count that ran one tick short of the window it is divided by.
-    //
-    // THE COST IS BOUNDED AND CONSERVATIVE, WHICH IS WHY IT IS A COST STATEMENT AND NOT A
-    // DEFECT. One tick of a stay understates neglect, so a row can only be counted MET where a
-    // matched window might have counted it unmet — and `report.ts`'s review law A compares top
-    // reviews against the LEAST-met row, so a `met` that is too high only ever loosens the law.
-    // It cannot make a correct run exit 1, and it cannot hide a scorer that reads one need.
+    //    An evicted guest's `unservedTicks` window is one tick shorter than `stayTicks` (step 4 has
+    //    not run). The review floors evictions anyway; the tally row may count `met` slightly
+    //    generously, which only loosens review law A.
     if (lodgingLost !== null) {
       depart(search, content, guest, null, engagedRoom, lodgingLost, tick);
       if (lodgingLost === 'evictedRoomGone') evictedRoomGone += 1;
@@ -2833,68 +1475,22 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       continue;
     }
 
-    // 4. DECAY. Every need that decays this tick falls one further below full, except the
-    //    ones something is serving, which are refilled by `refillPerTick`. The lodging room
-    //    serves the lodging need for as long as the guest holds it; the engagement serves
-    //    exactly one other. See `needs.ts` for the closed form.
-    //    (It read "loses a tick of patience … gain a tick of progress and a tick of relief"
-    //    until θ-a sweep 3 — three of ADR-0017's deleted nouns in one sentence, directly above
-    //    the call that implements the model that deleted them.)
-    //    AND WHO DELIVERED IT IS RECORDED ON THE TICK IT COMPLETES (G-013), because
-    //    nothing remembers afterwards: step 5 releases the provider the moment the need
-    //    resolves. The lodging room is a room by construction; the engagement is whatever
-    //    the guest walked to. `engagedRoom` is the entity when it is still providing, so
-    //    the kind is read from the thing itself rather than from the reservation.
-    // ========================================================================
-    // REST REQUIRES PRESENCE, AND PRESENCE IS `HOLDS A ROOM AND IS NOT ENGAGED` (ADR-0017 §3).
+    // 4. Decay. Each need decays one tick unless something serves it (then it refills). Who served
+    //    it is recorded now, because step 5 may release the provider this tick.
     //
-    // Until this goal the lodging need was served on every tick the guest HELD a room, so a
-    // guest asleep in the basement café was also, to the simulation, asleep in its bed. G-023a
-    // made that visible and parked it verbatim: *"Rest is served by holding a room, not by
-    // standing in it… ADR-0017 is what fixes it."* This line is that fix, and the parked
-    // observation is discharged here.
-    //
-    // WHY THE PREDICATE IS THE ENGAGEMENT AND NOT A POSITION COMPARISON. `standingCell` puts an
-    // unengaged room-holder in its own room and an engaged guest at its provider, so
-    // `engagement === null` IS "at home" exactly, with no second lookup and nothing to disagree
-    // with. G-023b gives a guest a position independent of what it holds — in transit it is at
-    // neither end — and on that day this becomes a cell comparison. Saying so here is cheaper
-    // than discovering that this line was the definition of presence.
-    //
-    // `away` IS THE SAME FACT SEEN FROM THE OTHER SIDE and it is what makes activity cost rest:
-    // the lodging need decays only while it is true. One derivation, two uses, no chance of the
-    // serving rule and the decay rule disagreeing about where the guest is.
-    // ========================================================================
-    // PRESENCE IS A CELL COMPARISON NOW (G-023b-i), AND THE BLOCK ABOVE PREDICTED IT WOULD BE:
-    // *"G-023b gives a guest a position independent of what it holds — in transit it is at
-    // neither end — and on that day this becomes a cell comparison."* This is that day.
-    //
-    // **WITHOUT THIS, THE WHOLE GOAL IS VACUOUS.** Holding a room and standing in it were the
-    // same fact while `placed()` teleported. Now a guest can hold a room it is still walking to,
-    // and if serving were still decided by what it HOLDS, travel would cost exactly nothing —
-    // the guest would be resting in its bed from the corridor. `arrivedAt` is the one predicate,
-    // used for the bed and for the amenity, so the two cannot disagree about where the guest is.
-    //
-    // AN UNPLACED HOST COUNTS AS ARRIVED, which is not a special case for travel but the
-    // pre-existing rule kept: `standingCell` already falls through an unplaced entity, so a
-    // guest cannot walk to a room that is nowhere and would otherwise never be served at all.
-    // CONTENT THAT DECLARES NO SPEED IS ALWAYS ARRIVED, AND THAT IS THE PROMISE THE SCHEMA
-    // MAKES RATHER THAN A CONVENIENCE. `guestCellsPerTick` absent means arriving is
-    // instantaneous, so under such content a guest IS wherever it is going, and gating serving
-    // on a cell comparison would change outcomes for content that says nothing about travel.
-    // Found by the suite: three tests build a world by hand in which a guest already holds a
-    // provider it never walked to, and they went red. The right reading of that is not "stale
-    // fixtures" — it is that a build with no travel must behave as it always did, to the byte.
+    //    Rest requires presence: the lodging need is served only when the guest holds a room, is not
+    //    engaged, and has actually arrived at it (`hasArrivedAt`); the engaged need likewise only once
+    //    the guest is at the provider. `!atHome` is the `away` flag that makes the lodging need decay.
+    //    Content with no guest speed counts as always arrived (travel is instantaneous), as does an
+    //    unplaced host.
     const atHome =
       guest.roomEntityId !== NO_ENTITY && guest.engagement === null && hasArrivedAt(search.speed, guest.at, lodgingRoom);
     const servedByRoom = atHome ? lodgingNeed?.id ?? null : null;
     const atAmenity = guest.engagement !== null && hasArrivedAt(search.speed, guest.at, engagedRoom);
     const engagedKind: ProviderKind =
       engagedRoom !== null && !isRoomKind(content, engagedRoom.kind) ? 'item' : 'room';
-    // THE ENGAGED NEED IS SERVED ONLY ONCE THE GUEST HAS ARRIVED, for the same reason the bed
-    // is: a guest walking to the cafe is not eating. `servedEngagement` is derived ONCE and used
-    // by the decay, the mood and the measurement, so all three answer "what is this hotel doing
-    // for this guest right now" identically.
+    // Derived once and used by decay, mood and measurement, so all three agree on what is being
+    // served right now.
     const servedEngagement = atAmenity ? guest.engagement?.needId ?? null : null;
     const needs = advanceNeeds(
       content,
@@ -2907,43 +1503,20 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     );
     if (needs !== guest.needs) guest = { ...guest, needs };
 
-    // ========================================================================
-    // 4b. THE DISSATISFACTION STOCK (θ-b1, ADR-0017 4(b), ADR-0026).
+    // 4b. Dissatisfaction stock:
     //
-    //     +1                on a tick the guest wants something nothing is serving
-    //     -relief           on a tick it wants nothing it is not getting
+    //     +1        on a tick the guest wants something nothing is serving
+    //     -relief   on a tick it wants nothing it is not getting
     //     clamped into [0, dissatisfactionCapacityTicks]
     //
-    // IT READS THE FACTS STEP 4 WAS GIVEN, not a second lookup: the same `servedByRoom` and the
-    // same engagement. One derivation, two uses — the discipline `atHome`/`away` above follows,
-    // and the reason "being served" cannot mean one thing to the decay and another to the mood.
+    //    Reads the same served facts as step 4. It drains, never resets.
     //
-    // IT IS HERE AND NOT AFTER STEP 5, and the difference is one tick at an engagement boundary
-    // in a case that cannot occur: step 5 releases an engagement only when its need reaches
-    // FULL, and a full need is not wanted, so both readings agree. Placed beside the decay
-    // because that is where the facts are, not because the answer differs.
-    //
-    // NOTHING RESETS IT. `starvedTicks` — the rejected design — was zeroed the moment anything
-    // served the guest, which is what made it a saturation detector rather than a stock
-    // (ADR-0026). The drain is a rate, and it is the only way this number falls.
-    // ========================================================================
-    // THE ONE NEED THE GUEST HAS CHOSEN TO LEAVE BEHIND (ADR-0026 as amended). A guest that
-    // HOLDS a room excuses its lodging need: at home that need is being served and is skipped
-    // anyway, and away it is decaying because the guest went out to eat — which is ADR-0017
-    // §2 working exactly as designed, and not something the hotel is doing to it. A guest
-    // holding NO room excuses nothing: not giving it a bed is precisely the hotel's failure.
-    //
-    // HOISTED OUT OF THE STOCK'S BRANCH AT G-028a, because two things read it now and only one
-    // of them is optional. Its value is unchanged and so is every guest's mood.
+    //    A guest holding a room excuses its lodging need (being out is its choice); a guest with no
+    //    room excuses nothing.
     const excused = guest.roomEntityId !== NO_ENTITY ? lodgingNeed?.id ?? null : null;
     const engagedNeedId = servedEngagement;
 
-    // THE WALK, ONCE (G-032b). It counts 4c's per-need ticks and reports 4b's one-bit mood
-    // through `unservedWalk`, from a single pass over the vector. The two used to be separate
-    // walks over the same array with the same predicate and the same arguments; G-028a declined
-    // the merge deliberately and parked what declining it cost, and this is the goal that owns
-    // the tick-cost re-take. The measurement moved UP here, above the mood, so that the mood can
-    // read it — the code below is the same arithmetic on the same boolean.
+    // One walk counts per-need `unservedTicks` and reports the one-bit mood through `unservedWalk`.
     const measured = accumulateUnservedTicks(
       content,
       guest.needs,
@@ -2957,52 +1530,26 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
 
     if (dissatisfactionCapacity !== undefined) {
       const letDown = unservedWalk.letDown;
-      // `?? 1` is unreachable through `bindContent`, which refuses half a stock
-      // (`cloneDissatisfaction`); it is the fill rate, which is 1 by definition, so a raw host
-      // that somehow got past that reads as "recovers exactly as fast as it is let down".
+      // `?? 1` is unreachable: `bindContent` refuses half a stock.
       const relief = dissatisfactionRelief ?? 1;
       const carried = letDown
         ? Math.min(dissatisfactionCapacity, guest.dissatisfaction + 1)
         : Math.max(0, guest.dissatisfaction - relief);
-      // IDENTITY-RETURNING AT BOTH ENDS, the `advanceNeed` property one field over: a contented
-      // guest sitting at 0 and a saturated guest sitting at the ceiling both allocate nothing.
+      // Identity-returning at both ends (0 and the ceiling).
       if (carried !== guest.dissatisfaction) guest = { ...guest, dissatisfaction: carried };
     }
 
-    // ========================================================================
-    // 4c. WAS 4c. THE WALK ABOVE IS BOTH, AND THE DISTINCTION IT DREW STILL HOLDS (G-032b).
-    //
-    // `letDown` is a MOOD: one bit for the whole guest, drained by `relief`, deciding whether
-    // this stay ends early. `unservedTicks` is a MEASUREMENT: one counter per need, never
-    // drained, and nothing in this package reads it. THEY ARE STILL DIFFERENT QUANTITIES —
-    // merging the walk did not merge the concepts, and the mood is still the only one of the two
-    // that any guest's behaviour depends on.
-    //
-    // WHAT THE MERGE PRESERVED, because it is the reason `excused` was hoisted at G-028a: the
-    // MEASUREMENT IS OUTSIDE THE STOCK'S BRANCH and still runs for content that declares no
-    // dissatisfaction capacity at all. A mood is optional — such content has guests that never
-    // walk out. A report about a hotel run under it must still be able to say how long its guests
-    // went unserved, and a counter that silently stopped counting for some content sets would be
-    // a hole exactly where nobody would look for one. That is why the walk moved UP to where the
-    // measurement already was, rather than the measurement moving DOWN into the mood's branch.
-    //
-    // THE SAME ARGUMENTS, IN THE SAME ORDER, FROM THE SAME LOCALS — now unavoidably so, because
-    // there is one call. G-028a's note said the two "cannot describe different hotels" and swept
-    // the identity in `needs.unserved.test.ts`; it is now structural rather than swept.
-    // ========================================================================
+    // The mood (`letDown`, drained, decides early departure) and the measurement (`unservedTicks`,
+    // never drained, read only at departure) are different quantities. The measurement runs even
+    // for content without a dissatisfaction stock.
 
-    // 5. HAS THE ENGAGEMENT FINISHED? Released the moment the need it serves resolves, so
-    //    the amenity is free for somebody else from here on in THIS tick — through
-    //    `release`, so the short-circuit in `findFreeRoom` cannot swallow it.
+    // 5. Has the engagement finished? Released the moment its need resolves, through `release`, so
+    //    the provider is free for someone else this tick.
     const engagement = guest.engagement;
     if (engagement !== null) {
       const served = findNeedState(guest.needs, engagement.needId);
-      // RELEASED AT FULL, WHICH IS THE FAR SIDE OF THE HYSTERESIS. A need is wanted from its
-      // want line until it is FULL, so a guest served past its line keeps its table until the
-      // stock is topped right up — it does not stand up the moment it stops being hungry. That
-      // asymmetry is the whole of the hysteresis, and asking `isNeedWanted` with
-      // `beingServed = true` is what states it in one place: the same predicate the scoring
-      // loop uses, given the fact only this branch knows.
+      // Released at full, the far side of the hysteresis: asking `isNeedWanted` with
+      // `beingServed = true` keeps the guest at its table until the stock is topped up.
       if (served === undefined || !isNeedWanted(findNeedType(content, served.needId), served, wantAt, true)) {
         release(search, engagement.entityId, engagedRoom, content);
         engagedRoom = null;
@@ -3010,189 +1557,41 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       }
     }
 
-    // ========================================================================
-    // DEPARTURE COHESION, RULED AT G-040b-i AND WRITTEN HERE BECAUSE HERE IS WHERE IT WOULD BE
-    // IMPLEMENTED. **A PARTY IS THE UNIT THAT ARRIVES AND BOOKS. A GUEST IS THE UNIT THAT
-    // LEAVES.**
-    //
-    // SIX OF THE SEVEN ROWS CANNOT SPLIT A PARTY, and by construction rather than by a rule:
-    //
-    //   checkedOut          reads the stay clock and the room. Members share one `arrivedTick`
-    //                       and one room, so they reach it on the same tick.
-    //   gaveUp              reads the same clock against `toleranceTicks` and the ABSENCE of a
-    //                       room. A party that finds nothing big enough finds nothing for all of
-    //                       its members (see the arrival loop), so they wait and give up as one.
-    //   evictedRoomGone     read the room. One room, one answer.
-    //   evictedRoomUnusable
-    //   evictedCauseUnrecorded
-    //                       is not a tick-writable row at all.
-    //   visitEnded          is UNREACHABLE for a party larger than one. It requires content with
-    //                       NO lodging need, and `assertPartiesCanBeHoused` now refuses a party
-    //                       above one under exactly that content — there is nothing for a party
-    //                       to be the unit OF where nobody books a room. So the `engagement ===
-    //                       null` clause in that branch, which does diverge per member, can only
-    //                       ever diverge between parties of one.
-    //
-    // `leftDissatisfied` IS THE ONE ROW THAT CAN, and it is left that way DELIBERATELY.
-    // Dissatisfaction is a per-guest STOCK (ADR-0026): two members holding one room still queue
-    // for amenities separately, so one can saturate while its partner is being served, and the
-    // fed-up one walks out while the other sleeps on.
-    //
-    // WHY NOT MAKE IT COHERE, WITH THE PRICE OF EACH ROUTE:
-    //
-    //   WITHIN THE TICK it can only work FORWARDS. This is one ascending pass, so a member
-    //   already visited cannot be recalled — the party would still split for a tick, and the
-    //   two halves would be filed under different reasons. An asymmetric rule is worse than a
-    //   stated one.
-    //   ACROSS TICKS it needs a party-level departure record, and `GuestOutcomes` cannot express
-    //   one: it counts GUESTS. That is new hashed state, hence a save bump, hence not this
-    //   goal's seam — the same argument that rules `payForStay` per guest.
-    //   AND THERE IS NO ROW TO FILE THE FOLLOWER UNDER. Every existing reason is a statement
-    //   about what happened to THAT guest, and "its partner left" is not one of them; an eighth
-    //   row would move every report and every golden, which is exactly what this half claims it
-    //   does not do. Filing a follower under a row it did not earn would corrupt the build
-    //   loop's steering signal (ADR-0025 §2).
-    //
-    // AND IT LEAKS NOTHING, WHICH IS WHY A SPLIT IS A LAG RATHER THAN A DEFECT: `release` is
-    // refcounted (G-040a), so the room stays the party's until its LAST member leaves, and
-    // `claimEntity` bounds a lodging claim by party identity, so no stranger can take the bed
-    // the remaining member is asleep in. What a watcher would see is one of a pair walking out
-    // in a huff. Under shipped content it never happens, because every party has one member;
-    // the tick a distribution is declared it becomes observable, and that is what G-040b-ii's
-    // WATCH is for.
-    // ========================================================================
+    // Departure cohesion: a party arrives and books as a unit, but guests leave individually. Every
+    // row except `leftDissatisfied` departs a whole party together by construction (members share an
+    // arrival tick and a room; `visitEnded` is unreachable for parties larger than one). A fed-up
+    // member can walk out while its partner stays; `release` is refcounted, so the room stays the
+    // party's until its last member leaves and nothing leaks.
 
-    // ========================================================================
-    // 6. DOES THE STAY END? TWO WAYS AND ONLY TWO (ADR-0017 §4) — AND FOUR BRANCHES, WHICH IS
-    //    NOT A CONTRADICTION AND IS WORTH A LINE BECAUSE IT LOOKS LIKE ONE.
+    // 6. Does the stay end? The branch order matters:
+    //      checkout first         — a guest whose stay is up leaves as a checkout even if fed up; it
+    //                               paid, and the checkedOut row must match revenue transactions.
+    //      the visit second       — a visitor whose time is up went home, not stormed out.
+    //      the lobby third        — a roomless guest's dissatisfaction rises with its age;
+    //                               `assertDissatisfactionOutlastsTheLobby` makes this fire first, and
+    //                               this order makes it win on a tie.
+    //      lift give-up
+    //      dissatisfaction last   — a guest that got a room, did not run out the clock, was not evicted.
     //
-    //    ADR-0017's two ways are THE CLOCK and DISSATISFACTION. The clock has two branches
-    //    because a guest has two clocks and reaches exactly one of them — `stayDurationTicks` if
-    //    it books a room, `visitDurationTicks` if it does not (θ-b2). The second terminator has
-    //    two branches because it has two CAUSES a player can act on: nobody gave the guest a
-    //    room, or the guest had a room and nothing to do. Those are one terminator and two rows
-    //    (ADR-0025 §2), and the rows are the build loop's steering signal rather than bookkeeping.
-    //
-    //    THE ORDER OF THE FOUR IS LOAD-BEARING, and each is decided by what it must not steal:
-    //      CHECKOUT first     — a guest whose stay is up leaves as a checkout even if it is also
-    //                           fed up. It paid, and `countRoomRevenueTransactions === the
-    //                           checkedOut row` is the one cross-subsystem witness this table
-    //                           has; a mood must not be able to take a row off it.
-    //      THE VISIT second   — the same argument for the population that pays nothing: a visitor
-    //                           whose time is up went home, and it must not be recorded as having
-    //                           stormed out. It cannot collide with checkout above (that branch
-    //                           needs a room this guest does not hold) and it is placed ahead of
-    //                           both dissatisfaction branches for the reason checkout is.
-    //      THE LOBBY third    — a roomless guest's dissatisfaction rises exactly as fast as its
-    //                           age, so both this branch and the next are true of it at some
-    //                           point. `assertDissatisfactionOutlastsTheLobby` makes the lobby
-    //                           the earlier one, and this ordering makes it also the winner on
-    //                           the tick they coincide.
-    //      DISSATISFACTION last — so it is what is left: a guest that got a room, did not run out
-    //                           the clock, and was not evicted.
-    //
-    //    CHECKOUT READS THE CLOCK AND THE ROOM. IT READS NO NEED STATE AT ALL, AND THAT IS
-    //    THIS GOAL'S WHOLE POINT rather than an implementation detail: until G-027a the
-    //    stay ended on the tick `night_rest` was met, so "the guest got what it came for"
-    //    and "the guest went home" were the same event, and every engagement need was
-    //    racing a deadline it did not know about (the wall ADR-0017 measured). A stay is
-    //    now a DURATION. A need finishing ends nothing.
-    //
-    //    THE CLOCK IS ARRIVAL-RELATIVE, WHICH COSTS NO FIELD AND MAKES THE LIFETIME BOUND
-    //    EXACT. `arrivedTick` already exists and is already hashed, so nothing is added to
-    //    `Guest`, no migration has to invent a check-in tick, and `maxGuestLifetimeTicks`
-    //    becomes `max(tolerance, stay)` — attained, not merely respected. (A nullable
-    //    `checkedInTick` defaulting to `null` would have been perfectly recoverable — it is
-    //    the `metBy: null` idiom and ADR-0008 permits it — so this is chosen on those two
-    //    properties and NOT because the alternative was unrepresentable.)
-    //
-    //    WHAT THE CHOICE COSTS, STATED RATHER THAN DISCOVERED: a guest that queued for a
-    //    room gets a SHORTER stay in it, because the clock started at the door. Under the
-    //    shipped table that is at most 180 ticks of 1,440 and it reads correctly to a
-    //    watching player — the hotel is not giving the late arrival a free extension. It
-    //    also means the room is released on a schedule set by arrivals rather than by
-    //    occupancy, which is what keeps `--rooms N` a capacity a queue can drain.
-    //
-    //    `>=` AND NOT `===`. A guest that took a room LATE — its stay clock already past —
-    //    would sail past an equality test and stay forever. Under the shipped table that is
-    //    unreachable (tolerance 180 < stay 1,440), and an unreachable state is exactly where
-    //    an equality quietly becomes a leak: `countStuckGuests` measures it either way, and
-    //    the comparison should not depend on a number in another file.
-    // ========================================================================
+    //    Checkout reads only the clock and the room, never need state: a stay is a duration measured
+    //    from arrival (so a guest that queued gets a shorter stay, and `maxGuestLifetimeTicks` is
+    //    exact). `>=` rather than `===`, so a guest that got its room late cannot stay forever.
     if (lodgingRoom !== null && stayDuration !== undefined && tick - guest.arrivedTick >= stayDuration) {
-      // Pay, release, leave. THE ROOM IS FREE FROM HERE ON IN THIS TICK — a guest visited
-      // later in this same loop can take it, even though it arrived later, because the room
-      // genuinely is empty now.
+      // Pay, release, leave. The room is free for later guests in this same loop.
       ledger = payForStay(ledger, tick, lodgingRoom.kind, content);
       depart(search, content, guest, lodgingRoom, engagedRoom, 'checkedOut', tick);
       checkedOut += 1;
       continue;
     }
-    // ========================================================================
-    // 6b. THE VISIT ENDS (θ-b2, ADR-0017 §5). The guest booked no room and its time is up.
+    // 6b. The visit ends: the guest booked no room and its time is up.
     //
-    //     KEYED ON THE CONTENT **AND** ON THE GUEST'S OWN VECTOR, AND THE CONTENT HALF WAS
-    //     MISSING FOR ONE SWEEP. It read *"keyed on the guest's own vector, NOT on the content,
-    //     and that is the whole of ADR-0017 §5's structural admission"* — and that predicate
-    //     admits a THIRD population it must never touch:
+    //     Keyed on the content having no lodging need and the guest having formed none: a guest
+    //     with no lodging need under lodging content is the v5-migrated case (stuck), not a visitor.
+    //     Disjoint from checkout, which requires a room.
     //
-    //       content has a lodging need, guest formed it        -> checkout / the lobby. Fine.
-    //       content has NONE, guest formed none                -> a VISITOR. This branch.
-    //       content HAS one, guest formed none                 -> the v5-MIGRATED guest, whose
-    //                                                             stay can no longer be
-    //                                                             progressed at all.
-    //
-    //     The third is exactly what `lodgingNeedStateOf` was written for and what
-    //     `countStuckGuests` reports. Under the guest-only predicate it matched here too — and
-    //     the shipped `guest-rules.json` now declares `visitDurationTicks`, so the branch was
-    //     LIVE for it. Reproduced: strip `rest` from a housed guest's vector under hotel content
-    //     and step 40 ticks — **live 0, visitEnded 1.** One function reported that guest stuck
-    //     while the tick filed it as a completed visit: the misfiling of the build loop's
-    //     steering signal ADR-0025 §2 spent a schema row to prevent.
-    //
-    //     WHY THE GUEST HALF IS KEPT ANYWAY, since today the content half alone decides it. It is
-    //     ADR-0017 §5's admission and it costs nothing: the day archetypes land (M6) a hotel will
-    //     declare a lodging need AND arrive guests that do not form it, and this branch will need
-    //     to tell those from the migrated ones. **It cannot, on this predicate** — the two are the
-    //     same shape — so M6 owes a guest-level archetype id, and saying so here is cheaper than
-    //     discovering it. What is NOT owed is a rewrite: the terminator already reads the guest.
-    //
-    //     IT CANNOT COLLIDE WITH CHECKOUT ABOVE. That branch requires `lodgingRoom !== null`, and
-    //     `reserve` only ever acquires a room for a guest that HAS a lodging need — so the two
-    //     predicates are disjoint by construction rather than by ordering. The ordering is still
-    //     what puts both clocks ahead of both dissatisfaction branches.
-    //
-    //     IT DEFERS WHILE THE GUEST IS AT A PROVIDER, exactly as the dissatisfaction branch below
-    //     does and for the identical reason (ADR-0026 as amended, from a frame at tick 6428).
-    //     **This was the plan's BLOCKER and it was found before a line existed**: modelled on
-    //     checkout, which needs no such condition because a resident is in its room when its
-    //     clock expires, the visit terminator vanished guests mid-meal — measured at **97.5 % of
-    //     departures engaged at the moment of departure** with one provider per need and arrivals
-    //     every 30 ticks. A watcher would see a guest walk into the cafe, get served, and blink
-    //     out. With the deferral: **0.0 %, in every configuration measured.**
-    //
-    //     A guest being served RIGHT NOW is not one whose visit is over, whatever the clock says.
-    //     It leaves when it is next at liberty.
-    //
-    //     IT CANNOT DEFER FOREVER: step 5 releases an engagement the tick its need reaches full,
-    //     so the deferral is bounded by one filling and `maxGuestLifetimeTicks` carries the
-    //     arithmetic — 299 on the shipped table, against a worst observed age of 275 over the
-    //     five contention regimes `visit.content.test.ts` executes. **RESPECTED WITH SLACK, NOT
-    //     ATTAINED**, and this line said "ATTAINED … measured maximum 297" for one sweep: the
-    //     297 belonged to a scratch arm that is not in the tree, and the attainment claim was
-    //     already contradicted by the test file that measures it.
-    //
-    //     `>=` AND NOT `===`, for checkout's reason: a guest loaded from a save taken under a
-    //     shorter duration arrives here already past it, and an equality would let it stay
-    //     forever. The deferral makes that doubly true — a guest that was engaged on the tick of
-    //     equality would never see it again.
-    //
-    //     NO `payForStay`. A visitor books no room, so there is nothing to charge it for, and
-    //     that is why this is its own row rather than a `checkedOut`: it keeps
-    //     `countRoomRevenueTransactions === the checkedOut row` true on every content shape
-    //     instead of switching the witness off on the path this goal added. Charging a visitor
-    //     for what it consumes is the money loop's, and it is M4's (`PARKING.md`).
-    // ========================================================================
+    //     Deferred while the guest is at a provider, so a visitor never vanishes mid-meal; it leaves
+    //     when next at liberty. Bounded by one filling (see `maxGuestLifetimeTicks`). `>=` for
+    //     checkout's reason. No `payForStay`: a visitor books no room.
     if (
       visitDuration !== undefined &&
       lodgingNeed === undefined &&
@@ -3204,85 +1603,24 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       visitEnded += 1;
       continue;
     }
-    // THE OTHER TERMINATOR, RE-EXPRESSED RATHER THAN MOVED (G-027b). The predicate was "the
-    // lodging need ran out of patience", and patience is the field the stock model deletes. What
-    // replaces it is the same event stated in the terms that survive: THE GUEST HAS NO ROOM AND
-    // NOTHING HAS SERVED ITS REASON FOR BOOKING SINCE IT ARRIVED.
-    //
-    // AGE IS THE UNSERVED RUN, AND THAT EQUIVALENCE RESTS ON THREE FACTS RATHER THAN ON ONE
-    // COMPARISON. It is why no counter is stored, and it is why this fires on exactly the tick
-    // the countdown fired on — probed, 0 give-ups at 30 ticks and 1 at 31 under both models:
-    //
-    //   1. THE ARRIVAL TICK IS FREE. A guest is created during `arrivedTick`, AFTER that tick's
-    //      decay pass, so the first decay it suffers is on `arrivedTick + 1` and at tick `t` it
-    //      has suffered exactly `t - arrivedTick` of them.
-    //   2. DECAY PRECEDES THIS TEST WITHIN A TICK (step 4, then step 6), so the tick on which
-    //      the run reaches the tolerance is the tick this branch observes it.
-    //   3. A ROOMLESS GUEST IS NEVER SERVED LODGING — nothing but a room can serve it, and it
-    //      has none — so no relief interrupts the run; and a guest that HAD a room and lost it
-    //      departs in step 3, before this line, so there is no path on which age and the
-    //      unserved run diverge.
-    //
-    // THE RESIDENT WHO IS DISSATISFIED IS THE BRANCH BELOW THIS ONE, AND IT ARRIVED IN θ-b1.
-    // This paragraph used to record its absence — *"that is the next goal's, it needs a saved
-    // counter (an unserved run that survives being interrupted by sleep)"* — and the goal that
-    // ran chose a different shape for a measured reason: an unserved RUN resets, and a rule built
-    // on a resetting counter is a saturation detector with no graded region (ADR-0026). What
-    // ships is a stock that drains. The saved field was predicted correctly; its semantics were
-    // not.
+    // 6c. The lobby give-up: no room and nothing has served lodging since arrival. The guest's age
+    // equals its unserved run because (1) the arrival tick is free, (2) decay precedes this test, and
+    // (3) a roomless guest is never served lodging (a guest that lost its room left in step 3). So no
+    // counter is needed.
     const lodgingUnserved =
       lodgingNeed !== undefined && guest.roomEntityId === NO_ENTITY && tolerance !== undefined;
     if (lodgingUnserved && tick - guest.arrivedTick >= tolerance) {
-      // Waited it out and never got a room. It pays nothing and leaves with that recorded.
-      // `gaveUp` names what happened rather than how it felt, and it is what `migrateV7ToV8`
-      // maps v7's `unsatisfied` counter onto (whose own doc comment read "patience for a room
-      // ran out before one was free").
+      // Never got a room. Pays nothing.
       depart(search, content, guest, lodgingRoom, engagedRoom, 'gaveUp', tick);
       gaveUp += 1;
       continue;
     }
-    // ========================================================================
-    // 6d. IT GAVE UP ON THE LIFT (G-038b-i, ADR-0075). It has been standing in the line, outside
-    //     the car, for `lift.waitToleranceTicks`.
+    // 6d. Gave up on the lift: standing in the line, outside the car, for
+    //     `lift.waitToleranceTicks`. Reads the line as the tick opened (step 7 is where guests join).
     //
-    //     IT READS THE LINE AS THE TICK OPENED, which is the only line that exists at this
-    //     point: step 6 runs before step 7, and step 7 is where `placed` joins guests to it. So
-    //     a guest that joins the line on tick t starts its clock at t and can first give up on
-    //     t + tolerance — the same off-by-one discipline `gaveUp`'s three-fact argument above
-    //     spells out for the lobby.
-    //
-    //     A GUEST IN THE CAR NEVER GIVES UP, AND THAT EXCLUSION IS EXACT RATHER THAN KIND.
-    //     `boardLift` returns true for every id in `riding` unconditionally, so a guest at the
-    //     front of the line that still wants to climb WILL climb this tick. Letting it give up
-    //     one line before it moves would be a guest walking out as the doors open, which is
-    //     §6.1's "correct but reads as stupid" in its literal form. (A rider that has stopped
-    //     wanting to climb leaves the line anyway, in `settleLiftQueue`, so nothing is kept
-    //     alive by this clause.)
-    //
-    //     IT SHORTENS LIVES AND NEVER LENGTHENS ONE, so `maxGuestLifetimeTicks` is untouched.
-    //     Checkout reads a clock and a room and does not care where the guest is standing; the
-    //     lobby give-up reads age. Both still fire on exactly the tick they fired on before.
-    //
-    //     NO ENGAGEMENT DEFERRAL, AND THE OMISSION IS DELIBERATE (against ADR-0026's shape two
-    //     branches down). That deferral protects a guest that is BEING SERVED, and `atAmenity`
-    //     requires `hasArrivedAt` — a guest in the line has by construction not arrived at its
-    //     provider, because its provider is on another floor. Adding the guard would instead let
-    //     a guest that reserved a table it can never reach stand in the line forever.
-    //
-    //     `>=` AND NOT `===`, for checkout's reason: a guest loaded from a save taken under a
-    //     more generous tolerance arrives here already past it, and an equality would let it
-    //     stand there forever.
-    //
-    //     AND THE CLOCK DOES NOT RESET WHEN THE DESTINATION CHANGES, which is a corner worth
-    //     naming rather than discovering. Step 5 can release an engagement, and step 1 can take
-    //     a provider away, so a guest CAN reach this line on the very tick its reason for
-    //     climbing evaporated — and if its patience expired on that same tick it leaves anyway.
-    //     That is deliberate and it is `dissatisfaction`'s rule: **the waiting really happened**,
-    //     and a stock that erased its history the moment the hotel finally did something right
-    //     would be the resetting counter ADR-0026 measured and rejected. It costs a one-tick
-    //     coincidence — the destination must change on exactly the tick the clock runs out — and
-    //     the guest that leaves has, by construction, stood in a line for its whole patience.
-    // ========================================================================
+    //     A guest in the car never gives up: it will climb this tick. No engagement deferral — a
+    //     guest in the line has not reached its provider, and deferring would let it stand forever.
+    //     The clock does not reset if its destination changes mid-wait. `>=` for checkout's reason.
     if (search.lift !== null) {
       const waitingSince = search.lift.since.get(guest.id);
       if (
@@ -3295,31 +1633,11 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
         continue;
       }
     }
-    // ADR-0017 4(b), LANDED. The guest has had enough: it wanted things this hotel did not give
-    // it, often enough and for long enough that the stock reached its ceiling.
+    // 6e. Left dissatisfied: the stock reached its ceiling. Independent of what the guest holds.
     //
-    // IT ASKS NO QUESTION ABOUT WHAT THE GUEST HOLDS, and that is the difference between this
-    // branch and the one above. A room is not a defence — it is exactly the case ADR-0017 4(b)
-    // names, a hotel with beds and no café — and neither is it a requirement, which is what makes
-    // this the terminator a lodging-free guest will need when θ-b2 lifts the room out of the
-    // model. What it asks is whether the hotel has been failing this guest, which is a fact the
-    // stock already carries.
-    //
-    // `>=` AND NOT `===`, for `checkedOut`'s reason one branch up: a guest loaded from a save
-    // taken under a more generous ceiling arrives here already past it, and an equality would
-    // let it stay forever. `countStuckGuests` would report it either way; the comparison should
-    // not depend on a number in another file.
-    //
-    // AND IT DOES NOT FIRE WHILE THE GUEST IS AT A PROVIDER (ADR-0026 as amended, from a frame).
-    // `ai-critic` watched guest 50 walk into a cafe at tick 6,382, eat for 46 ticks, and vanish
-    // at 6,428 with THIRTEEN TICKS of its meal left — and that was the dominant case rather than
-    // a corner: **210 of 224 walkouts happened while the guest was being served.** A guest that
-    // is being served RIGHT NOW is not one the hotel is failing, whatever it has accumulated, so
-    // it leaves when it is next at liberty.
-    //
-    // IT CANNOT DEFER FOREVER: step 5 releases the engagement on the tick its need reaches full,
-    // so no engagement outlives one filling, and the checkout clock is unconditional either way.
-    // `maxGuestLifetimeTicks` is therefore still `max(stay, tolerance) + 1` and still attained.
+    // Deferred while the guest is at a provider — a guest being served right now is not one the
+    // hotel is failing — so it leaves when next at liberty. Bounded by one filling. `>=` for
+    // checkout's reason.
     if (
       dissatisfactionCapacity !== undefined &&
       guest.dissatisfaction >= dissatisfactionCapacity &&
@@ -3330,125 +1648,63 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       continue;
     }
 
-    // 7. RESERVE WHAT IT CAN. A room first — that is the stay, and the thing it is here
-    //    for — then one provider for the most pressing engagement need that has one free.
-    //    AND, SINCE G-014b, THIS IS ALSO WHERE AN ENGAGED GUEST DECIDES WHETHER TO WALK OUT.
-    //    `engagedRoom` is passed rather than looked up again for the reason every release in
-    //    this loop takes it as a parameter: "is this thing still a provider" is answered once
-    //    per guest per tick, in step 1, and a second lookup could disagree with the first.
-    //    IT IS ALSO WHERE THE GUEST ENDS UP STANDING (G-023a). `reserve` is the one place
-    //    both holdings are decided, so it is the one place that can state the position they
-    //    imply without asking the entity store a second question — the two entities are
-    //    already in hand here and in there. Nothing else in this loop touches `at`.
+    // 7. Reserve what it can: a room first (the stay), then one provider for the most pressing
+    //    engagement need with one free. This is also where an engaged guest decides whether to
+    //    abandon, and where the guest's standing cell is set. `engagedRoom` is passed rather than
+    //    looked up again.
     guest = reserve(search, guest, lodgingNeed?.id, lodgingRoom, engagedRoom, wantAt);
     next.push(guest);
   }
 
   let nextId = guests.nextId;
-  // GUESTS, NOT COMMANDS (G-040b-i). Each arrival is a PARTY and a party is one or more guests,
-  // so the two counts stopped being the same number the moment a distribution could be declared.
-  // `outcomes.arrived` is the left-hand side of the conservation law in `assertGuestOutcomes` —
-  // every guest is either still here or has exactly one recorded outcome — so counting commands
-  // here would make a world with a pair in it unloadable the moment it was saved, reporting *"1
-  // arrived but 0 departed and 2 are still here"*. That exact message is pinned as the
-  // discriminating half of the arrival case. It is also a report row and the denominator of
-  // several derived shares, and neither of those may quietly mean "parties" on one line and
-  // "guests" on the next.
+  // Counts guests, not commands: each command is a party of one or more, and the conservation law
+  // counts guests on both sides.
   let arrivedGuests = 0;
   for (let party = 0; party < arrivingParties; party += 1) {
-    // THE PARTY IS NAMED BEFORE ITS FIRST MEMBER IS CREATED, and the name is the ordinal
-    // (G-040b-i). `partyId` is `guests.nextId` at the moment the party walks in — the id its
-    // first member will take — so it is unique for the life of the run, needs no second counter
-    // in hashed state, and IS the number `partySizeOf` reads the size from. Every member of the
-    // party therefore carries the fact of its own size without a field to carry it in.
+    // The party id is `nextId` when it walks in (its first member's id): unique without a second
+    // counter, and the ordinal `partySizeOf` reads the size from.
     const partyId = nextId;
     const size = partySizeOf(content, partyId);
-    // ONE MEMBER AT A TIME, IN ASCENDING ID, EACH RESERVING BEFORE THE NEXT IS CREATED — and
-    // that ORDER is what makes the party cohere rather than an ordering rule written on top of
-    // it (G-040b-i). The lower-id member decides first and takes a room its whole party fits in;
-    // the next member meets that same room first on the same ascending candidate list, finds it
-    // held BY ITS OWN PARTY (`findFreeRoom`'s standing-claim clause exempts exactly that), and
-    // joins it. No party-level resolver, and above all no `Map<PartyId, GuestId[]>` — a lookup
-    // whose ITERATION order would decide the answer is the I2 hazard this loop is written to
-    // avoid.
-    //
-    // AND THE MEMBERS CANNOT DISAGREE ABOUT WHAT IS FREE. Every release this tick happened in
-    // the loop over existing guests, which has already finished; nothing between two members of
-    // one party can free or take a room except those members. So a party that finds no room big
-    // enough finds none for ALL of its members, and arrives homeless together rather than in
-    // pieces.
+    // One member at a time, ascending id, each reserving before the next is created. The first member
+    // takes a room the whole party fits in; later members find it held by their own party and join
+    // it. No party-level resolver and no `Map<PartyId, GuestId[]>` (iteration order would decide the
+    // answer). All releases this tick have already happened, so members see the same free rooms and a
+    // party that finds nothing is homeless together.
     for (let member = 0; member < size; member += 1) {
-      // IT NO LONGER REFUSES A GUEST WITH NO LODGING NEED (θ-b2). It threw
-      // *"a guest arrived under content that defines no lodging need"*, which was the correct
-      // reading while a guest without a reason to book was a caller error; a VISITOR is now a
-      // design, and `formNeedVector` gives it the engagement needs it came for.
-      //
-      // WHAT THE OLD THROW WAS ACTUALLY PROTECTING, since a deletion is where a property goes
-      // missing (ADR-0027): that a created guest can always form a need vector, so no guest
-      // exists with nothing to want. That property is UNCHANGED and is now enforced where it
-      // belongs — `applyCommands` still refuses `guestArrives` under content with NO NEED TYPES
-      // AT ALL, which is the case that would produce an empty vector. The lodging need was never
-      // what made a vector non-empty; it was just the only need the old check knew about.
+      // A guest with no lodging need is a visitor. `applyCommands` refuses arrivals under content with
+      // no need types at all, so every guest has a non-empty need vector.
       const id = nextId;
       if (!Number.isSafeInteger(id + 1)) {
         throw new Error(`stepGuests: guest ids are exhausted at ${id}; the next id would not be a safe integer`);
       }
       nextId = id + 1;
-      // ONE INSTANCE OF EVERY NEED THE CONTENT DEFINES (G-012). Which needs a guest forms is
-      // an archetype's business at M6; today every guest wants everything.
-      //
-      // AND IT WALKS IN THROUGH THE DOOR (G-023a). THE CELL IS SET AT CREATION, not on the
-      // guest's first step, and that is load-bearing rather than tidy: this loop runs AFTER
-      // the loop over existing guests, so a guest created on tick t is not stepped until tick
-      // t + 1. A design that placed guests only while stepping them would leave every arrival
-      // unplaced for a whole tick — and `at` would have to be nullable to express it, which is
-      // the design this goal's first ruling refuses. `reserve` below may move it immediately
-      // to whatever it manages to take, exactly as it does for a guest already here.
+      // One instance of every need the content defines. The cell is set at creation (the entrance):
+      // arrivals are first stepped next tick, and `at` is never nullable. `reserve` may move it at once.
       const arrived: Guest = {
         id,
-        // THE PARTY, AND THE FIELD IS WRITTEN HERE AND NOWHERE ELSE (G-040a, ADR-0055).
-        // `partyId` is the id of the party's FIRST member, drawn from `guests.nextId`, so it is
-        // unique for the life of the run without a second counter in hashed state and it is the
-        // ordinal `partySizeOf` read the size from. For a party of one — every party under
-        // shipped content, because the distribution is absent — it is this guest's own id, and
-        // every occupancy number is what it was before the field existed.
-        //
-        // NOTHING DEREFERENCES IT AS A GUEST ID. Every reader compares it for equality, so the
-        // first member departing strands nobody: the remainder keep a name that still means the
-        // party, and `release`'s refcount keeps the room theirs until the last of them leaves.
+        // Written here and nowhere else. Only ever compared for equality, never dereferenced as a guest
+        // id, so a departing first member strands nobody.
         partyId,
         at: standingCell(null, null, input.entities.bounds),
         arrivedTick: tick,
         roomEntityId: NO_ENTITY,
         engagement: null,
         needs: formNeedVector(content),
-        // AND IT WALKS IN CONTENT (θ-b1). Zero is not a default standing in for anything: the
-        // hotel has not had a chance to fail this guest yet, and the first tick it is stepped is
-        // the first tick anything could. A guest that arrives already impatient would be an
-        // archetype, which is M6.
         dissatisfaction: 0,
       };
-      // A guest that has just walked in holds nothing, so there is no incumbent provider to
-      // hand over and nothing it could abandon.
-      // `lodgingNeed?.id` since θ-b2: `undefined` is a visitor, and `reserve` already reads it as
-      // "this guest wants no room" — the gate that makes `payForStay` unreachable under
-      // lodging-free content, and therefore the reason `revenue === 0` there is structural
-      // rather than asserted.
+      // Holds nothing yet, so nothing to abandon. `undefined` lodging need means a visitor: `reserve`
+      // acquires no room, so `payForStay` is unreachable under lodging-free content.
       next.push(reserve(search, arrived, lodgingNeed?.id, null, null, wantAt));
       arrivedGuests += 1;
     }
   }
 
-  // Ids came from a counter, existing guests were visited in ascending order and
-  // arrivals were appended after them — members of one party included, which take consecutive
-  // ids in the order they were created — so `next` is strictly ascending by construction and no
-  // sort exists here to get wrong. The same property `EntityStore.list` has.
+  // Existing guests in ascending order, then arrivals with consecutive new ids, so `next` is
+  // strictly ascending by construction.
   const nextGuests: GuestStore = { nextId, list: next };
   const nextOutcomes: GuestOutcomes = {
-    // ARRIVALS ARE COUNTED HERE AND NOWHERE ELSE, and the rows are counted at the departure
-    // sites above. Neither is computed from the other, which is what makes the conservation law
-    // in `assertGuestOutcomes` a check rather than an identity. `arrivedGuests` rather than the
-    // command count, because the law counts GUESTS on both sides (G-040b-i).
+    // Arrivals counted here, departures at the departure sites: independent, so the conservation law
+    // is a real check.
     arrived: outcomes.arrived + arrivedGuests,
     departures: addDepartures(
       outcomes.departures,
@@ -3468,33 +1724,16 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     reviewOutcomes: search.reviewOutcomes,
     recentRemarks: search.recentRemarks,
     ledger,
-    // THE LINE, REBUILT FROM WHO ACTUALLY NEEDED THE SHAFT (G-038b-i). A guest that boarded,
-    // that stopped needing to climb, or that departed for any reason simply is not in it — which
-    // is why this second record of a fact about guests cannot drift from the first.
+    // Rebuilt from who actually needed the shaft this tick, so it cannot drift from the guest list.
     liftQueue: search.lift === null ? input.liftQueue : settleLiftQueue(search.lift, tick),
   };
 }
 
 /**
- * The tick's departures, folded into the table once.
- *
- * IDENTITY-RETURNING WHEN NOTHING DEPARTED, which is almost every tick: no allocation, and
- * the outcome object next to it keeps pointing at the same rows. Rebuilding the whole row
- * array 525,600 times to add zero to each is exactly the per-tick allocation §6.1 asks
- * `sim-critic` to watch for.
- *
- * It walks the rows it was GIVEN rather than `GUEST_DEPARTURE_REASONS`, so a table that is
- * somehow malformed comes out malformed and is refused by `assertGuestOutcomes` at the
- * tick boundary — instead of being silently repaired here, where nothing would report it.
- *
- * ONE POSITIONAL COUNT PER TICK-WRITABLE REASON AND NOT A TABLE, still, at θ-b2's seventh row.
- * A parameter per reason is the shape that makes a forgotten row a TYPE ERROR at the call site
- * rather than a zero nobody notices — and it has now worked three times: `leftDissatisfied`,
- * `visitEnded`, and G-038b-i's `gaveUpWaitingForLift`, each reddening the one call site and the
- * switch below at once.
- * (The count is deliberately no longer spelled as a numeral. It read "FIVE POSITIONAL COUNTS …
- * at θ-b1's sixth row" — a sentence carrying two numbers that must both be re-typed whenever the
- * union grows, which is the row-count claim class this goal enumerated and drove to zero.)
+ * The tick's departures, folded into the table once. Returns the same rows when nothing departed
+ * (almost every tick). Walks the rows it was given, so a malformed table stays malformed for
+ * `assertGuestOutcomes` to refuse. One parameter per tick-writable reason, so a new reason is a
+ * type error at the call site.
  */
 function addDepartures(
   rows: readonly GuestOutcomeRow[],
@@ -3542,9 +1781,7 @@ function addDepartures(
       case 'evictedRoomUnusable':
         added = evictedRoomUnusable;
         break;
-      // `evictedCauseUnrecorded` is migration-only and takes nothing here. It is not a
-      // default branch: a reason added to the union without a decision about whether the
-      // tick can produce it should be a compile error, not a silent zero.
+      // Migration-only, takes nothing. Not a default branch, so a new reason must be handled explicitly.
       case 'evictedCauseUnrecorded':
         added = 0;
         break;
@@ -3555,73 +1792,27 @@ function addDepartures(
 }
 
 /**
- * Take a room if one is free, and engage a provider if one is — at most one of each, and
- * at most once per tick.
+ * Take a room if one is free, and engage a provider if one is — at most one of each, and at most
+ * once per tick. Every exit goes through `placed`, which sets where the guest stands.
  *
- * THE ENGAGEMENT PASS IS THE ONLY PLACE THE SCORE IS ACTED ON, AND IT IS THREE DECISIONS IN
- * A FIXED ORDER (G-014a, G-014b):
+ * The engagement pass makes three decisions in a fixed order:
  *
- *   WHETHER TO MOVE — an UNENGAGED guest engages the best it can find. An ENGAGED one moves
- *                  only if a rival need's pressure REACHES the incumbent's plus the
- *                  content-defined margin (`abandonMarginOf`). That is the hysteresis, and
- *                  without it a scorer re-run every tick oscillates between two nearly-equal
- *                  options, which is §6.1's second entry.
- *   WHICH NEED   — the pending engagement need with the most pressure that has a free
- *                  provider; exact ties settled by the lower need id. FIT IS NOT CONSULTED.
- *                  The incumbent's own need is not a candidate: within one need commitment
- *                  stays total, so no guest ever leaves a half-eaten meal for a nicer table.
- *   WHICH PROVIDER — the best-fit free provider of that need, which is simply the first free
- *                  entry of an already fit-ordered list (`providersFor`).
+ *   whether to move  — an unengaged guest engages the best it can find. An engaged one moves
+ *                      only if a rival need's pressure reaches the incumbent's plus the
+ *                      content-defined margin (`abandonMarginOf`): hysteresis against thrashing.
+ *   which need       — the wanted engagement need with the most pressure that has a free
+ *                      provider; exact ties by `needTieBreakRank`. Fit is not consulted. The
+ *                      incumbent's own need is not a candidate.
+ *   which provider   — the first free entry of an already fit-ordered list (`providersFor`).
  *
- * So a guest whose dinner is nearly desperate does not sit in the games room instead, and
- * among two places it could eat it takes the one the designer ranked higher. If that one is
- * busy it takes the next, on the same tick, rather than standing still: the difference
- * between a queue and a stupid-looking guest (§6.1).
+ * Fit must never settle a tie between needs: letting a designer's taste outrank a guest's need
+ * once starved a need for every guest (`utility.starvation.test.ts`).
  *
- * WHY FIT MAY NOT SETTLE A TIE BETWEEN NEEDS — MEASURED, NOT REASONED (G-014a's WATCH). The
- * first build of this goal scored `pressure * FIT_SCALE + fit` across needs, so at equal
- * pressure the nicer amenity won. On the shipped table that reordered a guest's whole stay,
- * and one engagement need then FAILED FOR EVERY GUEST IN THE HOTEL — `guest_comfort` 0 met,
- * 356 unmet at `--days 30 --seed 7 --rooms 6 --amenities 5`, where it had been 356 met.
- * `utility.starvation.test.ts` is that run, kept as a test.
+ * The lodging search does not consult fit: without a price term, fit would make the most
+ * expensive suite strictly preferred. `bindContent` refuses fit on lodging-only room types.
  *
- * The cause belonged to the CONTENT and not to this code: the three engagement needs summed to
- * exactly the lodging budget (WATCH #1), so the ORDER of pursuit decided whether a guest could
- * have all three. Two of the six orders did, and BOTH ENDED IN ENTERTAINMENT — whatever went
- * last had waited 330 ticks, and entertainment's patience was the only one in the table long
- * enough to survive that. The combined score produced an entertainment-FIRST order, which is
- * the class that starved. `utility.starvation.test.ts` simulates all six rather than asserting
- * this in prose.
- *
- * **ADR-0017 §1 DELETED THAT PREMISE AND NOT THE RULING** (θ-a sweep 3 — the paragraph above was
- * present tense until then, and every term in it is a countdown-era one). There is no
- * `satisfyTicks` to sum, no patience to outlast, and a need that is never terminal cannot be
- * stranded by an order. The ruling stands on its own footing: fit is a designer's taste and
- * pressure is the guest's need, and letting taste outrank need is the dominant-strategy shape
- * regardless of which decay model is underneath. `utility.starvation.test.ts` says the same.
- *
- * THE LODGING SEARCH DOES NOT CONSULT FIT, and that is a scope line rather than an
- * oversight. A bedroom's desirability trades against its PRICE, and pricing is M4's; a fit
- * term with no price term would make the most expensive suite strictly preferred, which is
- * the dominant-strategy shape `balance-critic` hunts. `bindContent` refuses a fit on a room
- * type that only lodges, so this is enforced rather than merely intended.
- *
- * THERE IS NO TURNAROUND DELAY, and an earlier draft of this comment claimed there was.
- * A guest whose engagement ends in step 5 has `engagement: null` by the time this runs, so
- * it engages its next provider ON THE SAME TICK — it finishes dinner and goes straight to
- * the games room. That is the better behaviour and it is what the code does; the comment
- * was describing a design that was considered and not built. The turnaround that DOES
- * exist is a different one: a room released by a guest visited earlier in this loop is
- * available immediately, but a guest visited EARLIER than the release has already had its
- * turn and waits for the next tick. That is the price of never letting a later arrival
- * overtake an earlier one, and it is G-004's rule unchanged.
- *
- * AND IT IS WHERE THE GUEST ENDS UP STANDING (G-023a). Every exit goes through `placed`,
- * which is why both entities are parameters: this function is the only one that knows what
- * the guest holds AFTER its decisions, and re-asking the entity store would be a second
- * lookup that could disagree with the first — the discipline every release in this file
- * already keeps. It costs no lookup, no pass and no allocation on a tick where the guest
- * does not move.
+ * A guest whose engagement ended in step 5 engages its next provider on the same tick. A room
+ * released later in the loop is only available to guests visited after the release.
  */
 function reserve(
   search: RoomSearch,
@@ -3631,118 +1822,44 @@ function reserve(
   engagedRoom: Entity | null,
   wantAt: number,
 ): Guest {
-  // HOISTED TO THE TOP OF THE FUNCTION AT G-027b, because the lodging branch below now asks a
-  // content question ("does this guest want a room") where it used to ask a state one. One read,
-  // one name, and nothing below can reach a different content than the line above it.
   const content = search.input.content;
-  // TWO SPREADS RATHER THAN ONE, AND THE COLLAPSE WAS TRIED AND DROPPED (G-016). Deciding
-  // both reservations before writing either — so a guest that takes a room AND engages a
-  // provider on one tick allocates one `Guest` instead of two — was implemented and
-  // measured NO BETTER than this, and possibly worse; fewer allocations of a wider object
-  // literal, reached through a branchier path, did not pay. The state hash was unmoved
-  // either way, so this is a performance call and not a correctness one.
-  //
-  // Treat that as "not worth it" rather than as a number: it was measured during the same
-  // session in which the machine drifted nearly 2x, and only the levers that survived a
-  // PAIRED, INTERLEAVED re-measurement carry figures in this codebase. See `depart`.
+  // Two spreads (room, then engagement) rather than one combined write: collapsing them was
+  // measured and did not pay.
   let result = guest;
   if (result.roomEntityId === NO_ENTITY && lodgingNeedId !== undefined) {
     const lodging = findNeedState(result.needs, lodgingNeedId);
-    // WANTED, NOT MERELY UNFULL. A guest books a room because it wants rest, and it arrives
-    // exactly at its want line, so this is true on the tick it walks in — which is the timing
-    // G-004 shipped and this goal must not move. It gates only the ACQUISITION: commitment to a
-    // room stays total for the whole stay (`stepGuests`), so a guest whose rest fills does not
-    // hand its bed back at noon.
+    // Wanted, not merely unfull: a guest arrives at its want line so this is true on arrival. It only
+    // gates acquisition; a room, once held, is kept for the whole stay.
     if (lodging !== undefined && isNeedWanted(findNeedType(content, lodgingNeedId), lodging, wantAt, false)) {
-      // `NO_ENTITY` IS NOT A PLACEHOLDER HERE, IT IS THE FACT (G-036c): this branch runs only
-      // while the guest holds no room, and `guestAccessTo` exempts the LODGING search from
-      // `guestsOfThisRoom` for exactly that reason — lodging is how a guest becomes a guest of
-      // the room, so gating it on already being one would make every bedroom carrying the rule
-      // unbookable. `staffOnly` still bites here, and should: no guest books a bed in the
-      // linen store.
-      // ======================================================================================
-      // THE PARTY'S SIZE IS ITS ORIGINAL SIZE, CARRIED RATHER THAN COUNTED (G-040b-i). RULED
-      // HERE, AT THE POINT OF USE, BECAUSE THE TWO READINGS ARE DIFFERENT BEHAVIOURS.
+      // `NO_ENTITY` is the fact here (the guest holds no room); `guestAccessTo` exempts the lodging
+      // search from `guestsOfThisRoom`. `staffOnly` still applies.
       //
-      // The alternative — count the party's LIVE members — is the shape the tick already builds
-      // twice over, and it is WRONG in the one place it would first be asked. `stepGuests`
-      // creates and reserves arrivals ONE AT A TIME, so at the moment the first member of a pair
-      // calls this function its partner does not exist: a live count answers 1 for it and 2 for
-      // the partner, and **the first member takes a single**. The pair is split silently, by the
-      // mechanism meant to keep it together, the moment a second lodging room type exists. (The
-      // `held` map is built before the arrival loop and cannot see this tick's arrivals at all,
-      // so a per-tick size lookup built there is blind in exactly the same way.)
-      //
-      // AND THE LIVE COUNT IS A DIFFERENT RULE EVEN WHERE IT IS ACCURATE: it SHRINKS when a
-      // member gives up, so a pair reduced to one would then fit a single, and a party's room
-      // would depend on how its members had fared. That is a design, and it is not this one.
-      // What ADR-0055 rules is that a party books ONE room, so what the room must hold is the
-      // party that walked in.
-      //
-      // IT COSTS NO FIELD AND NO SAVE BUMP, which is why the ruling is affordable: `partyId` IS
-      // the ordinal the size was drawn at (`guests.nextId` when the party walked in), and
-      // `partySizeOf` is a pure function of it. Every member of a party asks the same question
-      // of the same number and gets the same answer, on this tick and on every later one.
-      //
-      // A save written under one distribution and loaded under another gets the NEW answer, and
-      // that is the `dissatisfaction` precedent ADR-0068 cites rather than a defect: content can
-      // legitimately change between saves, and a world carrying a pair under content that now
-      // forms singles is a true statement about the build that wrote it.
-      // ======================================================================================
+      // The party's size is its original size (a pure function of `partyId`), not a count of live
+      // members. Members are created one at a time, so a live count would tell the first member of a
+      // pair it is alone and it would take a single; and a live count would shrink as members leave.
+      // Content changes between saves take effect on load.
       const partySize = partySizeOf(content, result.partyId);
       const room = findFreeRoom(search, lodgingNeedId, true, NO_ENTITY, result.partyId, partySize);
       if (room !== null) {
-        // THE CLAIM GROWS RATHER THAN BEING SET (G-040a): `findFreeRoom` returns a room this
-        // guest's own party may already be in, and overwriting the entry would lose the members
-        // already there. Only a room with no standing claim starts a new one.
+        // The claim grows rather than being overwritten: the room may already hold this party.
         const standing = search.held.get(room.id);
         if (standing === undefined) search.held.set(room.id, { partyId: result.partyId, lodgers: 1 });
         else standing.lodgers += 1;
         result = { ...result, roomEntityId: room.id };
-        // The parameter is the room this guest held on the way IN, and it has just changed.
-        // Reassigned rather than shadowed so the exits below cannot read the stale one — a
-        // guest that checked in this tick is in its room, not still in the doorway.
+        // Reassigned so the exits below see the room the guest now holds.
         lodgingRoom = room;
       }
     }
   }
-  // ============================================================================
-  // WHERE COMMITMENT USED TO BE TOTAL (G-014b). Until this goal the line here read
-  // `if (result.engagement !== null) return result;` — an engaged guest was never scored
-  // again, so thrashing was unexpressible rather than unlikely. It is expressible now, and
-  // the content-defined margin is the whole of what keeps it rare.
-  //
-  // THE INCUMBENT SETS A FLOOR ON THE SAME SCORING PASS RATHER THAN GETTING A PASS OF ITS
-  // OWN. A challenger must REACH `incumbent + margin` (`abandonThresholdBasisPoints`), so the
-  // bar the walk below compares against is that minus one — the loop's test is already
-  // "strictly greater than the best so far", and seeding the best with the bar makes the
-  // margin an initial condition instead of a second comparison. Two consequences, both
-  // wanted: a need that could not clear the margin never costs a provider lookup, which is
-  // the property G-016 bought and this goal must not spend; and ties BETWEEN CHALLENGERS
-  // still fall to the lower need id, because the vector is walked in ascending id and the
-  // test stays strict.
-  //
-  // NO FAST PATH FOR A SATURATING MARGIN, DELIBERATELY. `margin === ONE_WHOLE_BASIS_POINTS`
-  // makes the bar unreachable — because `pressureBasisPoints` CLAMPS at
-  // `MAX_PENDING_PRESSURE_BASIS_POINTS`, which since G-027b is an imposed ceiling rather than a
-  // consequence of `isNeedPending`, whose field this model deletes (R1) — so an early return
-  // would be provably behaviour-preserving and would cost content that predates this goal
-  // nothing. It is left out because that content is G-014b's Era-A ARM: skipping the walk
-  // would mean the arm proves the fast path rather than proving that the real re-scoring
-  // never switches. The walk it pays for is a few integer comparisons and no provider
-  // lookups.
-  // ============================================================================
+  // The incumbent seeds the walk's "best so far" at `abandonThresholdBasisPoints - 1`, so a
+  // challenger must strictly exceed it (i.e. reach threshold) and a hopeless need never costs a
+  // provider lookup. No fast path for a saturating margin (unreachable threshold): the walk is
+  // cheap and must genuinely prove that re-scoring never switches.
   const engagement = result.engagement;
   let bar = -1;
   if (engagement !== null) {
-    // THE CALLER MUST HAND OVER THE PROVIDER IT ALREADY RESOLVED, and the pairing is checked
-    // rather than assumed. `stepGuests` answers "is this thing still providing" once per
-    // guest per tick (step 1) and nulls the engagement when the answer is no (step 2), so an
-    // engaged guest arriving here always has its provider entity. If that ever stops being
-    // true, `release` below would be handed `null` and would free the provider WITHOUT
-    // un-exhausting what it serves — leaving a guest standing beside an empty café for the
-    // rest of the tick, which is the silent-fallback failure `findFreeRoom`'s short-circuit
-    // is built to avoid. Loud here beats invisible there.
+    // The caller must pass the provider it resolved in step 1; otherwise `release` would free it
+    // without un-exhausting its needs. Throw rather than fail silently.
     if (engagedRoom === null) {
       throw new Error(
         `reserve: guest ${guest.id} is engaged with entity ${engagement.entityId} but the caller resolved no provider ` +
@@ -3751,137 +1868,62 @@ function reserve(
     }
     const incumbent = findNeedState(result.needs, engagement.needId);
     const incumbentType = incumbent === undefined ? undefined : findNeedType(content, engagement.needId);
-    // A guest engaged for a need this content does not define, or for one that is no longer
-    // pending, has no pressure to compare against. It stays committed rather than being
-    // scored against a fabricated zero. The tick cannot reach either state — step 5 releases
-    // the engagement the moment its need resolves — so this is a postcondition, not a case.
+    // Postcondition: step 5 already released engagements whose need is not wanted, so this does not
+    // occur in the tick. Stay committed rather than score against a fabricated zero.
     if (incumbent === undefined || incumbentType === undefined || !isNeedWanted(incumbentType, incumbent, wantAt, true)) {
       return placed(result, lodgingRoom, engagedRoom, search);
     }
     bar = abandonThresholdBasisPoints(pressureBasisPoints(incumbentType, incumbent), abandonMarginOf(content)) - 1;
   }
-  // ONE PASS over the needs, taking the maximum score.
-  //
-  // IT WAS A DESCENDING WALK, AND REPEATED SELECTION IS O(needs^2) COMPARISONS with two
-  // binary searches into the content table each, paid by every unengaged guest on every
-  // tick. G-014a keeps the single pass and changes what is being maximised.
-  //
-  // The 27.7%-of-tick-self-time figure this comment used to carry came from G-012's drift
-  // window and is WITHDRAWN rather than restated — it was never re-measured paired, and
-  // G-016 found every un-paired reading in this milestone inflated. The change is kept on
-  // its complexity argument, which needs no stopwatch: one pass instead of O(n^2).
-  //
-  // THE PROVIDER IS ONLY LOOKED UP FOR A NEED THAT WOULD BEAT THE BEST SO FAR, so a
-  // hopeless need costs one comparison rather than a scan — the property G-016 bought and
-  // this goal keeps. Since G-014b "the best so far" starts at the incumbent's bar rather
-  // than at -1 for an engaged guest, so the same sentence covers the abandon decision.
-  //
-  // THE NEED TYPE IS RESOLVED BY POSITION WHEN IT CAN BE, exactly as `advanceNeeds` does and
-  // for the same measured reason: `formNeedVector` builds one entry per need type in the
-  // content table's own ascending order, so for a guest that formed its vector under THIS
-  // content `needs[i]` and `needTypesInOrder(content)[i]` are the same need. Scoring needs
-  // the type for every pending need of every unengaged guest on every tick, and a binary
-  // search each is the shape G-016 spent a goal removing. CHECKED per entry by a string
-  // identity compare rather than assumed — a guest migrated from v5 carries one need where
-  // the content defines four, and it falls back to the search.
+  // One pass over the needs, taking the maximum. The provider is only looked up for a need that
+  // would beat the best so far, so a hopeless need costs one comparison. The need type is resolved
+  // by position where the vector aligns with the content table (checked per entry), with a search
+  // fallback for migrated guests.
   const needTypes = needTypesInOrder(content);
   const maybeAligned = result.needs.length === needTypes.length;
   let bestPressure = bar;
-  // THE INCUMBENT'S RANK IS NEVER READ, so this initial value can never decide anything: the
-  // only path that compares against it requires `bestNeed` to be defined, and only a real
-  // candidate defines it. Zero rather than a sentinel because a sentinel would suggest
-  // otherwise.
+  // Never read for the incumbent's bar (comparisons against it require `bestNeed`), so any value
+  // works.
   let bestRank = 0;
   let bestNeed: NeedState | undefined;
   let bestProvider: Entity | null = null;
   for (let i = 0; i < result.needs.length; i += 1) {
     const need = result.needs[i];
     if (need === undefined) continue;
-    // A FULL NEED IS NOT A CANDIDATE, and this is the cheap half of the wanting test — one
-    // integer compare, before any type resolution, for every need of every guest on every tick.
-    // The other half needs the capacity and is asked below, once the type is in hand.
+    // Cheap half of the wanting test, before type resolution.
     if (need.deficit === 0) continue;
-    // The lodging need is served by the room the guest holds, never by an engagement: a
-    // guest does not book a second bedroom to sleep in.
+    // The lodging need is served by the room, never by an engagement.
     if (need.needId === lodgingNeedId) continue;
-    // A GUEST NEVER LEAVES A HALF-EATEN MEAL TO EAT THE SAME MEAL SOMEWHERE NICER (G-014b).
-    // Within one need the commitment stays TOTAL: fit is ordinal by ruling, so a margin
-    // denominated in it would make magnitudes the schema calls inert into load-bearing
-    // numbers owing derivations nobody can supply (`PARKING.md`). Skipping the incumbent
-    // here is what makes that true rather than merely intended — without it the incumbent
-    // would tie with itself at the bar and, needing to EXCEED it, would lose anyway, which
-    // is the same answer reached by accident instead of on purpose.
+    // Within one need commitment stays total: a guest never leaves a half-eaten meal for a nicer
+    // table.
     if (engagement !== null && need.needId === engagement.needId) continue;
     const positional = maybeAligned ? needTypes[i] : undefined;
     const needType =
       positional !== undefined && positional.id === need.needId ? positional : findNeedType(content, need.needId);
-    // A need this content does not define cannot be pursued — the `urgencyOf` contract. It
-    // sorted last under the old comparator and is skipped here, which is the same outcome
-    // reached without a special case in the ranking.
+    // A need this content does not define cannot be pursued.
     if (needType === undefined) continue;
-    // WANTED, and `beingServed` is FALSE for every candidate in this walk: the incumbent is
-    // skipped by name above, so nothing here is a need something is already serving. A need
-    // between full and its want line is therefore not a candidate — the near side of the
-    // hysteresis, and the reason a guest does not walk out to chase a stock it has barely
-    // dented. Asked here rather than at the top of the loop because it needs the capacity, and
-    // resolving the type is the expensive part G-016 spent a goal making positional.
+    // Wanted, with `beingServed` false (the incumbent is skipped above), so a need between full and
+    // its want line is not a candidate — the near side of the hysteresis.
     if (!isNeedWanted(needType, need, wantAt, false)) continue;
     const pressure = pressureBasisPoints(needType, need);
-    // ============================================================================
-    // THE TIE-BREAK, AND UNTIL G-054 IT WAS A SPELLING (ADR-0078).
+    // Tie-break. Pressure decides; only an exact tie consults `needTieBreakRank`, which depends on the
+    // guest, so tied needs lead for roughly equal shares of guests instead of the lowest id always
+    // winning.
     //
-    // This line read `if (pressure <= bestPressure) continue;` — strictly greater, over a walk
-    // in ascending content-id order, so an EXACT tie kept the LOWER NEED ID. That is
-    // `compareNeedPriority`'s own tie rule, carried forward deliberately, and it was wrong for
-    // a reason nobody had looked for: the three shipped engagement needs have identical
-    // `capacityTicks` and `refillPerTick`, so they are exactly tied whenever none has been
-    // served — **the common case, not a corner** — and I2 forbids randomness, so the tie fell
-    // the same way for every guest, every cycle, for the life of the hotel. Renaming the three
-    // ids and changing nothing else moved `guest_nourishment` 3.3x; the alphabetically last
-    // need read 569-613 basis points unserved against the first one's 126-254.
+    //   pressure <  bestPressure   loses.
+    //   pressure == bestPressure, no `bestNeed` yet: this is the incumbent's bar, and equality must
+    //                              lose here or the abandon threshold shifts by one basis point.
+    //   pressure == bestPressure, `bestNeed` set: a real tie; lower rank wins.
     //
-    // NOW: pressure still decides, and only an EXACT tie consults `needTieBreakRank`, which is
-    // a function of THIS GUEST as well as of the need. Across a population every need leads for
-    // about a third of guests. `utility.ts`'s docblock carries the two rejected candidates and
-    // the reason a rotation is not equivalent.
-    //
-    // THE THREE-WAY SPLIT IS NOT COSMETIC — read the ordering of these branches:
-    //
-    //   pressure  <  bestPressure   loses. `pressureBasisPoints`' order is untouched by this
-    //                               goal and nothing below can reorder two unequal pressures.
-    //   pressure === bestPressure   AND `bestNeed` is undefined: this is the INCUMBENT'S BAR,
-    //                               not a rival need. A challenger must EXCEED the bar to
-    //                               abandon (G-014b), so equality loses — and it must lose here
-    //                               rather than later, or `abandonThresholdBasisPoints` moves by
-    //                               one basis point and the hysteresis boundary shifts.
-    //   pressure === bestPressure   AND `bestNeed` is defined: a real tie between two
-    //                               candidates. Lower rank wins.
-    //
-    // AND THE PROVIDER LOOKUP STAYS BEHIND ALL OF IT, which is the property G-016 bought and
-    // this goal must not spend. A tie that loses on rank costs one `Math.imul` chain and no
-    // search. A tie that WINS on rank costs a search that the old code would not have made —
-    // but only after an earlier search already succeeded, which is the tick a guest engages on
-    // rather than every tick it spends waiting. Where nothing is free every candidate is
-    // searched under both rules, because a failed search leaves `bestPressure` untouched.
-    // ============================================================================
+    // The provider lookup stays behind all of this.
     if (pressure < bestPressure) continue;
     const rank = needTieBreakRank(guest.id, i);
     if (pressure === bestPressure) {
       if (bestNeed === undefined) continue;
       if (rank >= bestRank) continue;
     }
-    // `result.roomEntityId` RATHER THAN `guest.roomEntityId`, AND THE DIFFERENCE IS ONE TICK
-    // (G-036c). The lodging branch above may have just assigned a room to `result`, and reading
-    // the parameter instead would mean a guest that checked in this tick could not use its own
-    // room's vending machine until the next one — a guest walking past the thing it just
-    // rented. `reserve` never reassigns a room a guest already holds, so this value is final
-    // for the rest of the guest's stay.
-    // THE PARTY'S SIZE IS NOT COMPUTED HERE AND THE LITERAL IS NOT A PLACEHOLDER (G-040b-i).
-    // `capacity` bounds the party a ROOM sleeps, not a queue at a café: an engagement claim is a
-    // flat refusal — one guest at a time, whatever the provider is — so the capacity clause is
-    // inside `forLodging` and this argument is never read on this path. One guest is what an
-    // engagement is for, and passing the real size would buy a content lookup per engaged guest
-    // per tick to feed a branch that cannot run.
+    // `result.roomEntityId`, not `guest.roomEntityId`: a guest that checked in this tick can use its
+    // own room's items immediately. Party size 1 is correct here: capacity only applies to lodging.
     const provider = findFreeRoom(search, need.needId, false, result.roomEntityId, result.partyId, 1);
     if (provider === null) continue;
     bestPressure = pressure;
@@ -3890,36 +1932,18 @@ function reserve(
     bestProvider = provider;
   }
   if (bestNeed === undefined || bestProvider === null) return placed(result, lodgingRoom, engagedRoom, search);
-  // ============================================================================
-  // THE SEARCH SUCCEEDS BEFORE ANYTHING IS RELEASED, AND THE ORDER IS THE DECISION (G-014b,
-  // MAJOR 4(a)). Releasing first and searching afterwards would let a guest abandon INTO
-  // NOTHING — a guaranteed unhappiness the margin cannot see, and §6.1's "reads as stupid"
-  // in its literal form: a guest that walks out of the café, finds the games room taken and
-  // stands in the corridor. Worse, `release` un-exhausts the freed provider's needs, so
-  // another guest visited later in this same loop could take it and the abandonment would be
-  // irreversible within the tick.
+  // The search succeeds before anything is released, so a guest never abandons into nothing (and a
+  // released provider cannot be taken by someone later in the loop before the switch is certain).
+  // The incumbent's provider is in `held`, so it cannot be selected.
   //
-  // Reaching this line means a free provider for a challenger that CLEARS THE MARGIN is in
-  // hand. It cannot be the incumbent's own provider: that entity is in `held` — the guest is
-  // holding it — and `findFreeRoom` skips everything held, so the incumbent cannot
-  // self-select and a "switch" to the thing already engaged is unrepresentable.
-  //
-  // THE PRICE OF THAT ORDERING, STATED RATHER THAN DISCOVERED: a provider that serves BOTH
-  // the incumbent need and the challenger need is invisible to the search that decides the
-  // switch, because the guest is holding it. So a guest could walk from a provider that
-  // could have served the new need to a second one that also does. No shipped content can
-  // reach it — no room type or item in `packages/content/data` provides two needs — and
-  // closing it properly needs the search to consider "what I already hold" as a candidate
-  // for another need, which is a different decision. Parked with its falsification test.
-  // ============================================================================
+  // Known gap: a provider serving both the incumbent and the challenger need is invisible to this
+  // search. No shipped content has a multi-need provider.
   if (engagement !== null) {
     release(search, engagement.entityId, engagedRoom, content);
     result = { ...result, needs: abandonNeed(result.needs, engagement.needId), engagement: null };
   }
   search.held.set(bestProvider.id, { partyId: NO_PARTY, lodgers: 0 });
-  // AND THE GUEST IS AT THE THING IT JUST ENGAGED (G-023a). `bestProvider`, not `engagedRoom`
-  // — the incumbent was released three lines up, so passing it here would leave a guest
-  // standing at the café it just walked out of.
+  // Stand at the new provider, not the one just released.
   return placed(
     { ...result, engagement: { entityId: bestProvider.id, needId: bestNeed.needId } },
     lodgingRoom,
@@ -3929,174 +1953,48 @@ function reserve(
 }
 
 /**
- * The guest, standing where its holdings put it (G-023a). THE ONLY PLACE `Guest.at` MOVES —
- * the arrival literal in `stepGuests` is the only other writer, and it writes the same rule
- * for a guest that holds nothing.
+ * The guest, one step closer to where its holdings put it. The only place `Guest.at` moves
+ * (besides the arrival literal).
  *
- * IDENTITY-RETURNING WHEN THE CELL HAS NOT CHANGED, which is almost every tick of almost
- * every guest — a sleeping guest does not move. `addDepartures` keeps its rows the same way
- * and for the same reason: this runs for every guest on every tick, and a spread per guest
- * per tick to rewrite two integers with the same two integers is exactly the allocation
- * §6.1 asks `sim-critic` to watch for. `cellsEqual` is the comparison, never `===` on the
- * object (`grid.ts`).
- *
- * IT COSTS NO LOOKUP. Both entities were resolved by `stepGuests` step 1 or found by
- * `reserve` itself, so this adds no pass over anything and tick cost stays linear in guests.
- *
- * THE CELL IS COPIED, NEVER SHARED, AND THE COPY IS HERE RATHER THAN IN `standingCell`
- * (G-023a, `sim-critic` MINOR 3). `standingCell` hands back the HOST ENTITY'S OWN `at`
- * object, so landing it unchanged would make a guest and the room it stands in two
- * references to one `Cell` — precisely the sharing `draftSpawn` refuses for an entity's
- * placement ("the caller's object must not be able to move an entity after the fact") and
- * that `migrateV10ToV11` refuses for a migrated guest. Nothing can write through it today
- * because every field of `Cell` is `readonly`, and the round trip re-splits them, so no hash
- * moves either way; it is copied because the rule is argued in two other copies of this
- * placement code and a rule kept in two places out of three is the drift ADR-0008 is about.
- *
- * COPYING COSTS NOTHING IN THE STEADY STATE, which is why the choice of site matters:
- * `cellsEqual` runs FIRST, so a guest that has not moved allocates neither a `Cell` nor a
- * `Guest`, and the copy happens only on the tick a guest actually changes cell. Copying
- * inside `standingCell` instead would allocate for every guest on every tick, which is the
- * per-guest-per-tick allocation MAJOR 1 of the same critique is about.
+ * Returns the same guest when the cell has not changed (almost every guest, every tick); compares
+ * with `cellsEqual`, never `===`. Costs no lookup. The cell is copied rather than shared with the
+ * host entity, and the copy happens only when the guest actually moves.
  */
 function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entity | null, search: RoomSearch): Guest {
   const at = standingCell(lodgingRoom, engagedProvider, search.input.entities.bounds);
   if (cellsEqual(guest.at, at)) return guest;
-  // A FLOOR IS REACHED BY A STAIR (G-038a-ii-alpha). The cell a guest walks TOWARDS this tick
-  // is not always the cell it is going TO: with a stairwell declared and a destination on
-  // another floor, the target is a LEG of the journey rather than its end. Derived every tick
-  // from `guest.at`, the destination and the plan; never stored. See `stairLeg`.
+  // A floor is reached by a stair: the cell walked towards this tick may be a leg of the journey.
+  // Derived every tick, never stored. See `stairLeg`.
   const leg = stairLeg(guest.at, at, search.stairwell);
-  // ==========================================================================================
-  // THE LIFT GATE (G-038b-i). A guest whose leg CHANGES FLOOR is asking the shaft to carry it,
-  // and a shaft with a lift in it carries only so many at a time.
-  //
-  // `leg.floor !== guest.at.floor` IS THE WHOLE PREDICATE, AND IT IS `stairLeg`'S OWN OUTPUT
-  // RATHER THAN A SECOND COPY OF ITS CONDITION. That matters more than it looks: `climbsFrom`
-  // in `validity.ts` exists because reachability had to RE-DERIVE when the floor axis spends,
-  // and its docblock says so — *"copied from `stairLeg` because it IS `stairLeg`'s condition"*.
-  // A third copy here would be a third thing to keep in step. Reading the leg asks the question
-  // once, of the function that answers it. **Neither of the existing two moves in this goal.**
-  //
-  // AND THE GUEST IS NECESSARILY STANDING ON THE SHAFT CELL OF ITS OWN FLOOR WHEN THIS FIRES,
-  // which is what makes the line a PLACE rather than an abstraction: `stairLeg` returns a
-  // different floor only for a guest already on the stairwell's column and row. A guest still
-  // walking towards the stairwell is not in the line, because it is not there yet.
-  //
-  // A LIFT IMPLIES A STAIRWELL — refused by `installLift` on the way in from a command and by
-  // `assertWorldShape` on the way in from a save — so there is no world in which this fires
-  // with no shaft to fire at.
-  //
-  // IT RETURNS THE GUEST UNCHANGED, which is a WAIT rather than a special case: the guest is
-  // already standing where it wants to be standing, so "does not board" and "does not move" are
-  // the same sentence. It costs no allocation, which is the same identity return a sleeping
-  // guest takes four lines above.
-  // ==========================================================================================
+  // The lift gate: a leg that changes floor asks the shaft to carry the guest. `stairLeg` only
+  // returns a different floor for a guest already on the stairwell cell, so the line is a real
+  // place. A lift implies a stairwell. Not boarding means not moving, so return the guest unchanged.
   if (search.lift !== null && leg.floor !== guest.at.floor && !boardLift(search.lift, guest.id)) {
     return guest;
   }
-  // A ROOM IS ENTERED THROUGH ITS DOOR (G-046). The second waypoint, derived every tick from
-  // the same three cells the stair leg is: where the guest is, where it is going, and what
-  // the plan says. Never stored, for `stairLeg`'s reason exactly — the destination can change
-  // mid-journey and a stored one would go stale silently. On a leg that is not the journey's
-  // end, and on a destination that is not a room, this is `leg` unchanged and by reference.
-  //
-  // AND A ROOM IS LEFT THROUGH ITS DOOR TOO (G-046b). The THIRD waypoint, and it is the first
-  // one that reads `guest.at` as a PLACE THE GUEST IS rather than as the start of a line: the
-  // two legs above ask where the journey is going, this asks what the guest has to get out of
-  // first. Derived every tick from the same cells, never stored, and returning `leg` untouched
-  // for a guest standing on circulation — which is almost every moving guest on almost every
-  // tick. **It is applied LAST because it constrains the FIRST step**: whatever the two legs
-  // above decided the guest is heading for, it cannot start by walking through its own wall.
+  // Door waypoints, derived every tick: a room is entered through its door (`doorLeg`) and left
+  // through its door (`exitLeg`). `exitLeg` is applied last because it constrains the first step.
   const approach = exitLeg(search.input.validity, guest.at, doorLeg(search.input.validity, guest.at, leg, at), search.speed);
-  // THE ROOM STANDING ON THE CELL THE GUEST IS WALKING TO, RESOLVED ONCE AND ONLY FOR A GUEST
-  // THAT IS ACTUALLY MOVING (G-038a-i). It is asked AFTER the `cellsEqual` return above, so a
-  // sleeping guest — which is almost every guest on almost every tick — pays nothing for
-  // walls, exactly as it already paid nothing for a step. See `isWalkableFor` for why the
-  // ROOM rather than the destination ENTITY: a guest engaged with an item walks to a cell
-  // inside that item's host room.
-  //
-  // IT IS ASKED OF `approach` AND NOT OF `leg`, WHICH IS THE OTHER HALF OF G-046 AND IS NOT A
-  // TIDY-UP. The third set of `isWalkableFor` — "the destination room's own footprint" — is a
-  // PERMIT, and the permit must be for the cell the guest is walking to THIS tick. While the
-  // guest is walking to a DOORWAY the answer is `NO_ENTITY`, so no room's footprint is
-  // admissible and a guest may not land inside its own destination on the way to the door; the
-  // permit reappears the moment the guest turns in. That is what makes the door the way in
-  // rather than a suggestion, and it costs nothing: it is the same call on a different cell.
+  // The room on the target cell, resolved only for a moving guest. Asked of `approach`, not `leg`:
+  // while walking to a doorway the permit is `NO_ENTITY`, so a guest cannot cut through its
+  // destination room's walls.
   const next = stepTowards(guest.at, approach, search.speed, search.input.validity, roomIdAt(search.input.validity, approach));
   return cellsEqual(guest.at, next) ? guest : { ...guest, at: next };
 }
 
 /**
- * ==========================================================================================
- * WHERE A GUEST WALKS *THIS TICK*, WHICH IS NOT ALWAYS WHERE IT IS GOING (G-038a-ii-alpha).
+ * Where a guest walks this tick, which is not always where it is going: a floor is reached by a
+ * stair.
  *
- *   A FLOOR IS REACHED BY A STAIR. `stepTowards` spent the floor axis first and
- *   UNCONDITIONALLY, so a guest with a cross-floor destination rose through the ceiling from
- *   wherever it happened to be standing. This is the function that sends it to the stairwell
- *   first.
+ *   same floor, or no stairwell declared  ->  the destination itself (no stairwell: the floor
+ *                                             axis spends unconditionally, the v20 behaviour).
+ *   off the stairwell column              ->  the stair cell on the guest's own floor (walk).
+ *   on the stairwell column               ->  the stair cell on the destination's floor (climb).
  *
- * ------------------------------------------------------------------------------------------
- * A DERIVED DESTINATION, NOT A STORED ONE, AND THAT IS THE DESIGN RATHER THAN A DETAIL.
- *
- * `stepTowards`' own docblock records why a countdown with a stored destination was refused at
- * G-023b-i: *"the destination CAN change mid-journey — a waiting guest is given a room while it
- * is walking to the cafe — and a stored one would go stale silently."* A stair leg IS a
- * destination, so storing one would re-introduce exactly that. Recomputing it every tick is
- * correct under a mid-journey change by construction, adds NO hashed field beyond the stair set
- * itself, and keeps `placed`'s recompute-every-tick decision intact.
- *
- * IT IS O(1), AND ONLY BECAUSE STAIRS ARE ALIGNED. `stairwell` is one array index resolved once
- * per tick (`RoomSearch.stairwell`); nothing here scans the stair set, nothing here searches for
- * a NEAREST stair, and nothing here is a route search. *"Nearest stair on this floor"* is
- * O(stairs) per moving guest per tick on top of `stepTowards`' four-or-fewer `isWalkableFor`
- * calls — the shape the plan review refused against a bound ADR-0056 froze.
- * ------------------------------------------------------------------------------------------
- *
- * ------------------------------------------------------------------------------------------
- * THREE CASES, AND THEY COMPOSE INTO A JOURNEY WITH NO STATE BETWEEN THEM.
- *
- *   SAME FLOOR, or NO STAIRWELL DECLARED  ->  the destination itself, unchanged. The second of
- *     those is the v20 reading: no stair anywhere means the floor axis spends unconditionally,
- *     so this file behaves on such a world exactly as it did before G-038a-ii-alpha, to the
- *     cell. ~~and it is what every world in this project has today~~ — **STRUCK AT
- *     G-038a-iii-b, which declared the stairwell in `report.ts` and in
- *     `apps/game/src/scenario.ts`. No SHIPPED world takes that branch any more**; a migrated
- *     v20 save and a fixture that declares nothing still do, which is what keeps the branch.
- *   OFF THE STAIRWELL COLUMN  ->  the foot of the stairs ON THE GUEST'S OWN FLOOR. The floor gap
- *     is then zero, so `stepTowards` spends nothing on the floor axis and the guest WALKS.
- *   ON THE STAIRWELL COLUMN  ->  the stair cell on the DESTINATION's floor. The column and row
- *     gaps are then zero, so the whole budget goes vertical and the guest CLIMBS.
- *
- * THE PHASES ADVANCE STRICTLY AND NOTHING OSCILLATES, which is the safety argument and it is
- * structural rather than statistical — G-038a-i's shape, one axis over. Within a phase the guest
- * covers exactly `min(cellsPerTick, distance)` cells toward that phase's target, so the
- * remaining distance falls monotonically; reaching the target moves it on; the third phase IS
- * the pre-goal function. A guest cannot be stranded and cannot be sent back.
- *
- * A JOURNEY IS LENGTHENED, AND THAT IS THE MECHANIC RATHER THAN A COST TO HIDE. G-038a-i could
- * say a wall never lengthens a journey; a stair does, by up to two ticks of unspent budget at
- * the two phase changes plus the detour to the column. That is why the speed window is
- * re-derived in this goal and `worstJourney` stops being the Manhattan sum — see
- * `tools/headless/src/dissatisfaction.content.test.ts`, which walks all three legs.
- *
- * AND IT INHERITS `stepTowards`' FALLBACK, WHICH IS WHAT ANSWERS *"WHAT IF SOMEBODY BUILDS ON
- * THE STAIRWELL?"*. If a room stands on the stair cell, every candidate landing is a wall and
- * `stepTowards` takes candidate zero — so the guest converges on the stairwell anyway, stands
- * inside that room for a tick, and climbs. **A room drawn over a stairwell does not sever the
- * building in this half.** What it costs is LEGIBILITY — a guest seen standing in a stranger's
- * bedroom on its way up, which is WATCH #17's residual class on a new subject rather than a new
- * failure mode. The refusal that would stop it needs reachability to derive itself from, and
- * reachability is G-038a-ii-beta's.
- * ------------------------------------------------------------------------------------------
- *
- * A MODULE-LEVEL FUNCTION AND NOT A CLOSURE, for `hasArrivedAt`'s MEASURED reason: this runs for
- * every MOVING guest on every tick, after `placed`'s `cellsEqual` early return, and a closure
- * declared inside the loop is the allocation shape that measured 1.5889 against a 1.4640 bound.
- * Scalars in, one cell out, nothing captured.
- *
- * IT RETURNS `to` BY REFERENCE in the two unchanged cases, so the path every world in this
- * project takes today allocates nothing at all.
+ * Derived every tick, never stored, so a destination change mid-journey is handled by
+ * construction. O(1) because stairs are aligned. Each phase closes monotonically, so nothing
+ * oscillates. A room built over the stairwell does not sever the building: `stepTowards`' fallback
+ * lets the guest pass through it. Returns `to` by reference in the unchanged cases.
  */
 export function stairLeg(from: Cell, to: Cell, stairwell: Cell | null): Cell {
   if (stairwell === null || to.floor === from.floor) return to;
@@ -4107,51 +2005,12 @@ export function stairLeg(from: Cell, to: Cell, stairwell: Cell | null): Cell {
 }
 
 /**
- * ==========================================================================================
- * A ROOM IS ENTERED THROUGH ITS DOOR (G-046). `stairLeg`'s shape, one question over.
+ * A room is entered through its door: on the journey's final leg, walk to the doorway cell
+ * outside the room first, then turn in. A different destination, not a route search.
  *
- *   A FLOOR IS REACHED BY A STAIR.  A ROOM IS ENTERED THROUGH ITS DOOR.
- *
- * The human watched the game and said guests *"seem to jump through walls rather than looking
- * for a door (which I guess doesn't exist!)"*. It did not. `standingCell` returns the room's
- * own cell and `stepTowards` walked at it, so a guest crossed whichever wall it happened to be
- * beside. This inserts the doorway as a WAYPOINT: the guest walks to the cell outside the
- * room, and only from there turns in.
- *
- * ------------------------------------------------------------------------------------------
- * IT IS OPTION (b), AND OPTION (c) IS STILL REFUSED. `GOALS.md` G-046 prices three answers and
- * the human ruled the middle one. **Nothing here searches for a route** — `doorwayFor` is a
- * memo lookup over a walk `roomInvalidity` already runs, and `stepTowards` is the same
- * four-or-fewer-candidate step it has always been. What the guest gets is a different
- * DESTINATION, not a different way of travelling.
- *
- * WHAT IT THEREFORE DOES NOT BUY, SAID PLAINLY SO NOBODY READS THIS AS MORE THAN IT IS: the
- * approach to the doorway is still a straight two-axis walk, so a guest whose doorway lies past
- * an obstruction still spends its candidates and still falls back. **The door fixes the LAST
- * step of a journey, which is the one a watcher is looking at.** The cells crossed between two
- * landings are `stepTowards`' own documented non-question and remain one.
- * ------------------------------------------------------------------------------------------
- *
- * ------------------------------------------------------------------------------------------
- * IT APPLIES ONLY TO THE FINAL LEG, AND THAT GUARD IS LOAD-BEARING RATHER THAN TIDY.
- *
- * `cellsEqual(leg, to)` asks whether the stair leg is the journey's END. Drop the guard and a
- * room built ON the stairwell cell LIVELOCKS every guest trying to climb past it: the leg is
- * the stair foot, the stair foot is inside that room, so the door rule diverts the guest to
- * THAT room's doorway — where the leg is still the stair foot, so it diverts again, forever.
- * The guest never climbs and never gives up. `stepTowards`' own docblock records the incumbent
- * behaviour for that layout ("a guest converges on the stairwell anyway, stands inside that
- * room for a tick, and climbs"), and this guard is what preserves it.
- *
- * A GUEST CLIMBING IS NOT AT ITS DESTINATION AND HAS NO DOOR TO LOOK FOR. The two legs compose
- * in the only order that means anything: reach the destination's FLOOR, then its DOOR, then
- * the cell itself. Each phase closes monotonically because `stepTowards` spends
- * `min(cellsPerTick, distance)` toward whatever target it is given, whatever the building looks
- * like — so a guest cannot be stranded between the stairs and the door.
- * ------------------------------------------------------------------------------------------
- *
- * IT ALLOCATES NOTHING AND RETURNS BY REFERENCE, on both branches: `leg` unchanged, or the
- * doorway cell the validity memo is already holding. `stepTowards` only ever reads it.
+ * Only applies when the stair leg is the journey's end (`cellsEqual(leg, to)`); without that
+ * guard a room built on the stairwell cell would divert climbing guests to its doorway forever.
+ * Returns by reference.
  */
 export function doorLeg(validity: ValidityContext, from: Cell, leg: Cell, to: Cell): Cell {
   if (!cellsEqual(leg, to)) return leg;
@@ -4159,70 +2018,20 @@ export function doorLeg(validity: ValidityContext, from: Cell, leg: Cell, to: Ce
 }
 
 /**
- * ==========================================================================================
- * A ROOM IS *LEFT* THROUGH ITS DOOR (G-046b). `doorLeg`'s sentence, running the other way.
+ * A room is left through its door: if the guest is inside a room, step first to its doorway.
  *
- *   A FLOOR IS REACHED BY A STAIR.  A ROOM IS ENTERED THROUGH ITS DOOR.
- *   A ROOM IS LEFT THROUGH ITS DOOR.
+ * Two guards make this terminate:
+ *   1. Only when the doorway is within one tick's budget. `stepTowards` then has exactly one
+ *      candidate (the doorway, always walkable), so the fallback cannot drop the guest into a
+ *      third room, and the guest ends in circulation — so the rule cannot fire two ticks running.
+ *   2. Never backwards: only when the doorway is no further from `leg` than the guest already is.
+ *      Otherwise a guest whose door is on the far side would oscillate in and out.
+ * So the distance to `leg` strictly falls at least every second tick. `travel.exit.test.ts` builds
+ * the geometries that fail without each guard.
  *
- * G-046 answered ENTERING and said so: on the WATCH surface at seed 7 over 2,880 ticks it took
- * guests walking IN through a wall from 64 to 19, and left 248 walking OUT. **An approach rule
- * cannot answer an exit** — `doorLeg` rewrites the target when the target IS the destination,
- * and a guest that is leaving has already got where it was going. What has to be constrained is
- * its FIRST step, and the only input that says so is where the guest IS.
- *
- * ------------------------------------------------------------------------------------------
- * THE LIVELOCK THIS GOAL WAS BLOCKED ON, AND THE TWO GUARDS THAT ANSWER IT.
- *
- * `stepTowards` returns an untested `fallback` when every candidate landing is a wall. Point a
- * guest at its own doorway naively and that fallback can drop it into a THIRD room, from which
- * the same rule fires again — **and a guest that cannot legally leave anywhere never leaves**,
- * which the departure accounting has no word for. G-046's builder named the risk and refused to
- * take it blind. **Neither guard below is a tuning knob; each is one half of a termination
- * proof, and `travel.exit.test.ts` builds the geometry that fails without it.**
- *
- *   1. WITHIN ONE TICK'S BUDGET. The rule fires only when the doorway is at most
- *      `cellsPerTick` steps away. Then `stepTowards` has EXACTLY ONE candidate — the whole
- *      remaining distance fits in the budget, so `leastOnColumn` and `mostOnColumn` coincide —
- *      and that candidate IS the doorway. A doorway is a declared walkway that no room stands
- *      on, so `isWalkableFor` admits it for every permit. **The candidate loop therefore
- *      returns on its first and only candidate and the fallback cannot run.** A guest that
- *      takes this rule lands ON its doorway, in circulation: never inside a third room, never
- *      inside the room it is leaving, and — because it is no longer inside any room — **the
- *      rule cannot fire on two consecutive ticks.**
- *   2. NEVER BACKWARDS. The rule fires only when the doorway is no further from the leg than
- *      the guest already is. Without it a guest whose door is on the far side of its room walks
- *      out, is pushed straight back in by `stepTowards`' fallback, and walks out again forever
- *      — the two cells map onto each other and neither is wrong on its own tick.
- *
- * TERMINATION, IN THREE LINES. Let `d` be the guest's distance to `leg` across the floor. On a
- * tick where this rule fires, `d` does not increase (guard 2) and the guest ends outside every
- * room (guard 1). On a tick where it does not, `stepTowards` spends the whole budget toward
- * `leg`, so `d` falls by `min(budget, d)`. The rule cannot fire twice running, so `d` strictly
- * falls at least every second tick and the guest reaches its leg in at most `2d` of them.
- * **No guest is stranded, and `stepTowards`' fallback is untouched** — which it had to be:
- * it is documented in two places as the anti-stranding guarantee and changing it would change
- * what `unreachable` means.
- * ------------------------------------------------------------------------------------------
- *
- * WHAT GUARD 2 COSTS, STATED AS THE SCOPE OF THE RULE RATHER THAN AS A REGRET: **a guest whose
- * door is behind it still steps out through the wall in front of it.** Sending it out of the
- * far door instead needs a route AROUND the room, and that is option (c) — full routing, priced
- * at 1.70x-1.91x and refused twice. Without one, "leave by the far door" puts the guest on its
- * doorstep and then walks it straight back through the room it just left, which is a worse
- * picture than the one being fixed as well as a livelock. **The residue is named in G-046b's
- * census rather than hidden.**
- *
- * ABSENT SPEED MEANS NO STEP, SO THERE IS NO THRESHOLD TO BE PART OF. Content that declares no
- * `guestCellsPerTick` arrives instantaneously (`hasArrivedAt`), and such content behaves after
- * this goal exactly as it did before it, to the cell.
- *
- * A BOARDING GUEST IS NEVER DIVERTED, and it falls out of guard 2 rather than needing a clause:
- * the lift gate fires only for a guest whose leg is on another FLOOR, which `stairLeg` returns
- * only for a guest already standing on the stairwell's column and row — so its distance across
- * the floor to that leg is zero, and no doorway can beat zero.
- *
- * IT ALLOCATES NOTHING AND RETURNS BY REFERENCE on every branch, like the two legs above it.
+ * Cost of guard 2: a guest whose door is behind it still steps out through the wall in front.
+ * Content with no speed is unaffected. A boarding guest is never diverted (its across-floor
+ * distance to the leg is zero). Returns by reference.
  */
 export function exitLeg(validity: ValidityContext, from: Cell, leg: Cell, cellsPerTick: number | undefined): Cell {
   if (cellsPerTick === undefined) return leg;
@@ -4233,103 +2042,19 @@ export function exitLeg(validity: ValidityContext, from: Cell, leg: Cell, cellsP
 }
 
 /**
- * How many steps apart two cells are ACROSS THE FLOOR, ignoring the floor axis.
- *
- * THE FLOOR IS LEFT OUT ON PURPOSE AND IT IS WHAT MAKES GUARD 2 CORRECT ON A STAIRWELL. A leg
- * `stairLeg` put on another floor sits at the stairwell's own column and row, so a guest
- * standing there is zero steps from it across the floor and any doorway is at least one — the
- * rule refuses, and a guest climbing out of a room somebody built over the shaft still climbs.
- * Counting the floor gap instead would make that distance three and divert it forever.
+ * Steps between two cells across the floor, ignoring the floor axis — so a guest on the
+ * stairwell is zero from a leg on another floor and guard 2 never diverts a climber.
  */
 function stepsAcross(a: Cell, b: Cell): number {
   return Math.abs(a.column - b.column) + Math.abs(a.row - b.row);
 }
 
 /**
- * ONE TICK OF WALKING (G-023b-i). **THE ONLY PLACE A GUEST'S CELL CHANGES DURING A TICK.**
+ * Has this guest actually reached the thing it is holding?
  *
- * ------------------------------------------------------------------------------------------
- * TRANSIT IS `at` ITSELF, AND THERE IS NO SECOND FIELD. This is the design change this goal
- * made against its own re-plan, which had specified a `transitTicks` countdown and a save
- * schema bump to v17. Stepping the cell instead is strictly better and the plan was wrong:
- *
- *   - **A guest mid-journey is somewhere.** A countdown says "arrives in 4 ticks" and leaves
- *     the guest standing at its origin; stepping puts it in the corridor, which is where a
- *     watching player would expect to see it (§5 WATCH) and what the viewer can already draw.
- *   - **It adds NO hashed state, so there is no v17 and no 16->17 migration.** `at` is already
- *     hashed and already saved (G-023a). A migration written to satisfy a criterion I wrote an
- *     hour earlier would have been invention.
- *   - **A countdown needs a destination stored beside it**, or it must re-derive one every
- *     tick and hope it has not changed. The destination CAN change mid-journey — a waiting
- *     guest is given a room while it is walking to the cafe — and a stored one would go stale
- *     silently. Recomputing the target every tick and stepping toward whatever it is now is
- *     correct under that change by construction.
- *
- * SPEED ABSENT MEANS INSTANTANEOUS, which is exactly what every build before this one did.
- * That is why `undefined` is a branch here rather than a defaulted constant: a default in this
- * package would be a content number living in the simulation (I3).
- *
- * THE AXIS ORDER WAS ARBITRARY AND IS NOW A TIE-BREAK (G-038a-i). It was vertical, then column,
- * then row, because it had to be SOME fixed order for I2 and nothing modelled a route to be
- * faithful to. A room is a route now: the horizontal budget can be split between the two axes in
- * several ways, every one of them the same distance travelled, and the guest takes the first
- * split whose LANDING CELL is somewhere it may stand (`isWalkableFor`). Column-first is candidate
- * ZERO, so the old order is what an unobstructed guest still gets, to the cell.
- *
- * ------------------------------------------------------------------------------------------
- * WHY THE CHOICE IS OVER LANDINGS AND NOT OVER EVERY CELL CROSSED, WHICH IS THE DESIGN.
- *
- * A guest occupies exactly ONE cell per tick. Nothing in the simulation, in a save, in the state
- * hash or in a recorded frame can observe a cell it passed through on the way, so "a wall is a
- * wall" is a claim about where a guest STANDS, and that is what this chooses over. A per-cell
- * rule was built and MEASURED: it makes the WATCH surface WORSE, 23 through-wall landings to 43,
- * because refusing one cell early spends the row budget and strands the guest with nothing but
- * blocked column steps for the rest of the journey. Landing-choice was 23 -> 6 on the same arm.
- *
- * AND THE PROPERTY THAT MAKES IT SAFE: every candidate spends the WHOLE budget, so the guest
- * covers exactly `min(cellsPerTick, distance)` cells whatever the building looks like. A wall
- * cannot lengthen a journey, cannot slow one, and cannot strand a guest — when every candidate
- * is a wall the guest takes candidate zero, which is what this function did before walls
- * existed. That is why this half owes no re-derivation of `guestCellsPerTick`'s [2, 108] window
- * and no change to `dissatisfaction.content.test.ts`'s `ceil(worstJourney / speed)` term.
- *
- * `walls` AND `destinationRoom` ARE ONE ARGUMENT IN TWO HALVES, and the second is not optional
- * in spirit: `destinationRoom` is the room STANDING ON the destination cell, resolved by
- * `roomIdAt`, and passing walls without it would make the guest's own room unenterable and send
- * every final approach down the fallback. `placed` is the only production caller and passes
- * both. Both default to absent so that a caller with no context — `travel.movement.test.ts`,
- * and every build before this goal — gets the pre-G-038a-i function to the byte.
- *
- * THE FLOOR AXIS IS UNTOUCHED AND SPENDS UNCONDITIONALLY. There is no stair anywhere in this
- * project, so there is no vertical route to be faithful to and nothing to refuse; that is
- * G-038a-ii's, and it is exactly what a v20 world means.
- * ------------------------------------------------------------------------------------------
- *
- * THE ROW AXIS IS WALKED LAST, AND SINCE G-036a IT IS REALLY WALKED. G-034a added it against a
- * one-row plot, where `to.row - from.row` was always 0 and this function returned exactly what
- * it returned before the axis existed; the shipped plot now has eight rows, so the worst journey
- * across it is `22 floors + 79 columns + 7 rows` = 108 cells rather than 101. That number is the
- * derived FLOOR under the guest speed dial in `packages/content/src/schema.ts`, and
- * `travel.movement.test.ts` MEASURES it by walking the plot corner to corner — comparing all
- * three axes, which is a repair rather than a restatement: the loop terminated on
- * `floor && column` and would have under-reported the journey the day the plot gained depth.
- * ------------------------------------------------------------------------------------------
- */
-/**
- * HAS THIS GUEST ACTUALLY REACHED THE THING IT IS HOLDING? (G-023b-i.)
- *
- * A MODULE-LEVEL FUNCTION AND NOT A CLOSURE IN THE TICK, AND THE FIRST SPELLING WAS THE
- * CLOSURE. It was an arrow function declared inside the guest loop, so it allocated once per
- * guest per tick — the allocation shape G-010 spent a goal removing, warned about in three
- * comments in this file, and written anyway. **`check:tickcost` measured it: ratio 1.5889
- * against a 1.4640 bound.** Hoisting it is the whole repair. Scalars in, boolean out, nothing
- * captured.
- *
- * CONTENT THAT DECLARES NO SPEED IS ALWAYS ARRIVED — `guestCellsPerTick` absent means arriving
- * is instantaneous, so presence gates nothing and such content behaves as every build before
- * this one did, to the byte. AN UNPLACED HOST ALSO COUNTS AS ARRIVED, which is not a travel
- * special case but the pre-existing rule kept: `standingCell` already falls through an unplaced
- * entity, so a guest cannot walk to a room that is nowhere and would otherwise never be served.
+ * Module-level rather than a closure in the tick loop (a per-guest closure measurably regressed
+ * tick cost). Content with no speed is always arrived (travel is instantaneous), and an unplaced
+ * host counts as arrived, matching `standingCell`.
  */
 export function hasArrivedAt(speed: number | undefined, guestAt: Cell, host: Entity | null): boolean {
   if (speed === undefined) return true;
@@ -4337,6 +2062,20 @@ export function hasArrivedAt(speed: number | undefined, guestAt: Cell, host: Ent
   return cellsEqual(guestAt, host.at);
 }
 
+/**
+ * One tick of walking: the only place a guest's cell changes during a tick. Transit is `at`
+ * itself; no destination is stored, so a destination change mid-journey is handled for free.
+ * `cellsPerTick` undefined means instantaneous arrival.
+ *
+ * The floor axis is spent first. The remaining budget is split between column and row; the guest
+ * takes the first split (column-first is candidate zero) whose landing cell is walkable. Only
+ * landings are checked, since a guest occupies one cell per tick. Every candidate spends the whole
+ * budget, so a wall cannot lengthen or stall a journey; if every candidate is a wall, candidate
+ * zero is taken.
+ *
+ * `walls` and `destinationRoom` (the room on the destination cell, from `roomIdAt`) go together;
+ * without the latter the guest's own room would be unenterable. Both default to absent.
+ */
 export function stepTowards(
   from: Cell,
   to: Cell,
@@ -4360,12 +2099,8 @@ export function stepTowards(
   const columnSign = columnGap >= 0 ? 1 : -1;
   const rowSign = rowGap >= 0 ? 1 : -1;
 
-  // THE MOST THE COLUMN AXIS CAN TAKE, AND THE LEAST IT MAY LEAVE. `mostOnColumn` is
-  // column-first, which is exactly what this function returned before it could see a wall,
-  // so it is candidate ZERO and an unobstructed guest lands where it always landed.
-  // `leastOnColumn` is what the row axis cannot absorb, clamped so the range is never empty:
-  // when the whole remaining distance is shorter than the budget the two coincide and the
-  // guest simply arrives.
+  // `mostOnColumn` (column-first) is candidate zero: what an unobstructed guest always gets.
+  // `leastOnColumn` is what the row axis cannot absorb, clamped so the range is never empty.
   const mostOnColumn = Math.min(budget, columnDistance);
   const leastOnColumn = Math.min(mostOnColumn, Math.max(0, budget - rowDistance));
 
@@ -4379,8 +2114,6 @@ export function stepTowards(
     if (fallback === null) fallback = candidate;
     if (walls === null || isWalkableFor(walls, candidate, destinationRoom)) return candidate;
   }
-  // Unreachable: `leastOnColumn <= mostOnColumn` by construction, so the loop runs at least
-  // once and `fallback` is set. Kept as the postcondition of that rather than as evidence
-  // anything was checked (ADR-0010's amendment).
+  // Unreachable: the loop runs at least once, so `fallback` is set.
   return fallback ?? { floor, column: from.column, row: from.row };
 }

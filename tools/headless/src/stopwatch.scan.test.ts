@@ -362,8 +362,8 @@ describe('no test in `pnpm test` reads a clock (I4, §2.0, G-020c)', () => {
     expect(
       all,
       'a test in `pnpm test` reads a clock. A timing bound inside the unit-test suite is what\n' +
-        'made I4 unreliable from G-016 to G-020c (HOTELSIM.md §2.0). Timing bounds live in\n' +
-        `\`pnpm check:scaling\` (tools/gates/scaling.mjs).\n${report}\n`,
+        'made I4 unreliable. Timing checks belong in a gate outside the suite, like check:tickcost.\n' +
+        `${report}\n`,
     ).toEqual([]);
   });
 
